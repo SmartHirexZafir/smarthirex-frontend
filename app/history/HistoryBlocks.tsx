@@ -9,7 +9,6 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
 
   const handleRerun = async (id, prompt) => {
     setRerunningId(id);
-    // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 1500));
     onRerunPrompt(prompt);
     setRerunningId(null);
@@ -34,15 +33,11 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
   const currentItems = historyData.slice(startIndex, startIndex + itemsPerPage);
 
   const nextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
-    }
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
 
   const prevPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
-    }
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
   };
 
   return (
@@ -64,7 +59,7 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
               style={{ animationDelay: `${index * 0.1}s` }}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/3 to-blue-500/3"></div>
-              
+
               <div className="relative z-10">
                 <div className="flex items-start justify-between mb-6">
                   <div className="flex-1">
@@ -83,7 +78,7 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
                       </div>
                     </div>
                   </div>
-                  
+
                   <div className={`px-4 py-2 rounded-full text-sm font-medium shadow-lg ${getMatchColor(history.totalMatches)}`}>
                     <i className={`${getMatchIcon(history.totalMatches)} mr-2`}></i>
                     {history.totalMatches} candidates
@@ -98,7 +93,7 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
                     <i className="ri-eye-line mr-2"></i>
                     View Results
                   </button>
-                  
+
                   <button
                     onClick={() => handleRerun(history.id, history.prompt)}
                     disabled={rerunningId === history.id}
@@ -123,7 +118,6 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
         </div>
       )}
 
-      {/* Enhanced Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center space-x-6 pt-8">
           <button
@@ -134,7 +128,7 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
             <i className="ri-arrow-left-line"></i>
             <span className="font-medium">Previous</span>
           </button>
-          
+
           <div className="flex space-x-2">
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
               <button
@@ -162,7 +156,6 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
         </div>
       )}
 
-      {/* Results Summary */}
       {historyData.length > 0 && (
         <div className="text-center pt-4">
           <p className="text-sm text-gray-600 bg-white/50 backdrop-blur-sm rounded-full px-4 py-2 inline-block">
@@ -182,7 +175,7 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
             transform: translateY(0);
           }
         }
-        
+
         .animate-slide-in {
           animation: slide-in 0.6s ease-out;
         }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function HistoryFilter({ onFilter }) {
   const [filters, setFilters] = useState({
@@ -10,10 +10,31 @@ export default function HistoryFilter({ onFilter }) {
     sort: 'latest'
   });
 
+  // 🔁 Automatically fetch filtered history on filter change
+  useEffect(() => {
+    const fetchFilteredHistory = async () => {
+      const params = new URLSearchParams();
+      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
+      if (filters.dateTo) params.append('dateTo', filters.dateTo);
+      if (filters.search) params.append('search', filters.search);
+      if (filters.sort) params.append('sort', filters.sort);
+
+      try {
+        const res = await fetch(`http://localhost:10000/history/user-history?${params.toString()}`);
+        const data = await res.json();
+        onFilter(data || []);
+      } catch (error) {
+        console.error('Failed to fetch filtered history:', error);
+        onFilter([]);
+      }
+    };
+
+    fetchFilteredHistory();
+  }, [filters]);
+
   const handleFilterChange = (key, value) => {
     const newFilters = { ...filters, [key]: value };
     setFilters(newFilters);
-    onFilter(newFilters);
   };
 
   const handleClearFilters = () => {
@@ -24,7 +45,6 @@ export default function HistoryFilter({ onFilter }) {
       sort: 'latest'
     };
     setFilters(clearedFilters);
-    onFilter(clearedFilters);
   };
 
   return (
@@ -111,36 +131,15 @@ export default function HistoryFilter({ onFilter }) {
         {/* Quick Filter Buttons */}
         <div className="mt-6 flex flex-wrap gap-2">
           <span className="text-sm text-gray-600 mr-2">Quick filters:</span>
-          <button
-            onClick={() => handleFilterChange('search', 'React')}
-            className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs hover:bg-blue-200 transition-colors"
-          >
-            React
-          </button>
-          <button
-            onClick={() => handleFilterChange('search', 'Python')}
-            className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs hover:bg-green-200 transition-colors"
-          >
-            Python
-          </button>
-          <button
-            onClick={() => handleFilterChange('search', 'UI/UX')}
-            className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs hover:bg-purple-200 transition-colors"
-          >
-            UI/UX
-          </button>
-          <button
-            onClick={() => handleFilterChange('search', '5+ years')}
-            className="px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-xs hover:bg-orange-200 transition-colors"
-          >
-            5+ years
-          </button>
-          <button
-            onClick={() => handleFilterChange('search', 'full-stack')}
-            className="px-3 py-1 bg-pink-100 text-pink-700 rounded-full text-xs hover:bg-pink-200 transition-colors"
-          >
-            Full-stack
-          </button>
+          {['React', 'Python', 'UI/UX', '5+ years', 'full-stack'].map((tag) => (
+            <button
+              key={tag}
+              onClick={() => handleFilterChange('search', tag)}
+              className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs hover:bg-blue-200 transition-colors"
+            >
+              {tag}
+            </button>
+          ))}
         </div>
       </div>
     </div>

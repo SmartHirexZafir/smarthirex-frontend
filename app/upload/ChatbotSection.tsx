@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -33,7 +32,7 @@ export default function ChatbotSection({ onPromptSubmit, isProcessing, activePro
     scrollToBottom();
   }, [messages]);
 
-  const handleSubmit = (prompt = inputValue) => {
+  const handleSubmit = async (prompt = inputValue) => {
     if (!prompt.trim()) return;
 
     const userMessage = {
@@ -47,18 +46,36 @@ export default function ChatbotSection({ onPromptSubmit, isProcessing, activePro
     setInputValue('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const candidateCount = Math.floor(Math.random() * 15) + 3;
+    try {
+      const response = await fetch('http://localhost:10000/chatbot/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ prompt })
+      });
+
+      const data = await response.json();
+
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
-        content: `Perfect! I found ${candidateCount} candidates matching "${prompt}". I've analyzed their skills, experience, and compatibility with your requirements. Check the results below for detailed candidate profiles.`,
+        content: data.message || "Got it! Let me find some candidates for you.",
         timestamp: new Date().toLocaleTimeString()
       };
+
       setMessages(prev => [...prev, botMessage]);
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        id: Date.now() + 2,
+        type: 'bot',
+        content: "Sorry, I couldn't process your request. Please try again later.",
+        timestamp: new Date().toLocaleTimeString()
+      }]);
+      console.error("Error:", error);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
 
     onPromptSubmit(prompt);
   };

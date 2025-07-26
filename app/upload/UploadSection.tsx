@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef } from 'react';
@@ -6,6 +5,8 @@ import { useState, useRef } from 'react';
 export default function UploadSection({ onFileUpload, uploadedFiles }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [processingFiles, setProcessingFiles] = useState([]);
+  const [uploadCount, setUploadCount] = useState(0);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleDragOver = (e) => {
@@ -21,7 +22,7 @@ export default function UploadSection({ onFileUpload, uploadedFiles }) {
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragOver(false);
-    
+
     const files = Array.from(e.dataTransfer.files);
     processFiles(files);
   };
@@ -31,7 +32,7 @@ export default function UploadSection({ onFileUpload, uploadedFiles }) {
     processFiles(files);
   };
 
-  const processFiles = (files) => {
+  const processFiles = async (files) => {
     const newProcessingFiles = files.map(file => ({
       id: Date.now() + Math.random(),
       name: file.name,
@@ -42,56 +43,74 @@ export default function UploadSection({ onFileUpload, uploadedFiles }) {
 
     setProcessingFiles(newProcessingFiles);
 
-    // Simulate file processing
-    newProcessingFiles.forEach((file, index) => {
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += Math.random() * 20;
-        if (progress >= 100) {
-          progress = 100;
-          clearInterval(interval);
-          
-          // Simulate parsed data
-          const parsedData = {
-            ...file,
-            progress: 100,
-            status: 'completed',
-            parsedData: {
-              name: `Candidate ${index + 1}`,
-              email: `candidate${index + 1}@email.com`,
-              phone: `+1 (555) 123-456${index}`,
-              skills: ['JavaScript', 'React', 'Node.js', 'Python'][Math.floor(Math.random() * 4)],
-              experience: `${Math.floor(Math.random() * 8) + 1} years`,
-              location: ['New York', 'San Francisco', 'Austin', 'Seattle'][Math.floor(Math.random() * 4)]
-            }
-          };
-          
-          setProcessingFiles(prev => 
-            prev.map(f => f.id === file.id ? parsedData : f)
-          );
-        } else {
-          setProcessingFiles(prev => 
-            prev.map(f => f.id === file.id ? { ...f, progress } : f)
-          );
-        }
-      }, 100);
-    });
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
 
-    onFileUpload(newProcessingFiles);
+    try {
+      const response = await fetch('http://localhost:10000/upload/upload-resumes', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.resumes) {
+        setUploadCount(result.resumes.length);
+        setShowSuccessPopup(true);
+
+        // Simulate processing after upload success
+        newProcessingFiles.forEach((file, index) => {
+          let progress = 0;
+          const interval = setInterval(() => {
+            progress += Math.random() * 20;
+            if (progress >= 100) {
+              progress = 100;
+              clearInterval(interval);
+
+              const parsedData = {
+                ...file,
+                progress: 100,
+                status: 'completed',
+                parsedData: {
+                  name: result.resumes[index]?.name || `Candidate ${index + 1}`,
+                  email: result.resumes[index]?.email || `candidate${index + 1}@email.com`,
+                  phone: result.resumes[index]?.phone || `+1 (555) 123-456${index}`,
+                  skills: result.resumes[index]?.skills?.[0] || 'N/A',
+                  experience: `${result.resumes[index]?.experience || 0} years`,
+                  location: 'N/A'
+                }
+              };
+
+              setProcessingFiles(prev =>
+                prev.map(f => f.id === file.id ? parsedData : f)
+              );
+            } else {
+              setProcessingFiles(prev =>
+                prev.map(f => f.id === file.id ? { ...f, progress } : f)
+              );
+            }
+          }, 100);
+        });
+
+        onFileUpload(newProcessingFiles);
+      } else {
+        console.error(result?.detail || "Upload failed");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+    }
   };
 
   return (
     <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-gray-200/50 p-8 relative overflow-hidden">
-      {/* Background Pattern */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5"></div>
-      
+
       <div className="relative z-10">
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Upload Resume Files</h2>
           <p className="text-gray-600">Drag & drop your resume files or click to browse</p>
         </div>
 
-        {/* Upload Zone */}
         <div 
           className={`relative border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 cursor-pointer ${
             isDragOver 
@@ -135,7 +154,6 @@ export default function UploadSection({ onFileUpload, uploadedFiles }) {
           />
         </div>
 
-        {/* Processing Files */}
         {processingFiles.length > 0 && (
           <div className="mt-8 space-y-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Processing Files</h3>
@@ -164,7 +182,6 @@ export default function UploadSection({ onFileUpload, uploadedFiles }) {
                   </div>
                 </div>
                 
-                {/* Progress Bar */}
                 <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
                   <div 
                     className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-300"
@@ -172,7 +189,6 @@ export default function UploadSection({ onFileUpload, uploadedFiles }) {
                   ></div>
                 </div>
 
-                {/* Parsed Data */}
                 {file.status === 'completed' && file.parsedData && (
                   <div className="bg-white/80 rounded-xl p-4 border border-gray-200/50">
                     <h4 className="font-medium text-gray-900 mb-3 flex items-center">
@@ -201,6 +217,16 @@ export default function UploadSection({ onFileUpload, uploadedFiles }) {
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Success Pop-up */}
+        {showSuccessPopup && (
+          <div className="fixed bottom-6 right-6 bg-green-500 text-white px-6 py-4 rounded-xl shadow-lg z-50 animate-bounce">
+            <strong>{uploadCount}</strong> CVs successfully uploaded!
+            <button onClick={() => setShowSuccessPopup(false)} className="ml-4 text-sm underline">
+              Close
+            </button>
           </div>
         )}
       </div>

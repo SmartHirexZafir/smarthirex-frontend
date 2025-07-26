@@ -17,6 +17,10 @@ interface Candidate {
   location: string;
   currentRole: string;
   avatar: string;
+  _id?: string;
+  match_score?: number;
+  predicted_role?: string;
+  filter_skills?: string[];
 }
 
 interface FileUpload extends File {
@@ -51,15 +55,32 @@ export default function UploadPage() {
     setUploadedFiles(files);
   };
 
-  const handlePromptSubmit = (prompt: string) => {
+  const handlePromptSubmit = async (prompt: string) => {
     setActivePrompt(prompt);
     setIsProcessing(true);
 
-    setTimeout(() => {
-      const mockCandidates: Candidate[] = []; // Replace with actual API response
-      setCandidates(mockCandidates);
+    try {
+      const response = await fetch('http://localhost:10000/chatbot/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ prompt })
+      });
+
+      const data = await response.json();
+
+      if (data.resumes_preview) {
+        setCandidates(data.resumes_preview);
+      } else {
+        setCandidates([]);
+      }
+    } catch (error) {
+      console.error('Error fetching filtered candidates:', error);
+      setCandidates([]);
+    } finally {
       setIsProcessing(false);
-    }, 2000);
+    }
   };
 
   const navItems = [

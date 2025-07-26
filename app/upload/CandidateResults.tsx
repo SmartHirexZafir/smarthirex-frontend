@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 
 export default function CandidateResults({ candidates, isProcessing, activePrompt }) {
@@ -9,9 +8,17 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
   const [viewMode, setViewMode] = useState('grid');
   const itemsPerPage = 6;
 
-  const totalPages = Math.ceil(candidates.length / itemsPerPage);
+  // ✅ Filter out duplicates and ensure valid scores
+  const cleanedCandidates = useMemo(() => {
+    const seen = new Set();
+    return candidates
+      .filter(c => c && c.match_score !== undefined && c._id && !seen.has(c._id) && seen.add(c._id))
+      .sort((a, b) => b.match_score - a.match_score); // best matches first
+  }, [candidates]);
+
+  const totalPages = Math.ceil(cleanedCandidates.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentCandidates = candidates.slice(startIndex, startIndex + itemsPerPage);
+  const currentCandidates = cleanedCandidates.slice(startIndex, startIndex + itemsPerPage);
 
   const getScoreColor = (score) => {
     if (score >= 90) return 'bg-green-100 text-green-800 border-green-200';
@@ -28,30 +35,30 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
   };
 
   const nextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
-    }
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
   };
 
   const prevPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
-    }
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  };
+
+  const extractMatchedSkills = (skills = [], requiredSkills = []) => {
+    return skills.filter(skill => requiredSkills.includes(skill.toLowerCase()));
   };
 
   return (
     <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-gray-200/50 relative overflow-hidden">
-      {/* Background Pattern */}
       <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-blue-500/5"></div>
       
       <div className="relative z-10">
-        {/* Header */}
         <div className="p-6 border-b border-gray-200/50 bg-gradient-to-r from-purple-50/50 to-blue-50/50">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-2xl font-bold text-gray-900">Filtered Candidates</h3>
               <p className="text-gray-600 mt-1">
-                {isProcessing ? 'AI is analyzing candidates...' : `Found ${candidates.length} matching candidates`}
+                {isProcessing
+                  ? 'AI is analyzing candidates...'
+                  : `Found ${cleanedCandidates.length} matching candidates`}
               </p>
             </div>
             <div className="flex items-center space-x-3">
@@ -69,7 +76,6 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
           </div>
         </div>
 
-        {/* Content */}
         <div className="p-6">
           {isProcessing ? (
             <div className="flex items-center justify-center py-16">
@@ -86,72 +92,79 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
             </div>
           ) : (
             <>
-              {/* Candidates Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                {currentCandidates.map((candidate) => (
-                  <div
-                    key={candidate.id}
-                    className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200/50 hover:shadow-xl transition-all duration-300 transform hover:scale-105"
-                  >
-                    {/* Header */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900 text-lg mb-1">{candidate.name}</h4>
-                        <p className="text-sm text-gray-600 mb-2">{candidate.currentRole}</p>
-                        <p className="text-xs text-gray-500 flex items-center">
-                          <i className="ri-map-pin-line mr-1"></i>
-                          {candidate.location}
-                        </p>
-                      </div>
-                      <div className={`px-3 py-1 rounded-full text-sm font-medium border ${getScoreColor(candidate.score)}`}>
-                        <i className={`${getScoreIcon(candidate.score)} mr-1`}></i>
-                        {candidate.score}%
-                      </div>
-                    </div>
+                {currentCandidates.map((candidate) => {
+                  const skills = candidate.skills || [];
+                  const score = candidate.match_score || 0;
+                  const name = candidate.name || 'Unnamed Candidate';
+                  const experience = candidate.experience ? `${candidate.experience} years` : 'Not specified';
+                  const location = candidate.location || 'Not available';
+                  const jobRole = candidate.predicted_role || 'Unknown role';
+                  const matchedSkills = extractMatchedSkills(
+                    skills,
+                    (candidate.filter_skills || []).map(s => s.toLowerCase())
+                  );
 
-                    {/* Skills */}
-                    <div className="mb-4">
-                      <p className="text-xs text-gray-500 mb-2">Skills</p>
-                      <div className="flex flex-wrap gap-1">
-                        {candidate.skills.slice(0, 3).map((skill, index) => (
-                          <span
-                            key={index}
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              candidate.matchedSkills.includes(skill)
-                                ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                : 'bg-gray-100 text-gray-600 border border-gray-200'
-                            }`}
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                        {candidate.skills.length > 3 && (
-                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
-                            +{candidate.skills.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Experience */}
-                    <div className="mb-4">
-                      <p className="text-xs text-gray-500 mb-1">Experience</p>
-                      <p className="text-sm font-medium text-gray-900">{candidate.experience}</p>
-                    </div>
-
-                    {/* Action */}
-                    <Link
-                      href={`/candidate/${candidate.id}`}
-                      className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-3 px-4 rounded-xl text-sm font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105 text-center flex items-center justify-center"
+                  return (
+                    <div
+                      key={candidate._id}
+                      className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200/50 hover:shadow-xl transition-all duration-300 transform hover:scale-105"
                     >
-                      <i className="ri-eye-line mr-2"></i>
-                      View Profile
-                    </Link>
-                  </div>
-                ))}
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900 text-lg mb-1">{name}</h4>
+                          <p className="text-sm text-gray-600 mb-2">{jobRole}</p>
+                          <p className="text-xs text-gray-500 flex items-center">
+                            <i className="ri-map-pin-line mr-1"></i>
+                            {location}
+                          </p>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-sm font-medium border ${getScoreColor(score)}`}>
+                          <i className={`${getScoreIcon(score)} mr-1`}></i>
+                          {score}%
+                        </div>
+                      </div>
+
+                      <div className="mb-4">
+                        <p className="text-xs text-gray-500 mb-2">Skills</p>
+                        <div className="flex flex-wrap gap-1">
+                          {skills.slice(0, 3).map((skill, index) => (
+                            <span
+                              key={index}
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                matchedSkills.includes(skill.toLowerCase())
+                                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                                  : 'bg-gray-100 text-gray-600 border border-gray-200'
+                              }`}
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                          {skills.length > 3 && (
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                              +{skills.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mb-4">
+                        <p className="text-xs text-gray-500 mb-1">Experience</p>
+                        <p className="text-sm font-medium text-gray-900">{experience}</p>
+                      </div>
+
+                      <Link
+                        href={`/candidate/${candidate._id}`}
+                        className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-3 px-4 rounded-xl text-sm font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105 text-center flex items-center justify-center"
+                      >
+                        <i className="ri-eye-line mr-2"></i>
+                        View Profile
+                      </Link>
+                    </div>
+                  );
+                })}
               </div>
 
-              {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-center space-x-4 pt-6 border-t border-gray-200/50">
                   <button
@@ -162,7 +175,7 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
                     <i className="ri-arrow-left-line"></i>
                     <span>Previous</span>
                   </button>
-                  
+
                   <div className="flex space-x-2">
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                       <button
@@ -190,10 +203,9 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
                 </div>
               )}
 
-              {/* Results Summary */}
               <div className="mt-6 text-center">
                 <p className="text-sm text-gray-600">
-                  Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, candidates.length)} of {candidates.length} candidates
+                  Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, cleanedCandidates.length)} of {cleanedCandidates.length} candidates
                 </p>
               </div>
             </>

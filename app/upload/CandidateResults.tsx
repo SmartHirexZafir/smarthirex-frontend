@@ -12,7 +12,7 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
   const cleanedCandidates = useMemo(() => {
     const seen = new Set();
     return candidates
-      .filter(c => c && c.match_score !== undefined && c._id && !seen.has(c._id) && seen.add(c._id))
+      .filter(c => c && (c.match_score ?? c.score) !== undefined && c._id && !seen.has(c._id) && seen.add(c._id))
       .sort((a, b) => b.match_score - a.match_score); // best matches first
   }, [candidates]);
 
@@ -95,7 +95,7 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 {currentCandidates.map((candidate) => {
                   const skills = candidate.skills || [];
-                  const score = candidate.match_score || 0;
+                  const score = candidate.match_score ?? candidate.score ?? 0;
                   const name = candidate.name || 'Unnamed Candidate';
                   const experience = candidate.experience ? `${candidate.experience} years` : 'Not specified';
                   const location = candidate.location || 'Not available';

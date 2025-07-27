@@ -55,32 +55,10 @@ export default function UploadPage() {
     setUploadedFiles(files);
   };
 
-  const handlePromptSubmit = async (prompt: string) => {
+  // ✅ FIXED: Now accepts prompt AND results
+  const handlePromptSubmit = (prompt: string, results: Candidate[] = []) => {
     setActivePrompt(prompt);
-    setIsProcessing(true);
-
-    try {
-      const response = await fetch('http://localhost:10000/chatbot/query', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ prompt })
-      });
-
-      const data = await response.json();
-
-      if (data.resumes_preview) {
-        setCandidates(data.resumes_preview);
-      } else {
-        setCandidates([]);
-      }
-    } catch (error) {
-      console.error('Error fetching filtered candidates:', error);
-      setCandidates([]);
-    } finally {
-      setIsProcessing(false);
-    }
+    setCandidates(results);
   };
 
   const navItems = [

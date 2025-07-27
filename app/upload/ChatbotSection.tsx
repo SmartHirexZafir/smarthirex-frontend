@@ -60,11 +60,14 @@ export default function ChatbotSection({ onPromptSubmit, isProcessing, activePro
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
-        content: data.message || "Got it! Let me find some candidates for you.",
+        content: data.reply || "Got it! Let me find some candidates for you.",
         timestamp: new Date().toLocaleTimeString()
       };
 
       setMessages(prev => [...prev, botMessage]);
+
+      // ✅ Send candidates up to parent
+      onPromptSubmit(prompt, data.resumes_preview || []);
     } catch (error) {
       setMessages(prev => [...prev, {
         id: Date.now() + 2,
@@ -73,20 +76,19 @@ export default function ChatbotSection({ onPromptSubmit, isProcessing, activePro
         timestamp: new Date().toLocaleTimeString()
       }]);
       console.error("Error:", error);
+
+      // Still pass empty array on failure
+      onPromptSubmit(prompt, []);
     } finally {
       setIsTyping(false);
     }
-
-    onPromptSubmit(prompt);
   };
 
   return (
     <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-gray-200/50 relative overflow-hidden">
-      {/* Background Pattern */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5"></div>
-      
+
       <div className="relative z-10">
-        {/* Header */}
         <div className="p-6 border-b border-gray-200/50 bg-gradient-to-r from-blue-50/50 to-purple-50/50">
           <div className="flex items-center justify-center space-x-4">
             <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
@@ -118,7 +120,6 @@ export default function ChatbotSection({ onPromptSubmit, isProcessing, activePro
               </div>
             </div>
           ))}
-          
           {isTyping && (
             <div className="flex justify-start">
               <div className="bg-gray-100/80 px-4 py-3 rounded-2xl border border-gray-200/50 shadow-sm">

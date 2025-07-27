@@ -1,19 +1,7 @@
-import CandidateDetail from './CandidateDetail';
+import ClientPage from './ClientPage';
 
-export async function generateStaticParams() {
-  return [
-    { id: '1' },
-    { id: '2' },
-    { id: '3' },
-    { id: '4' },
-    { id: '5' },
-    { id: '6' },
-    { id: '7' },
-    { id: '8' },
-    { id: '9' },
-  ];
-}
-
-export default function CandidatePage({ params }: { params: { id: string } }) {
-  return <CandidateDetail candidateId={params.id} />;
+export default async function CandidatePage({ params }: { params: { id: string } }) {
+  // ✅ Next.js 15 requires async for dynamic params
+  const { id } = await Promise.resolve(params); // ensures it's resolved
+  return <ClientPage candidateId={id} />;
 }

@@ -7,7 +7,7 @@ export default function ChatbotSection({ onPromptSubmit, isProcessing, activePro
     {
       id: 1,
       type: 'bot',
-      content: "Hi! I'm your AI recruiting assistant. I can help you find the perfect candidates. Try asking me something like 'Show me candidates with React and Django experience'",
+      content: "Hi! I'm your AI recruiting assistant. Try asking me something like 'Show me candidates with React and Django experience'",
       timestamp: new Date().toLocaleTimeString()
     }
   ]);
@@ -65,8 +65,6 @@ export default function ChatbotSection({ onPromptSubmit, isProcessing, activePro
       };
 
       setMessages(prev => [...prev, botMessage]);
-
-      // ✅ Send candidates up to parent
       onPromptSubmit(prompt, data.resumes_preview || []);
     } catch (error) {
       setMessages(prev => [...prev, {
@@ -76,8 +74,6 @@ export default function ChatbotSection({ onPromptSubmit, isProcessing, activePro
         timestamp: new Date().toLocaleTimeString()
       }]);
       console.error("Error:", error);
-
-      // Still pass empty array on failure
       onPromptSubmit(prompt, []);
     } finally {
       setIsTyping(false);
@@ -89,6 +85,7 @@ export default function ChatbotSection({ onPromptSubmit, isProcessing, activePro
       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5"></div>
 
       <div className="relative z-10">
+        {/* Header */}
         <div className="p-6 border-b border-gray-200/50 bg-gradient-to-r from-blue-50/50 to-purple-50/50">
           <div className="flex items-center justify-center space-x-4">
             <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center shadow-lg">

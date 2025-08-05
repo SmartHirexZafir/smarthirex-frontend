@@ -21,6 +21,7 @@ interface Candidate {
   match_score?: number;
   predicted_role?: string;
   filter_skills?: string[];
+  semantic_score?: number; // ✅ Added for semantic matching
 }
 
 interface FileUpload extends File {
@@ -55,7 +56,6 @@ export default function UploadPage() {
     setUploadedFiles(files);
   };
 
-  // ✅ FIXED: Now accepts prompt AND results
   const handlePromptSubmit = (prompt: string, results: Candidate[] = []) => {
     setActivePrompt(prompt);
     setCandidates(results);

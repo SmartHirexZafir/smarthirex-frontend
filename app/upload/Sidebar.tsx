@@ -1,16 +1,33 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 
 export default function Sidebar({ collapsed, onToggle }) {
+  const pathname = usePathname();
   const [activeItem, setActiveItem] = useState('upload');
 
+  useEffect(() => {
+    const current = pathname?.split('/')[1];
+    if (current) setActiveItem(current);
+  }, [pathname]);
+
   const menuItems = [
-    { id: 'upload', label: 'Upload CVs', icon: 'ri-upload-cloud-2-line', href: '/upload', active: true },
-    { id: 'history', label: 'Search History', icon: 'ri-history-line', href: '/history', active: false },
-    { id: 'tests', label: 'Tests', icon: 'ri-file-text-line', href: '/meetings', active: false }
+    { id: 'upload', label: 'Upload CVs', icon: 'ri-upload-cloud-2-line', href: '/upload' },
+    { id: 'history', label: 'Search History', icon: 'ri-history-line', href: '/history' },
+    { id: 'meetings', label: 'Tests', icon: 'ri-file-text-line', href: '/meetings' }
   ];
+
+  const handleNewJobPost = () => {
+    // 🔁 Future logic: open modal or route
+    alert('New job posting clicked!');
+  };
+
+  const handleExport = () => {
+    // 🔁 Future logic: export current results
+    alert('Export triggered!');
+  };
 
   return (
     <div className={`fixed left-0 top-0 h-full bg-white/90 backdrop-blur-md border-r border-gray-200/50 shadow-2xl z-50 transition-all duration-300 ${
@@ -101,11 +118,17 @@ export default function Sidebar({ collapsed, onToggle }) {
       {!collapsed && (
         <div className="absolute bottom-6 left-4 right-4">
           <div className="space-y-2">
-            <button className="w-full bg-gradient-to-r from-green-500 to-blue-500 text-white py-3 px-4 rounded-xl font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105">
+            <button
+              onClick={handleNewJobPost}
+              className="w-full bg-gradient-to-r from-green-500 to-blue-500 text-white py-3 px-4 rounded-xl font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+            >
               <i className="ri-add-line mr-2"></i>
               New Job Posting
             </button>
-            <button className="w-full border border-gray-200 text-gray-700 py-2 px-4 rounded-xl font-medium hover:bg-gray-50 transition-all duration-200 transform hover:scale-105">
+            <button
+              onClick={handleExport}
+              className="w-full border border-gray-200 text-gray-700 py-2 px-4 rounded-xl font-medium hover:bg-gray-50 transition-all duration-200 transform hover:scale-105"
+            >
               <i className="ri-download-line mr-2"></i>
               Export Results
             </button>

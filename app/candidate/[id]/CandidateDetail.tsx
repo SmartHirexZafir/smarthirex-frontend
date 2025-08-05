@@ -65,6 +65,10 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
     );
   }
 
+  const category = candidate.category || candidate.predicted_role || 'Unknown';
+  const confidence = candidate.confidence !== undefined ? `${candidate.confidence}%` : 'N/A';
+  const matchReason = candidate.match_reason || 'ML classified';
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
@@ -84,7 +88,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
               </div>
             </div>
 
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-3 flex-wrap justify-end">
               {candidate.rank !== undefined && (
                 <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-2 rounded-full text-sm font-medium">
                   <i className="ri-medal-line mr-2"></i>
@@ -97,6 +101,18 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                   {candidate.score}% Match
                 </div>
               )}
+              <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-medium">
+                <i className="ri-briefcase-line mr-1"></i>
+                {category}
+              </div>
+              <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-full text-sm font-medium">
+                <i className="ri-flashlight-line mr-1"></i>
+                {confidence}
+              </div>
+              <div className="bg-purple-100 text-purple-800 px-4 py-2 rounded-full text-sm font-medium">
+                <i className="ri-compass-3-line mr-1"></i>
+                {matchReason}
+              </div>
             </div>
           </div>
         </div>

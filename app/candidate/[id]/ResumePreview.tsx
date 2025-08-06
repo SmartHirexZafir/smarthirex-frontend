@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-export default function ResumePreview({ candidate }) {
+export default function ResumePreview({ candidate }: { candidate: any }) {
   const [showFullResume, setShowFullResume] = useState(true);
 
   if (!candidate || !candidate.resume) return null;
@@ -37,9 +37,7 @@ export default function ResumePreview({ candidate }) {
               <p className="font-medium text-gray-900 text-sm">
                 {resume.filename || 'Resume.pdf'}
               </p>
-              <p className="text-xs text-gray-600">
-                Uploaded via system
-              </p>
+              <p className="text-xs text-gray-600">Uploaded via system</p>
             </div>
           </div>
         </div>
@@ -49,7 +47,7 @@ export default function ResumePreview({ candidate }) {
       {resume.summary && (
         <div className="mb-4">
           <h4 className="text-md font-semibold text-gray-900 mb-2">Professional Summary</h4>
-          <p className="text-gray-700 leading-relaxed bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg p-3 text-sm">
+          <p className="text-gray-700 leading-relaxed bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg p-3 text-sm whitespace-pre-line">
             {resume.summary}
           </p>
         </div>
@@ -60,7 +58,7 @@ export default function ResumePreview({ candidate }) {
         <div className="mb-4">
           <h4 className="text-md font-semibold text-gray-900 mb-2">Education</h4>
           <div className="space-y-2">
-            {resume.education.map((edu, index) => (
+            {resume.education.map((edu: any, index: number) => (
               <div
                 key={index}
                 className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 border border-blue-200/50"
@@ -90,7 +88,7 @@ export default function ResumePreview({ candidate }) {
         <div className="mb-4">
           <h4 className="text-md font-semibold text-gray-900 mb-2">Work Experience</h4>
           <div className="space-y-3">
-            {resume.workHistory.map((work, index) => (
+            {resume.workHistory.map((work: any, index: number) => (
               <div
                 key={index}
                 className="border-l-4 border-blue-500 pl-3 bg-gradient-to-r from-blue-50/50 to-purple-50/50 rounded-r-lg py-2"
@@ -104,7 +102,7 @@ export default function ResumePreview({ candidate }) {
                     {work.duration}
                   </span>
                 </div>
-                <p className="text-gray-700 text-xs">{work.description}</p>
+                <p className="text-gray-700 text-xs whitespace-pre-line">{work.description}</p>
               </div>
             ))}
           </div>
@@ -116,25 +114,31 @@ export default function ResumePreview({ candidate }) {
         <div className="mb-4">
           <h4 className="text-md font-semibold text-gray-900 mb-2">Key Projects</h4>
           <div className="space-y-3">
-            {resume.projects.map((project, index) => (
-              <div
-                key={index}
-                className="bg-gradient-to-r from-gray-50 to-green-50 rounded-lg p-3 border border-gray-200/50"
-              >
-                <h5 className="font-medium text-gray-900 mb-1 text-sm">{project.name}</h5>
-                <p className="text-gray-700 text-xs mb-2">{project.description}</p>
-                <div className="flex flex-wrap gap-1">
-                  {(project.tech || []).map((tech, techIndex) => (
-                    <span
-                      key={techIndex}
-                      className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium"
-                    >
-                      {tech}
-                    </span>
-                  ))}
+            {resume.projects.map((project: any, index: number) => {
+              const name = typeof project === 'string' ? project.slice(0, 40) + '...' : project.name;
+              const desc = typeof project === 'string' ? project : project.description;
+              const tech = Array.isArray(project.tech) ? project.tech : [];
+
+              return (
+                <div
+                  key={index}
+                  className="bg-gradient-to-r from-gray-50 to-green-50 rounded-lg p-3 border border-gray-200/50"
+                >
+                  <h5 className="font-medium text-gray-900 mb-1 text-sm">{name}</h5>
+                  <p className="text-gray-700 text-xs mb-2 whitespace-pre-line">{desc}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {tech.map((t: string, i: number) => (
+                      <span
+                        key={i}
+                        className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -144,7 +148,7 @@ export default function ResumePreview({ candidate }) {
         <div>
           <h4 className="text-md font-semibold text-gray-900 mb-2">Technical Skills</h4>
           <div className="flex flex-wrap gap-2">
-            {candidate.skills.map((skill, index) => {
+            {candidate.skills.map((skill: string, index: number) => {
               const isMatched = (candidate.matchedSkills || []).includes(skill);
               return (
                 <span

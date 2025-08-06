@@ -1,13 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-export default function ActionButtons({ candidate, onStatusChange }) {
-  const [isShortlisted, setIsShortlisted] = useState(candidate.status === 'shortlisted');
-  const [isRejected, setIsRejected] = useState(candidate.status === 'rejected');
+type ActionButtonsProps = {
+  candidate: {
+    _id: string;
+    status?: string;
+  };
+  onStatusChange: (newStatus: string) => void;
+};
+
+export default function ActionButtons({ candidate, onStatusChange }: ActionButtonsProps) {
+  const [isShortlisted, setIsShortlisted] = useState(false);
+  const [isRejected, setIsRejected] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showTestModal, setShowTestModal] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setIsShortlisted(candidate.status === 'shortlisted');
+    setIsRejected(candidate.status === 'rejected');
+  }, [candidate.status]);
 
   const updateCandidateStatus = async (newStatus: string) => {
     try {
@@ -22,7 +35,7 @@ export default function ActionButtons({ candidate, onStatusChange }) {
 
       const result = await res.json();
       if (res.ok) {
-        onStatusChange(newStatus); // tell parent
+        onStatusChange(newStatus);
       } else {
         console.error('Status update failed:', result);
         alert('Failed to update status');
@@ -47,14 +60,6 @@ export default function ActionButtons({ candidate, onStatusChange }) {
     setIsRejected(!isRejected);
     setIsShortlisted(false);
     updateCandidateStatus(newStatus);
-  };
-
-  const handleSendTest = () => {
-    setShowTestModal(true);
-  };
-
-  const handleScheduleInterview = () => {
-    setShowScheduleModal(true);
   };
 
   return (
@@ -90,7 +95,7 @@ export default function ActionButtons({ candidate, onStatusChange }) {
           </button>
 
           <button
-            onClick={handleSendTest}
+            onClick={() => setShowTestModal(true)}
             className="flex items-center justify-center px-3 py-2 rounded-xl font-medium bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:shadow-lg transition-all duration-300 transform hover:scale-105 whitespace-nowrap cursor-pointer"
           >
             <i className="ri-file-list-line mr-1 text-sm"></i>
@@ -98,7 +103,7 @@ export default function ActionButtons({ candidate, onStatusChange }) {
           </button>
 
           <button
-            onClick={handleScheduleInterview}
+            onClick={() => setShowScheduleModal(true)}
             className="flex items-center justify-center px-3 py-2 rounded-xl font-medium bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow-lg transition-all duration-300 transform hover:scale-105 whitespace-nowrap cursor-pointer"
           >
             <i className="ri-calendar-event-line mr-1 text-sm"></i>
@@ -124,14 +129,46 @@ export default function ActionButtons({ candidate, onStatusChange }) {
       {/* Schedule Modal */}
       {showScheduleModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          {/* ...unchanged modal content... */}
+          <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Schedule Interview</h3>
+            <p className="text-sm text-gray-600 mb-4">This is a placeholder. Integration pending.</p>
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setShowScheduleModal(false)}
+                className="px-4 py-2 rounded-md text-sm bg-gray-200 hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded-md text-sm bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Send Test Modal */}
       {showTestModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          {/* ...unchanged modal content... */}
+          <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Send Test</h3>
+            <p className="text-sm text-gray-600 mb-4">This is a placeholder. Integration pending.</p>
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setShowTestModal(false)}
+                className="px-4 py-2 rounded-md text-sm bg-gray-200 hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                className="px-4 py-2 rounded-md text-sm bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Send
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

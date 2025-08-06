@@ -3,17 +3,21 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 
-export default function CandidateResults({ candidates, isProcessing, activePrompt }) {
+export default function CandidateResults({ candidates, isProcessing, activePrompt }: {
+  candidates: any[];
+  isProcessing: boolean;
+  activePrompt: string;
+}) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
   const cleanedCandidates = useMemo(() => {
     const seen = new Set();
     return candidates
-      .filter(c => {
-        if (!c || !c._id || seen.has(c._id)) return false;
+      .filter(c => c && c._id && !seen.has(c._id) && c.semantic_score !== undefined)
+      .map(c => {
         seen.add(c._id);
-        return true;
+        return c;
       })
       .sort((a, b) => (b.final_score || 0) - (a.final_score || 0));
   }, [candidates]);
@@ -61,33 +65,48 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 {currentCandidates.map((candidate) => {
-                  const name = candidate.name || 'Unnamed';
-                  const jobRole = candidate.predicted_role || candidate.category || 'Unknown Role';
-                  const experience = candidate.experience ? `${candidate.experience} years` : 'Not specified';
-                  const confidence = candidate.confidence !== undefined ? `${candidate.confidence.toFixed(2)}%` : 'N/A';
-                  const score = candidate.semantic_score?.toFixed(2) || '0.00';
-                  const scoreLabel = candidate.score_type || 'Prompt Match';
-                  const relatedRoles = Array.isArray(candidate.related_roles) ? candidate.related_roles : [];
+                  const {
+                    _id,
+                    name = 'Unnamed',
+                    predicted_role,
+                    category,
+                    experience,
+                    confidence,
+                    semantic_score,
+                    score_type,
+                    related_roles
+                  } = candidate;
+
+                  const jobRole = predicted_role || category || 'Unknown Role';
+                  const expText = experience ? `${experience} years` : 'Not specified';
+                  const confText = confidence !== undefined ? `${confidence.toFixed(2)}%` : 'N/A';
+                  const score = semantic_score?.toFixed(2) || '0.00';
+                  const scoreLabel = score_type || 'Prompt Match';
+
+                  const topRelatedRoles = Array.isArray(related_roles)
+                    ? related_roles.slice(0, 3)
+                    : [];
 
                   return (
                     <div
-                      key={candidate._id}
+                      key={_id}
                       className="bg-white/80 backdrop-blur-sm rounded-xl p-6 border border-gray-200/50 hover:shadow-xl transition-all duration-300 transform hover:scale-105"
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
                           <h4 className="text-lg font-bold text-gray-900 mb-1">{name}</h4>
                           <p className="text-sm text-purple-700 font-semibold mb-1">{jobRole}</p>
-                          <p className="text-xs text-gray-500 mb-1"><span className="font-semibold">Experience:</span> {experience}</p>
-                          <p className="text-xs text-gray-500 mb-1"><span className="font-semibold">Model Confidence:</span> {confidence}</p>
+                          <p className="text-xs text-gray-500 mb-1">
+                            <span className="font-semibold">Experience:</span> {expText}
+                          </p>
+                          <p className="text-xs text-gray-500 mb-1">
+                            <span className="font-semibold">Model Confidence:</span> {confText}
+                          </p>
 
-                          {relatedRoles.length > 0 && (
+                          {topRelatedRoles.length > 0 && (
                             <p className="text-xs text-blue-600 mt-1">
                               <span className="font-semibold">Also matches:</span>{' '}
-                              {relatedRoles
-                                .slice(0, 3)
-                                .map(r => `${r.role} (${r.match}%)`)
-                                .join(', ')}
+                              {topRelatedRoles.map(r => `${r.role} (${r.match}%)`).join(', ')}
                             </p>
                           )}
                         </div>
@@ -99,7 +118,7 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
                       </div>
 
                       <Link
-                        href={`/candidate/${candidate._id}`}
+                        href={`/candidate/${_id}`}
                         className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-3 px-4 rounded-xl text-sm font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105 text-center flex items-center justify-center"
                       >
                         <i className="ri-eye-line mr-2"></i>

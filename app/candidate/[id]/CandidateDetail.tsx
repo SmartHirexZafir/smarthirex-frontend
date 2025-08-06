@@ -8,10 +8,10 @@ import ActionButtons from './ActionButtons';
 import ScoreAnalysis from './ScoreAnalysis';
 
 export default function CandidateDetail({ candidateId }: { candidateId: string }) {
-  const [candidate, setCandidate] = useState(null);
+  const [candidate, setCandidate] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'analysis' | 'history'>('profile');
 
   useEffect(() => {
     const fetchCandidate = async () => {
@@ -19,11 +19,9 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
         setLoading(true);
         const res = await fetch(`http://localhost:10000/candidate/${candidateId}`);
         const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.detail || 'Failed to fetch candidate');
-        }
+        if (!res.ok) throw new Error(data.detail || 'Failed to fetch candidate');
         setCandidate(data);
-      } catch (err) {
+      } catch (err: any) {
         setError(err.message || 'Something went wrong');
       } finally {
         setLoading(false);
@@ -33,16 +31,31 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
     fetchCandidate();
   }, [candidateId]);
 
-  const handleStatusChange = (newStatus: string) => {
-    setCandidate((prev: any) => ({
-      ...prev,
-      status: newStatus,
-    }));
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      const res = await fetch(`http://localhost:10000/candidate/${candidateId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to update status');
+      }
+
+      setCandidate((prev: any) => ({
+        ...prev,
+        status: newStatus
+      }));
+    } catch (err: any) {
+      alert(err.message || 'Status update failed');
+    }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Loading candidate profile...</p>
@@ -53,11 +66,11 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
 
   if (error || !candidate) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <div className="text-center">
           <i className="ri-user-line text-6xl text-gray-400 mb-4"></i>
           <p className="text-gray-600 text-lg">{error || 'Candidate not found'}</p>
-          <Link href="/upload" className="text-blue-600 hover:text-blue-800 mt-2 inline-block cursor-pointer">
+          <Link href="/upload" className="text-blue-600 hover:text-blue-800 mt-2 inline-block">
             Back to candidates
           </Link>
         </div>
@@ -67,7 +80,9 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
 
   const category = candidate.category || candidate.predicted_role || 'Unknown';
   const confidence = candidate.confidence !== undefined ? `${candidate.confidence}%` : 'N/A';
-  const matchReason = candidate.match_reason || 'ML classified';
+  const matchReason = candidate.match_reason === 'Prompt filtered'
+    ? 'Filtered by prompt'
+    : 'ML classified';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -76,10 +91,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <Link 
-                href="/upload" 
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
-              >
+              <Link href="/upload" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <i className="ri-arrow-left-line text-xl text-gray-600"></i>
               </Link>
               <div>
@@ -89,16 +101,10 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
             </div>
 
             <div className="flex items-center space-x-3 flex-wrap justify-end">
-              {candidate.rank !== undefined && (
+              {candidate.rank > 0 && (
                 <div className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-4 py-2 rounded-full text-sm font-medium">
                   <i className="ri-medal-line mr-2"></i>
                   Rank #{candidate.rank}
-                </div>
-              )}
-              {candidate.score !== undefined && (
-                <div className="bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium">
-                  <i className="ri-star-line mr-2"></i>
-                  {candidate.score}% Match
                 </div>
               )}
               <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm font-medium">
@@ -139,8 +145,8 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                 ].map((tab) => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex-1 flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer ${
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`flex-1 flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                       activeTab === tab.id
                         ? 'bg-white text-blue-600 shadow-sm'
                         : 'text-gray-600 hover:text-blue-600'
@@ -155,7 +161,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
 
             <div className="bg-white/80 backdrop-blur-md rounded-b-2xl border-x border-b border-gray-200/50">
               {activeTab === 'profile' && <ResumePreview candidate={candidate} />}
-              {activeTab === 'analysis' && <ScoreAnalysis candidate={candidate} detailed={true} />}
+              {activeTab === 'analysis' && <ScoreAnalysis candidate={candidate} detailed />}
               {activeTab === 'history' && (
                 <div className="p-4">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Interaction History</h3>

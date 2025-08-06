@@ -2,7 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 
-export default function ChatbotSection({ onPromptSubmit, isProcessing, activePrompt }) {
+export default function ChatbotSection({ onPromptSubmit, isProcessing, activePrompt }: {
+  onPromptSubmit: (prompt: string, candidates: any[]) => void;
+  isProcessing: boolean;
+  activePrompt: string;
+}) {
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -13,7 +17,7 @@ export default function ChatbotSection({ onPromptSubmit, isProcessing, activePro
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const messagesEndRef = useRef(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const suggestedPrompts = [
     "Show me candidates with React + Django experience",
@@ -32,14 +36,15 @@ export default function ChatbotSection({ onPromptSubmit, isProcessing, activePro
     scrollToBottom();
   }, [messages]);
 
-  const handleSubmit = async (prompt = inputValue) => {
-    if (!prompt.trim()) return;
+  const handleSubmit = async (prompt = inputValue.trim()) => {
+    if (!prompt) return;
 
+    const timestamp = new Date().toLocaleTimeString();
     const userMessage = {
       id: Date.now(),
       type: 'user',
       content: prompt,
-      timestamp: new Date().toLocaleTimeString()
+      timestamp
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -65,7 +70,7 @@ export default function ChatbotSection({ onPromptSubmit, isProcessing, activePro
       };
 
       setMessages(prev => [...prev, botMessage]);
-      onPromptSubmit(prompt, data.resumes_preview || []);
+      onPromptSubmit(prompt, Array.isArray(data.resumes_preview) ? data.resumes_preview : []);
     } catch (error) {
       setMessages(prev => [...prev, {
         id: Date.now() + 2,

@@ -63,10 +63,11 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
                 {currentCandidates.map((candidate) => {
                   const name = candidate.name || 'Unnamed';
                   const jobRole = candidate.predicted_role || candidate.category || 'Unknown Role';
-                  const location = candidate.location || 'Not available';
                   const experience = candidate.experience ? `${candidate.experience} years` : 'Not specified';
-                  const score = candidate.final_score?.toFixed(2) || '0.00';
-                  const scoreLabel = candidate.score_type || 'Score';
+                  const confidence = candidate.confidence !== undefined ? `${candidate.confidence.toFixed(2)}%` : 'N/A';
+                  const score = candidate.semantic_score?.toFixed(2) || '0.00';
+                  const scoreLabel = candidate.score_type || 'Prompt Match';
+                  const relatedRoles = Array.isArray(candidate.related_roles) ? candidate.related_roles : [];
 
                   return (
                     <div
@@ -75,16 +76,22 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
                     >
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900 text-lg mb-1">{name}</h4>
-                          <p className="text-sm text-gray-600 mb-1">{jobRole}</p>
-                          <p className="text-xs text-gray-500 flex items-center mb-1">
-                            <i className="ri-map-pin-line mr-1"></i>
-                            {location}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Experience: {experience}
-                          </p>
+                          <h4 className="text-lg font-bold text-gray-900 mb-1">{name}</h4>
+                          <p className="text-sm text-purple-700 font-semibold mb-1">{jobRole}</p>
+                          <p className="text-xs text-gray-500 mb-1"><span className="font-semibold">Experience:</span> {experience}</p>
+                          <p className="text-xs text-gray-500 mb-1"><span className="font-semibold">Model Confidence:</span> {confidence}</p>
+
+                          {relatedRoles.length > 0 && (
+                            <p className="text-xs text-blue-600 mt-1">
+                              <span className="font-semibold">Also matches:</span>{' '}
+                              {relatedRoles
+                                .slice(0, 3)
+                                .map(r => `${r.role} (${r.match}%)`)
+                                .join(', ')}
+                            </p>
+                          )}
                         </div>
+
                         <div className="px-3 py-1 rounded-full text-sm font-semibold text-blue-800 border border-blue-200 bg-blue-50 shadow-sm text-center">
                           <div>{score}%</div>
                           <div className="text-xs text-gray-500">{scoreLabel}</div>

@@ -1,0 +1,241 @@
+// app/(shared)/TestEmailModal.tsx
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
+
+type CandidateLike = {
+  _id: string;
+  name?: string;
+  email?: string;
+  resume?: { email?: string };
+  job_role?: string;
+};
+
+type Props = {
+  open: boolean;
+  onClose: () => void;
+  candidate: CandidateLike | null;
+};
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:10000";
+
+function getCandidateEmail(c?: CandidateLike | null) {
+  return c?.email || c?.resume?.email || "";
+}
+
+function defaultSubject(role?: string) {
+  const r = role && role.trim() ? role : "Role";
+  return `Your ${r} assessment – SmartHirex`;
+}
+
+function defaultBodyHTML(name?: string, role?: string) {
+  const displayName = name && name.trim() ? name : "there";
+  const r = role && role.trim() ? role : "role";
+  // NOTE: {TEST_LINK} will be replaced by backend with the real link
+  return `
+<p>Hi <strong>${displayName}</strong>,</p>
+<p>You’re invited to take a short <strong>${r}</strong> assessment tailored to your experience.</p>
+<p>When you’re ready, click this link to begin:<br/>
+  <a href="{TEST_LINK}">{TEST_LINK}</a>
+</p>
+<p>Good luck!<br/>SmartHirex Team</p>
+`.trim();
+}
+
+export default function TestEmailModal({ open, onClose, candidate }: Props) {
+  const [to, setTo] = useState("");
+  const [subject, setSubject] = useState("");
+  const [bodyHtml, setBodyHtml] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sentInfo, setSentInfo] = useState<null | { test_link: string; email: string }>(null);
+
+  const role = useMemo(() => candidate?.job_role || "Role", [candidate]);
+
+  // hydrate defaults whenever modal opens for a new candidate
+  useEffect(() => {
+    if (!open) return;
+    setError(null);
+    setSentInfo(null);
+    setTo(getCandidateEmail(candidate));
+    setSubject(defaultSubject(role));
+    setBodyHtml(defaultBodyHTML(candidate?.name, role));
+  }, [open, candidate, role]);
+
+  if (!open || !candidate) return null;
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget && !sending) onClose();
+  };
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSentInfo(null);
+
+    if (!candidate?._id) {
+      setError("Candidate ID missing.");
+      return;
+    }
+    if (!to) {
+      setError("Recipient email is required.");
+      return;
+    }
+    if (!subject.trim()) {
+      setError("Subject cannot be empty.");
+      return;
+    }
+    if (!bodyHtml.trim()) {
+      setError("Email body cannot be empty.");
+      return;
+    }
+
+    try {
+      setSending(true);
+      const res = await fetch(`${API_BASE}/tests/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidate_id: candidate._id,
+          subject,
+          body_html: bodyHtml, // backend will replace {TEST_LINK}
+        }),
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || `Failed with status ${res.status}`);
+      }
+
+      const data = (await res.json()) as {
+        invite_id: string;
+        token: string;
+        test_link: string;
+        email: string;
+        sent: boolean;
+        expires_at: string;
+      };
+
+      setSentInfo({ test_link: data.test_link, email: data.email });
+    } catch (err: any) {
+      setError(err?.message || "Failed to send email.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      onClick={handleBackdropClick}
+      aria-modal="true"
+      role="dialog"
+    >
+      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <h3 className="text-lg font-semibold">Send Test</h3>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-2 hover:bg-gray-100"
+            aria-label="Close"
+            disabled={sending}
+          >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSend} className="space-y-4 p-6">
+          {/* To (read-only, derived from candidate) */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">To</label>
+            <input
+              type="email"
+              value={to}
+              readOnly
+              className="w-full rounded-lg border border-gray-300 bg-gray-100 px-3 py-2 text-sm text-gray-700"
+            />
+            {!to && (
+              <p className="mt-1 text-xs text-red-600">
+                No email found on candidate profile. Add email to continue.
+              </p>
+            )}
+          </div>
+
+          {/* Subject */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Subject</label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Your assessment invitation"
+            />
+          </div>
+
+          {/* Body (HTML) */}
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Message (HTML)</label>
+              <span className="text-xs text-gray-500">
+                Use <code className="rounded bg-gray-100 px-1">{`{TEST_LINK}`}</code> where the link should appear
+              </span>
+            </div>
+            <textarea
+              value={bodyHtml}
+              onChange={(e) => setBodyHtml(e.target.value)}
+              className="h-44 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder={`Hi ${candidate.name || "there"},\n\nClick {TEST_LINK} to begin…`}
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {sentInfo ? (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-3 text-sm text-green-800">
+              <div className="font-medium">Invitation sent!</div>
+              <div className="mt-1">
+                Sent to <span className="font-medium">{sentInfo.email}</span>
+              </div>
+              <div className="mt-1 break-all">
+                Test link: <a className="underline" href={sentInfo.test_link} target="_blank" rel="noreferrer">{sentInfo.test_link}</a>
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+                disabled={sending}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={sending || !to || !subject.trim() || !bodyHtml.trim()}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {sending ? "Sending…" : "Send"}
+              </button>
+            </div>
+          )}
+        </form>
+      </div>
+    </div>
+  );
+}

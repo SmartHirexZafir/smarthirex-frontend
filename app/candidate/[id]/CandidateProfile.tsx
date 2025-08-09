@@ -31,51 +31,54 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
     matchedSkills = []
   } = candidate;
 
+  const fmtPct = (v?: number) =>
+    typeof v === 'number' && isFinite(v) ? `${Math.round(v)}%` : '—';
+
   return (
-    <div className="bg-white/80 backdrop-blur-md rounded-2xl shadow-xl border border-gray-200/50 p-4 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-400/10 via-purple-400/10 to-green-400/10"></div>
+    <div className="relative overflow-hidden rounded-2xl border border-gray-200/50 bg-white/80 p-4 shadow-xl backdrop-blur-md">
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-400/10 via-purple-400/10 to-green-400/10" />
 
       <div className="relative z-10">
         {/* Profile Header */}
-        <div className="text-center mb-4">
-          <div className="relative inline-block mb-3">
-            <img 
-              src={avatar || '/default-avatar.png'}
+        <div className="mb-4 text-center">
+          <div className="relative mb-3 inline-block">
+            {/* simple img to avoid Next/Image config needs */}
+            <img
+              src={avatar && avatar.trim() ? avatar : '/default-avatar.png'}
               alt={name}
-              className="w-20 h-20 rounded-full object-cover border-3 border-white shadow-lg object-top"
+              className="h-20 w-20 rounded-full border-3 border-white object-cover object-top shadow-lg"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = '/default-avatar.png';
+              }}
             />
-            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
-              <i className="ri-check-line text-white text-xs"></i>
+            <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-green-500">
+              <i className="ri-check-line text-xs text-white" aria-hidden />
             </div>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-1">{name}</h2>
-          <p className="text-blue-600 font-medium text-sm mb-1">{currentRole}</p>
-          <p className="text-gray-600 text-xs">{company}</p>
+          <h2 className="mb-1 text-xl font-bold text-gray-900">{name}</h2>
+          <p className="mb-1 text-sm font-medium text-blue-600">{currentRole}</p>
+          <p className="text-xs text-gray-600">{company}</p>
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-3 rounded-xl border border-blue-200">
+        <div className="mb-4 grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100 p-3">
             <div className="text-center">
-              <div className="text-xl font-bold text-blue-600 mb-1">
-                {score !== undefined ? `${score}%` : '—'}
-              </div>
-              <div className="text-xs text-blue-800 font-medium">Match Score</div>
+              <div className="mb-1 text-xl font-bold text-blue-600">{fmtPct(score)}</div>
+              <div className="text-xs font-medium text-blue-800">Match Score</div>
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-green-50 to-green-100 p-3 rounded-xl border border-green-200">
+          <div className="rounded-xl border border-green-200 bg-gradient-to-br from-green-50 to-green-100 p-3">
             <div className="text-center">
-              <div className="text-xl font-bold text-green-600 mb-1">
-                {testScore !== undefined ? `${testScore}%` : '—'}
-              </div>
-              <div className="text-xs text-green-800 font-medium">Test Score</div>
+              <div className="mb-1 text-xl font-bold text-green-600">{fmtPct(testScore)}</div>
+              <div className="text-xs font-medium text-green-800">Test Score</div>
             </div>
           </div>
         </div>
 
         {/* Contact Info */}
-        <div className="space-y-2 mb-4">
+        <div className="mb-4 space-y-2">
           <ContactInfo label="Email" icon="ri-mail-line" color="blue" value={email} />
           <ContactInfo label="Phone" icon="ri-phone-line" color="green" value={phone} />
           <ContactInfo label="Location" icon="ri-map-pin-line" color="purple" value={location} />
@@ -84,21 +87,21 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
         {/* Skills Preview */}
         {skills.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">Top Skills</h3>
+            <h3 className="mb-2 text-sm font-semibold text-gray-900">Top Skills</h3>
             <div className="flex flex-wrap gap-1">
               {skills.map((skill, index) => {
                 const isMatched = matchedSkills.includes(skill);
                 return (
                   <span
-                    key={index}
-                    className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    key={`${skill}-${index}`}
+                    className={`rounded-full border px-2 py-1 text-xs font-medium ${
                       isMatched
-                        ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                        : 'bg-gray-100 text-gray-600 border border-gray-200'
+                        ? 'border-blue-200 bg-blue-100 text-blue-800'
+                        : 'border-gray-200 bg-gray-100 text-gray-600'
                     }`}
                   >
                     {skill}
-                    {isMatched && <i className="ri-check-line ml-1"></i>}
+                    {isMatched && <i className="ri-check-line ml-1" aria-hidden />}
                   </span>
                 );
               })}
@@ -118,17 +121,26 @@ function ContactInfo({
 }: {
   label: string;
   icon: string;
-  color: string;
+  color: 'blue' | 'green' | 'purple';
   value?: string | null;
 }) {
+  // Tailwind-safe class mapping (no dynamic template strings)
+  const colorClasses: Record<typeof color, { box: string; icon: string }> = {
+    blue:   { box: 'bg-blue-100',   icon: 'text-blue-600' },
+    green:  { box: 'bg-green-100',  icon: 'text-green-600' },
+    purple: { box: 'bg-purple-100', icon: 'text-purple-600' },
+  };
+
+  const c = colorClasses[color];
+
   return (
-    <div className="flex items-center space-x-2 p-2 bg-gray-50/80 rounded-lg">
-      <div className={`w-6 h-6 bg-${color}-100 rounded-lg flex items-center justify-center`}>
-        <i className={`${icon} text-${color}-600 text-sm`}></i>
+    <div className="flex items-center space-x-2 rounded-lg bg-gray-50/80 p-2">
+      <div className={`flex h-6 w-6 items-center justify-center rounded-lg ${c.box}`}>
+        <i className={`${icon} ${c.icon} text-sm`} aria-hidden />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium text-gray-900">{label}</p>
-        <p className="text-xs text-gray-600 truncate">{value || 'N/A'}</p>
+        <p className="truncate text-xs text-gray-600">{value || 'N/A'}</p>
       </div>
     </div>
   );

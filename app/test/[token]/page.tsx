@@ -49,6 +49,7 @@ export default function TestTokenPage() {
   };
 
   function resetAndExit() {
+    // Legacy navigation (used only if you explicitly enable allowSiteBack in TestResult)
     if (candidateId) {
       router.push(`/candidate/${candidateId}`);
     } else {
@@ -97,6 +98,8 @@ export default function TestTokenPage() {
             showPreview={true}
             previewWidth={220}
             position="bottom-right"
+            // Low-impact deterrent enabled; fullscreen remains off to avoid disruption
+            showWatermark={true}
           />
 
           <TestRunner
@@ -118,6 +121,8 @@ export default function TestTokenPage() {
         <TestResult
           result={result}
           onBack={resetAndExit}
+          // Critical: do NOT navigate back to the site after submit
+          allowSiteBack={false}
         />
       )}
     </div>

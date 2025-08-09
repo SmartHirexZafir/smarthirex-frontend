@@ -26,6 +26,11 @@ type ProctorGuardProps = {
   previewWidth?: number; // default 240
   /** Corner placement for preview */
   position?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
+  /** NEW: Try to keep the page in fullscreen; soft enforcement (opt-in) */
+  enforceFullscreen?: boolean; // default false (non-breaking)
+  /** NEW: Show a faint watermark with candidate+test info (opt-in) */
+  showWatermark?: boolean; // default false (non-breaking)
 };
 
 /**
@@ -33,6 +38,7 @@ type ProctorGuardProps = {
  * - requests camera access
  * - starts a proctoring session on the backend
  * - sends periodic heartbeats and (optionally) image snapshots
+ * - optional: deter screenshots (PrintScreen), react to visibility changes, fullscreen
  * - cleans up on unmount
  */
 export default function ProctorGuard({
@@ -46,6 +52,8 @@ export default function ProctorGuard({
   showPreview = true,
   previewWidth = 240,
   position = "bottom-right",
+  enforceFullscreen = false,
+  showWatermark = false,
 }: ProctorGuardProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -55,6 +63,7 @@ export default function ProctorGuard({
   const [cameraStatus, setCameraStatus] = useState<"idle" | "on" | "blocked" | "error">("idle");
   const [proctorError, setProctorError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null); // transient notices (e.g., screenshot attempt)
 
   const previewStyle = useMemo<React.CSSProperties>(() => {
     const base: React.CSSProperties = {
@@ -110,10 +119,10 @@ export default function ProctorGuard({
         streamRef.current = null;
       }
       if (videoRef.current) {
-        videoRef.current.srcObject = null;
+        (videoRef.current as HTMLVideoElement).srcObject = null;
       }
       setCameraStatus("idle");
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, []);
@@ -175,9 +184,8 @@ export default function ProctorGuard({
     const video = videoRef.current;
     if (!video) return;
 
-    // Ensure we have some dimensions
-    const w = video.videoWidth || 640;
-    const h = video.videoHeight || 480;
+    const w = (video as HTMLVideoElement).videoWidth || 640;
+    const h = (video as HTMLVideoElement).videoHeight || 480;
     let canvas = canvasRef.current;
     if (!canvas) {
       canvas = document.createElement("canvas");
@@ -188,7 +196,7 @@ export default function ProctorGuard({
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.drawImage(video, 0, 0, w, h);
+    ctx.drawImage(video as HTMLVideoElement, 0, 0, w, h);
 
     try {
       const dataURL = canvas.toDataURL("image/jpeg", 0.7); // ~70% quality
@@ -208,7 +216,7 @@ export default function ProctorGuard({
         // not fatal
         console.warn("ProctorGuard: snapshot failed", await res.text());
       }
-    } catch (e) {
+    } catch {
       // ignore network flakiness; try again at next interval
     }
   }, [apiBase, enableSnapshots, sessionId]);
@@ -227,6 +235,29 @@ export default function ProctorGuard({
     }
   }, [apiBase, sessionId]);
 
+  // --- Optional fullscreen ---------------------------------------------------
+  const requestFullscreen = useCallback(async () => {
+    if (!enforceFullscreen) return;
+    try {
+      const el = document.documentElement as any;
+      if (!document.fullscreenElement && el?.requestFullscreen) {
+        await el.requestFullscreen();
+      }
+    } catch {
+      // ignore; browsers may block
+    }
+  }, [enforceFullscreen]);
+
+  const exitFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement && (document as any).exitFullscreen) {
+        await (document as any).exitFullscreen();
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   // --- Lifecycle -------------------------------------------------------------
 
   // Start camera + session on mount
@@ -234,6 +265,10 @@ export default function ProctorGuard({
     let cancelled = false;
 
     (async () => {
+      if (enforceFullscreen) {
+        await requestFullscreen();
+      }
+
       const camOk = await startCamera();
       if (!camOk || cancelled) return;
 
@@ -244,9 +279,9 @@ export default function ProctorGuard({
     return () => {
       cancelled = true;
     };
-  }, [startCamera, startSession]);
+  }, [startCamera, startSession, requestFullscreen, enforceFullscreen]);
 
-  // Heartbeat interval
+  // Heartbeat interval + react to visibility/focus
   useEffect(() => {
     if (!sessionId) return;
 
@@ -260,9 +295,20 @@ export default function ProctorGuard({
     const id = window.setInterval(() => alive && send(), Math.max(5, heartbeatIntervalSec) * 1000);
 
     // also on visibility/focus changes
-    const onVis = () => send();
+    const onVis = () => {
+      send();
+      // soft deterrent: if tab hidden, take a quick snapshot (if enabled)
+      if (enableSnapshots && document.visibilityState !== "visible") {
+        captureAndUploadSnapshot();
+        setNotice("The test tab was hidden. Please keep it visible.");
+        window.setTimeout(() => setNotice(null), 1600);
+      }
+    };
     const onFocus = () => send();
-    const onBlur = () => send();
+    const onBlur = () => {
+      send();
+      if (enableSnapshots) captureAndUploadSnapshot();
+    };
 
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("focus", onFocus);
@@ -275,7 +321,7 @@ export default function ProctorGuard({
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("blur", onBlur);
     };
-  }, [sessionId, heartbeatIntervalSec, sendHeartbeat]);
+  }, [sessionId, heartbeatIntervalSec, sendHeartbeat, captureAndUploadSnapshot, enableSnapshots]);
 
   // Snapshot interval
   useEffect(() => {
@@ -297,16 +343,56 @@ export default function ProctorGuard({
       // best-effort end (keepalive=true)
       endSession("page_unload");
       stopCamera();
+      if (enforceFullscreen) {
+        exitFullscreen();
+      }
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
       onBeforeUnload();
       window.removeEventListener("beforeunload", onBeforeUnload);
     };
-
-    // NOTE: intentionally calling onBeforeUnload in cleanup to ensure we end.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endSession, stopCamera]);
+  }, [endSession, stopCamera, exitFullscreen, enforceFullscreen]);
+
+  // PrintScreen detection + best-effort clipboard clear (+ snapshot)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const key = (e.key || "").toLowerCase();
+      if (key === "printscreen") {
+        // Best-effort to overwrite clipboard (not guaranteed)
+        try {
+          (navigator as any).clipboard?.writeText?.(" ").catch(() => {});
+        } catch {}
+        if (enableSnapshots) {
+          captureAndUploadSnapshot();
+        }
+        setNotice("Screenshots are not allowed.");
+        window.setTimeout(() => setNotice(null), 1600);
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+      return true;
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true } as any);
+  }, [captureAndUploadSnapshot, enableSnapshots]);
+
+  // If the user exits fullscreen (soft enforcement), nudge & try to re-enter
+  useEffect(() => {
+    if (!enforceFullscreen) return;
+    const onFsChange = async () => {
+      if (!document.fullscreenElement) {
+        setNotice("Please stay in fullscreen during the test.");
+        window.setTimeout(() => setNotice(null), 1600);
+        // try to re-enter (user may need to interact again)
+        await requestFullscreen();
+      }
+    };
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, [enforceFullscreen, requestFullscreen]);
 
   // --- UI -------------------------------------------------------------------
 
@@ -355,6 +441,39 @@ export default function ProctorGuard({
         </div>
       )}
 
+      {/* Optional watermark overlay */}
+      {showWatermark && candidateId && testId && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            pointerEvents: "none",
+            zIndex: 40,
+            background: "transparent",
+          }}
+          aria-hidden
+        >
+          <div
+            style={{
+              position: "absolute",
+              right: 12,
+              bottom: 12,
+              opacity: 0.25,
+              fontSize: 12,
+              color: "#111",
+              background: "rgba(255,255,255,.6)",
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "1px solid rgba(0,0,0,.08)",
+              userSelect: "none",
+              mixBlendMode: "multiply",
+            }}
+          >
+            Candidate: {candidateId} &nbsp;|&nbsp; Test: {testId} &nbsp;|&nbsp; {new Date().toLocaleString()}
+          </div>
+        </div>
+      )}
+
       {/* Minimal, non-intrusive error hint (kept invisible unless needed) */}
       {proctorError && (
         <div
@@ -373,6 +492,27 @@ export default function ProctorGuard({
           }}
         >
           Proctoring: {proctorError}
+        </div>
+      )}
+
+      {/* Transient notices (e.g., screenshot attempt, tab hidden) */}
+      {notice && (
+        <div
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: 24,
+            transform: "translateX(-50%)",
+            zIndex: 60,
+            background: "rgba(17,24,39,.9)",
+            color: "#fff",
+            padding: "8px 12px",
+            borderRadius: 999,
+            fontSize: 12,
+            boxShadow: "0 8px 30px rgba(0,0,0,.25)",
+          }}
+        >
+          {notice}
         </div>
       )}
     </>

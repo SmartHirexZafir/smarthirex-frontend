@@ -8,6 +8,7 @@ export type Question = {
   question: string;
   options?: string[];              // MCQ only
   correct_answer?: string | null;  // MCQ -> string; others -> null
+  // difficulty?: "easy" | "medium" | "hard" | "expert"; // (optional if present)
 };
 
 export type SubmitDetail = {
@@ -36,6 +37,15 @@ type Props = {
 
 const DEFAULT_API_BASE =
   process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:10000";
+
+// --- helpers ---
+function validMcqOptions(opts: unknown): opts is string[] {
+  return Array.isArray(opts) && opts.length === 4 && opts.every(o => typeof o === "string" && o.trim().length > 0);
+}
+
+function fallbackOptions(): string[] {
+  return ["Option 1", "Option 2", "Option 3", "Option 4"];
+}
 
 export default function TestRunner({
   token,
@@ -125,7 +135,7 @@ export default function TestRunner({
     document.addEventListener("cut", onCut);
     document.addEventListener("paste", onPaste);
 
-    // Block common shortcuts (Ctrl/Cmd + C/V/X, PrintScreen)
+    // Block common shortcuts (Ctrl/Cmd + C/V/X/A, PrintScreen, Ctrl+S)
     const onKey = (e: KeyboardEvent) => {
       const isMod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
@@ -138,7 +148,6 @@ export default function TestRunner({
         nudge("Clipboard and screenshots are disabled during the test.");
         return false;
       }
-      // Optional: block Ctrl+S (save page)
       if (isMod && key === "s") {
         e.preventDefault();
         nudge("Saving the page is disabled during the test.");
@@ -148,10 +157,15 @@ export default function TestRunner({
     };
     window.addEventListener("keydown", onKey, { capture: true });
 
-    // Try to clear clipboard on blur (best-effort)
+    // Try to clear clipboard on blur (best-effort, silent on failure)
     const onBlur = () => {
-      if (navigator.clipboard && "writeText" in navigator.clipboard) {
-        navigator.clipboard.writeText(" ");
+      try {
+        // if the document isn't focused anymore, browsers may reject clipboard writes.
+        if (typeof navigator !== "undefined" && (navigator as any).clipboard?.writeText) {
+          (navigator as any).clipboard.writeText(" ").catch(() => {});
+        }
+      } catch {
+        // ignore
       }
     };
     window.addEventListener("blur", onBlur);
@@ -209,6 +223,10 @@ export default function TestRunner({
       {safeQuestions.map((q, idx) => {
         const t = String(q.type || "mcq").toLowerCase();
         const isMcq = t === "mcq";
+        const opts = isMcq
+          ? (validMcqOptions(q.options) ? q.options! : fallbackOptions())
+          : [];
+
         return (
           <div key={idx} className="rounded-xl border border-gray-200 p-4">
             <div className="mb-2 text-sm font-medium">
@@ -225,35 +243,33 @@ export default function TestRunner({
                 role="radiogroup"
                 aria-labelledby={`q-${idx}-label`}
               >
-                {(q.options && q.options.length === 4 ? q.options : ["A", "B", "C", "D"]).map(
-                  (opt, oi) => {
-                    const id = `q${idx}-opt${oi}`;
-                    const selected = (answers[idx] ?? "") === opt;
-                    return (
-                      <label
-                        key={id}
-                        htmlFor={id}
-                        className={
-                          "flex items-center gap-3 rounded-lg border px-3 py-2 text-sm transition " +
-                          (selected
-                            ? "border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50"
-                            : "border-gray-300 hover:bg-gray-50")
-                        }
-                      >
-                        <input
-                          id={id}
-                          type="radio"
-                          name={`q-${idx}`}
-                          value={opt}
-                          checked={selected}
-                          onChange={(e) => updateAnswer(idx, e.target.value)}
-                          className="h-4 w-4"
-                        />
-                        <span className="break-words">{opt}</span>
-                      </label>
-                    );
-                  }
-                )}
+                {opts.map((opt, oi) => {
+                  const id = `q${idx}-opt${oi}`;
+                  const selected = (answers[idx] ?? "") === opt;
+                  return (
+                    <label
+                      key={id}
+                      htmlFor={id}
+                      className={
+                        "flex items-center gap-3 rounded-lg border px-3 py-2 text-sm transition " +
+                        (selected
+                          ? "border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50"
+                          : "border-gray-300 hover:bg-gray-50")
+                      }
+                    >
+                      <input
+                        id={id}
+                        type="radio"
+                        name={`q-${idx}`}
+                        value={opt}
+                        checked={selected}
+                        onChange={(e) => updateAnswer(idx, e.target.value)}
+                        className="h-4 w-4"
+                      />
+                      <span className="break-words">{opt}</span>
+                    </label>
+                  );
+                })}
               </div>
             ) : (
               <div>

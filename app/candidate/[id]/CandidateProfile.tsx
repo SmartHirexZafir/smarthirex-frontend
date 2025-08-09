@@ -6,13 +6,30 @@ type Candidate = {
   currentRole?: string;
   company?: string;
   score?: number;
-  testScore?: number;
+  testScore?: number;           // frontend camelCase
+  test_score?: number;          // backend snake_case
   email?: string;
   phone?: string;
   location?: string;
   skills?: string[];
   matchedSkills?: string[];
+  resume?: { email?: string };  // optional nested email
 };
+
+const FALLBACK_SVG =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e5e7eb"/>
+      <stop offset="1" stop-color="#f3f4f6"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" fill="url(#g)"/>
+  <circle cx="64" cy="46" r="22" fill="#cbd5e1"/>
+  <rect x="24" y="78" width="80" height="34" rx="17" fill="#cbd5e1"/>
+</svg>`);
 
 export default function CandidateProfile({ candidate }: { candidate: Candidate }) {
   if (!candidate) return null;
@@ -23,13 +40,25 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
     currentRole = 'N/A',
     company = 'Not specified',
     score,
-    testScore,
+    test_score,
+    testScore: testScoreCamel,
     email,
     phone,
     location = 'N/A',
     skills = [],
-    matchedSkills = []
+    matchedSkills = [],
+    resume,
   } = candidate;
+
+  // Prefer backend value; fall back to camelCase
+  const normalizedTestScore =
+    typeof test_score === 'number' && isFinite(test_score)
+      ? test_score
+      : typeof testScoreCamel === 'number' && isFinite(testScoreCamel)
+      ? testScoreCamel
+      : undefined;
+
+  const normalizedEmail = email || resume?.email || undefined;
 
   const fmtPct = (v?: number) =>
     typeof v === 'number' && isFinite(v) ? `${Math.round(v)}%` : '—';
@@ -42,13 +71,18 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
         {/* Profile Header */}
         <div className="mb-4 text-center">
           <div className="relative mb-3 inline-block">
-            {/* simple img to avoid Next/Image config needs */}
+            {/* plain <img> to avoid Next/Image config; safe error fallback */}
             <img
               src={avatar && avatar.trim() ? avatar : '/default-avatar.png'}
               alt={name}
               className="h-20 w-20 rounded-full border-3 border-white object-cover object-top shadow-lg"
               onError={(e) => {
-                (e.currentTarget as HTMLImageElement).src = '/default-avatar.png';
+                const img = e.currentTarget as HTMLImageElement;
+                // Swap to inline SVG ONCE to stop 404 retry loop
+                if (img.src !== FALLBACK_SVG) {
+                  img.src = FALLBACK_SVG;
+                  img.onerror = null;
+                }
               }}
             />
             <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-green-500">
@@ -71,15 +105,19 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
 
           <div className="rounded-xl border border-green-200 bg-gradient-to-br from-green-50 to-green-100 p-3">
             <div className="text-center">
-              <div className="mb-1 text-xl font-bold text-green-600">{fmtPct(testScore)}</div>
-              <div className="text-xs font-medium text-green-800">Test Score</div>
+              <div className="mb-1 text-xl font-bold text-green-600">
+                {fmtPct(normalizedTestScore)}
+              </div>
+              <div className="text-xs font-medium text-green-800" title="Latest assessment score (MCQ %)">
+                Test Score
+              </div>
             </div>
           </div>
         </div>
 
         {/* Contact Info */}
         <div className="mb-4 space-y-2">
-          <ContactInfo label="Email" icon="ri-mail-line" color="blue" value={email} />
+          <ContactInfo label="Email" icon="ri-mail-line" color="blue" value={normalizedEmail} />
           <ContactInfo label="Phone" icon="ri-phone-line" color="green" value={phone} />
           <ContactInfo label="Location" icon="ri-map-pin-line" color="purple" value={location} />
         </div>
@@ -117,14 +155,14 @@ function ContactInfo({
   label,
   icon,
   color,
-  value
+  value,
 }: {
   label: string;
   icon: string;
   color: 'blue' | 'green' | 'purple';
   value?: string | null;
 }) {
-  // Tailwind-safe class mapping (no dynamic template strings)
+  // Tailwind-safe class mapping
   const colorClasses: Record<typeof color, { box: string; icon: string }> = {
     blue:   { box: 'bg-blue-100',   icon: 'text-blue-600' },
     green:  { box: 'bg-green-100',  icon: 'text-green-600' },

@@ -1,7 +1,7 @@
 // app/candidate/[id]/CandidateDetail.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import CandidateProfile from "./CandidateProfile";
 import ResumePreview from "./ResumePreview";
@@ -17,10 +17,16 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"profile" | "analysis" | "history">("profile");
 
+  const mountedAtRef = useRef<number>(Date.now()); // for short-lived polling
+  const pollingIdRef = useRef<number | null>(null);
+
   const fetchCandidate = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/candidate/${candidateId}`);
+      const res = await fetch(`${API_BASE}/candidate/${candidateId}`, {
+        // help bypass any intermediate caching; we want fresh score if it just changed
+        headers: { "Cache-Control": "no-cache" },
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Failed to fetch candidate");
       setCandidate(data);
@@ -32,8 +38,67 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
     }
   }, [candidateId]);
 
+  // initial load
   useEffect(() => {
     fetchCandidate();
+  }, [fetchCandidate]);
+
+  // live auto-refresh (short window) to catch score updates soon after a test submission
+  useEffect(() => {
+    // poll every 15s for up to 3 minutes after mount
+    const POLL_MS = 15000;
+    const MAX_MS = 3 * 60 * 1000;
+
+    function shouldPollNow() {
+      return Date.now() - mountedAtRef.current < MAX_MS;
+    }
+
+    if (pollingIdRef.current) {
+      window.clearInterval(pollingIdRef.current);
+      pollingIdRef.current = null;
+    }
+
+    // Start polling if within the live window
+    if (shouldPollNow()) {
+      pollingIdRef.current = window.setInterval(() => {
+        if (!shouldPollNow()) {
+          if (pollingIdRef.current) {
+            window.clearInterval(pollingIdRef.current);
+            pollingIdRef.current = null;
+          }
+          return;
+        }
+        // If we don't have a score or it's 0, or user is on analysis tab, try to refresh
+        const score = Number(candidate?.test_score ?? 0);
+        if (!candidate || !Number.isFinite(score) || score === 0 || activeTab === "analysis") {
+          fetchCandidate();
+        }
+      }, POLL_MS) as any;
+    }
+
+    return () => {
+      if (pollingIdRef.current) {
+        window.clearInterval(pollingIdRef.current);
+        pollingIdRef.current = null;
+      }
+    };
+  }, [candidate?.test_score, activeTab, fetchCandidate]);
+
+  // refresh when the tab becomes visible / regains focus (common after test completion)
+  useEffect(() => {
+    const onFocusOrVisible = () => {
+      // quick refresh to pick up any just-submitted score
+      fetchCandidate();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") onFocusOrVisible();
+    };
+    window.addEventListener("focus", onFocusOrVisible);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", onFocusOrVisible);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [fetchCandidate]);
 
   const handleStatusChange = async (newStatus: string) => {
@@ -88,6 +153,12 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
   const matchReason =
     candidate.match_reason === "Prompt filtered" ? "Filtered by prompt" : "ML classified";
 
+  // fresh test score from backend (tests/submit updates parsed_resumes.test_score)
+  const testScore =
+    typeof candidate.test_score === "number" && Number.isFinite(candidate.test_score)
+      ? Math.round(candidate.test_score)
+      : null;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
@@ -123,6 +194,17 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                 <i className="ri-compass-3-line mr-1"></i>
                 {matchReason}
               </div>
+
+              {/* NEW: visible test score chip when present */}
+              {testScore !== null && (
+                <div
+                  className="bg-green-100 text-green-800 px-4 py-2 rounded-full text-sm font-medium"
+                  title="Latest assessment score (MCQ percent)"
+                >
+                  <i className="ri-checkbox-circle-line mr-1"></i>
+                  Score: {testScore}%
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -145,25 +227,37 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
           {/* Right Column */}
           <div className="lg:col-span-3">
             <div className="bg-white/80 backdrop-blur-md rounded-t-2xl border border-gray-200/50 p-4">
-              <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-                {[
-                  { id: "profile", label: "Resume", icon: "ri-file-text-line" },
-                  { id: "analysis", label: "Analysis", icon: "ri-bar-chart-line" },
-                  { id: "history", label: "History", icon: "ri-history-line" },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex-1 flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      activeTab === tab.id
-                        ? "bg-white text-blue-600 shadow-sm"
-                        : "text-gray-600 hover:text-blue-600"
-                    }`}
-                  >
-                    <i className={`${tab.icon} mr-2`}></i>
-                    {tab.label}
-                  </button>
-                ))}
+              <div className="flex items-center justify-between">
+                <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+                  {[
+                    { id: "profile", label: "Resume", icon: "ri-file-text-line" },
+                    { id: "analysis", label: "Analysis", icon: "ri-bar-chart-line" },
+                    { id: "history", label: "History", icon: "ri-history-line" },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id as any)}
+                      className={`flex-1 flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                        activeTab === tab.id
+                          ? "bg-white text-blue-600 shadow-sm"
+                          : "text-gray-600 hover:text-blue-600"
+                      }`}
+                    >
+                      <i className={`${tab.icon} mr-2`}></i>
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Quick manual refresh (useful right after a test) */}
+                <button
+                  onClick={fetchCandidate}
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
+                  title="Refresh candidate"
+                >
+                  <i className="ri-refresh-line mr-1" />
+                  Refresh
+                </button>
               </div>
             </div>
 
@@ -178,7 +272,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                     <button
                       onClick={fetchCandidate}
                       className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
-                      title="Refresh"
+                      title="Refresh history"
                     >
                       <i className="ri-refresh-line mr-1" />
                       Refresh

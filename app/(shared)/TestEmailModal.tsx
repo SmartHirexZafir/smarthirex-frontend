@@ -43,10 +43,18 @@ function defaultBodyHTML(name?: string, role?: string) {
 `.trim();
 }
 
+// clamp helper for question count
+function clampQuestionCount(n: number) {
+  if (Number.isNaN(n)) return 4;
+  return Math.min(50, Math.max(1, Math.floor(n)));
+}
+
 export default function TestEmailModal({ open, onClose, candidate }: Props) {
   const [to, setTo] = useState("");
   const [subject, setSubject] = useState("");
   const [bodyHtml, setBodyHtml] = useState("");
+  const [questionCount, setQuestionCount] = useState<number>(4);
+
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentInfo, setSentInfo] = useState<null | { test_link: string; email: string }>(null);
@@ -61,6 +69,7 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
     setTo(getCandidateEmail(candidate));
     setSubject(defaultSubject(role));
     setBodyHtml(defaultBodyHTML(candidate?.name, role));
+    setQuestionCount(4); // default each time modal opens
   }, [open, candidate, role]);
 
   if (!open || !candidate) return null;
@@ -90,6 +99,7 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
       setError("Email body cannot be empty.");
       return;
     }
+    const qc = clampQuestionCount(questionCount);
 
     try {
       setSending(true);
@@ -100,6 +110,8 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
           candidate_id: candidate._id,
           subject,
           body_html: bodyHtml, // backend will replace {TEST_LINK}
+          // NEW: allow sender to choose number of questions
+          question_count: qc,
         }),
       });
 
@@ -124,6 +136,9 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
       setSending(false);
     }
   }
+
+  const canSend =
+    !sending && !!to && !!subject.trim() && !!bodyHtml.trim() && questionCount >= 1 && questionCount <= 50;
 
   return (
     <div
@@ -174,6 +189,26 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
             />
           </div>
 
+          {/* Number of questions */}
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Number of questions</label>
+              <span className="text-xs text-gray-500">1–50 (default 4)</span>
+            </div>
+            <input
+              type="number"
+              min={1}
+              max={50}
+              step={1}
+              value={questionCount}
+              onChange={(e) => setQuestionCount(clampQuestionCount(Number(e.target.value)))}
+              className="w-32 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            {questionCount < 1 || questionCount > 50 ? (
+              <p className="mt-1 text-xs text-red-600">Please choose between 1 and 50.</p>
+            ) : null}
+          </div>
+
           {/* Body (HTML) */}
           <div>
             <div className="flex items-center justify-between">
@@ -203,7 +238,10 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
                 Sent to <span className="font-medium">{sentInfo.email}</span>
               </div>
               <div className="mt-1 break-all">
-                Test link: <a className="underline" href={sentInfo.test_link} target="_blank" rel="noreferrer">{sentInfo.test_link}</a>
+                Test link:{" "}
+                <a className="underline" href={sentInfo.test_link} target="_blank" rel="noreferrer">
+                  {sentInfo.test_link}
+                </a>
               </div>
               <div className="mt-3 flex gap-2">
                 <button
@@ -227,7 +265,7 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
               </button>
               <button
                 type="submit"
-                disabled={sending || !to || !subject.trim() || !bodyHtml.trim()}
+                disabled={!canSend}
                 className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {sending ? "Sending…" : "Send"}

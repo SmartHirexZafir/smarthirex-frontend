@@ -17,8 +17,14 @@ type Props = {
   candidate: CandidateLike | null;
 };
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:10000";
+// Resolve API base safely, supporting both env names
+function resolveApiBase() {
+  const raw =
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_BASE ||
+    "http://localhost:10000";
+  return String(raw).replace(/\/$/, "");
+}
 
 function getCandidateEmail(c?: CandidateLike | null) {
   return c?.email || c?.resume?.email || "";
@@ -50,6 +56,7 @@ function clampQuestionCount(n: number) {
 }
 
 export default function TestEmailModal({ open, onClose, candidate }: Props) {
+  const API_BASE = useMemo(() => resolveApiBase(), []);
   const [to, setTo] = useState("");
   const [subject, setSubject] = useState("");
   const [bodyHtml, setBodyHtml] = useState("");
@@ -101,6 +108,10 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
     }
     const qc = clampQuestionCount(questionCount);
 
+    // Abort after 20s to avoid hanging UI
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20000);
+
     try {
       setSending(true);
       const res = await fetch(`${API_BASE}/tests/invite`, {
@@ -110,29 +121,38 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
           candidate_id: candidate._id,
           subject,
           body_html: bodyHtml, // backend will replace {TEST_LINK}
-          // NEW: allow sender to choose number of questions
+          // allow sender to choose number of questions
           question_count: qc,
         }),
+        signal: controller.signal,
       });
 
       if (!res.ok) {
-        const t = await res.text();
+        const t = await res.text().catch(() => "");
         throw new Error(t || `Failed with status ${res.status}`);
       }
 
-      const data = (await res.json()) as {
-        invite_id: string;
-        token: string;
-        test_link: string;
-        email: string;
-        sent: boolean;
-        expires_at: string;
-      };
+      const data = (await res.json().catch(() => null)) as
+        | {
+            invite_id: string;
+            token: string;
+            test_link: string;
+            email: string;
+            sent: boolean;
+            expires_at: string;
+          }
+        | null;
+
+      if (!data || !data.test_link) {
+        throw new Error("Unexpected server response.");
+      }
 
       setSentInfo({ test_link: data.test_link, email: data.email });
     } catch (err: any) {
-      setError(err?.message || "Failed to send email.");
+      const aborted = err?.name === "AbortError";
+      setError(aborted ? "Request timed out. Please try again." : err?.message || "Failed to send email.");
     } finally {
+      window.clearTimeout(timeout);
       setSending(false);
     }
   }

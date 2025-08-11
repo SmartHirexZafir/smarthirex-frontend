@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ProctorHeartbeat, type HeartbeatStatus } from "../Services/proctorHeartbeat";
 
 type ProctorGuardProps = {
   /** Backend base URL, e.g. http://localhost:10000 */
@@ -33,6 +34,12 @@ type ProctorGuardProps = {
   showWatermark?: boolean; // default false (non-breaking)
 };
 
+const DEFAULT_API_BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  process.env.NEXT_PUBLIC_API_BASE ??
+  "http://localhost:10000"
+).replace(/\/$/, "");
+
 /**
  * ProctorGuard
  * - requests camera access
@@ -40,9 +47,14 @@ type ProctorGuardProps = {
  * - sends periodic heartbeats and (optionally) image snapshots
  * - optional: deter screenshots (PrintScreen), react to visibility changes, fullscreen
  * - cleans up on unmount
+ *
+ * Enhancements:
+ * - Integrates ProctorHeartbeat (singleton) for accurate camera health and resilient pings.
+ * - Adds a watchdog to auto-recover the camera if a track ends or frames stall.
+ * - No hardcoding: all endpoints derive from apiBase and props.
  */
 export default function ProctorGuard({
-  apiBase = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:10000",
+  apiBase = DEFAULT_API_BASE,
   testId = null,
   candidateId = null,
   token = null,
@@ -58,6 +70,10 @@ export default function ProctorGuard({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  const hbRef = useRef<ProctorHeartbeat | null>(null);
+  const lastFrameAtRef = useRef<number>(0); // used by watchdog
+  const restartingRef = useRef<boolean>(false);
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [cameraStatus, setCameraStatus] = useState<"idle" | "on" | "blocked" | "error">("idle");
@@ -92,15 +108,54 @@ export default function ProctorGuard({
 
   // --- Helpers ---------------------------------------------------------------
 
+  const attachFrameListener = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+
+    // @ts-ignore experimental types - requestVideoFrameCallback
+    if ("requestVideoFrameCallback" in v) {
+      let id: number | null = null;
+      const loop = (now: number) => {
+        lastFrameAtRef.current = now;
+        // @ts-ignore experimental
+        id = v.requestVideoFrameCallback(loop);
+      };
+      // kick it off
+      // @ts-ignore experimental
+      id = v.requestVideoFrameCallback(loop);
+
+      // cleanup on detach
+      return () => {
+        try {
+          if (id && "cancelVideoFrameCallback" in v) {
+            // @ts-ignore experimental
+            v.cancelVideoFrameCallback(id);
+          }
+        } catch {}
+      };
+    } else {
+      const onTimeUpdate = () => {
+        lastFrameAtRef.current = performance.now();
+      };
+      v.addEventListener("timeupdate", onTimeUpdate);
+      return () => v.removeEventListener("timeupdate", onTimeUpdate);
+    }
+  }, []);
+
   const startCamera = useCallback(async () => {
     try {
       setCameraStatus("idle");
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        try {
+          await video.play(); // may be blocked if not user-initiated; best-effort
+        } catch {}
       }
+
       setCameraStatus("on");
       return true;
     } catch (err: any) {
@@ -110,6 +165,44 @@ export default function ProctorGuard({
       return false;
     }
   }, []);
+
+  const restartCameraIfNeeded = useCallback(async () => {
+    if (restartingRef.current) return;
+    const s = streamRef.current;
+    const video = videoRef.current;
+
+    const hasLiveTrack =
+      !!s && s.getVideoTracks?.().some((t) => t.readyState === "live");
+
+    const frameIsFresh =
+      Number.isFinite(lastFrameAtRef.current) &&
+      performance.now() - lastFrameAtRef.current < Math.max(heartbeatIntervalSec * 1000 * 2, 8000);
+
+    // If no live track or frames stale while tab is visible & focused — try restart once.
+    if ((!hasLiveTrack || !frameIsFresh) && document.visibilityState === "visible" && document.hasFocus()) {
+      try {
+        restartingRef.current = true;
+        // stop old tracks first
+        try {
+          s?.getTracks?.().forEach((t) => t.stop());
+        } catch {}
+        streamRef.current = null;
+        if (video) (video as HTMLVideoElement).srcObject = null;
+
+        const ok = await startCamera();
+        if (ok) {
+          // re-hook heartbeat media (if running)
+          if (hbRef.current) {
+            hbRef.current.setMedia({ stream: streamRef.current, videoEl: videoRef.current });
+          }
+          setNotice("Camera recovered.");
+          window.setTimeout(() => setNotice(null), 1200);
+        }
+      } finally {
+        restartingRef.current = false;
+      }
+    }
+  }, [heartbeatIntervalSec, startCamera]);
 
   const stopCamera = useCallback(() => {
     try {
@@ -138,7 +231,7 @@ export default function ProctorGuard({
       const res = await fetch(`${apiBase}/proctor/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ test_id: testId, candidate_id: candidateId }),
+        body: JSON.stringify({ test_id: testId, candidate_id: candidateId, token: token ?? undefined }),
         keepalive: true,
       });
       if (!res.ok) {
@@ -156,8 +249,9 @@ export default function ProctorGuard({
     } finally {
       setStarting(false);
     }
-  }, [apiBase, testId, candidateId]);
+  }, [apiBase, testId, candidateId, token]);
 
+  // kept for compatibility (not used when ProctorHeartbeat is active)
   const sendHeartbeat = useCallback(
     async (visible: boolean, focused: boolean) => {
       if (!sessionId) return;
@@ -221,19 +315,22 @@ export default function ProctorGuard({
     }
   }, [apiBase, enableSnapshots, sessionId]);
 
-  const endSession = useCallback(async (reason: string) => {
-    if (!sessionId) return;
-    try {
-      await fetch(`${apiBase}/proctor/end`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, reason }),
-        keepalive: true,
-      });
-    } catch {
-      // ignore
-    }
-  }, [apiBase, sessionId]);
+  const endSession = useCallback(
+    async (reason: string) => {
+      if (!sessionId) return;
+      try {
+        await fetch(`${apiBase}/proctor/end`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, reason }),
+          keepalive: true,
+        });
+      } catch {
+        // ignore
+      }
+    },
+    [apiBase, sessionId]
+  );
 
   // --- Optional fullscreen ---------------------------------------------------
   const requestFullscreen = useCallback(async () => {
@@ -263,6 +360,7 @@ export default function ProctorGuard({
   // Start camera + session on mount
   useEffect(() => {
     let cancelled = false;
+    let detachFrame: (() => void) | undefined;
 
     (async () => {
       if (enforceFullscreen) {
@@ -272,18 +370,73 @@ export default function ProctorGuard({
       const camOk = await startCamera();
       if (!camOk || cancelled) return;
 
+      // start observing frames for watchdog
+      detachFrame = attachFrameListener();
+
       const sid = await startSession();
       if (!sid || cancelled) return;
     })();
 
     return () => {
       cancelled = true;
+      try { detachFrame?.(); } catch {}
     };
-  }, [startCamera, startSession, requestFullscreen, enforceFullscreen]);
+  }, [startCamera, startSession, requestFullscreen, enforceFullscreen, attachFrameListener]);
 
-  // Heartbeat interval + react to visibility/focus
+  // Instantiate + run ProctorHeartbeat once we have a session and a stream
+  useEffect(() => {
+    if (!sessionId || !videoRef.current) return;
+
+    // (Re)create heartbeat instance whenever session or apiBase changes
+    if (hbRef.current) {
+      try { hbRef.current.stop(); } catch {}
+      hbRef.current = null;
+    }
+
+    const hb = new ProctorHeartbeat({
+      url: `${apiBase}/proctor/heartbeat`,
+      intervalMs: Math.max(5, heartbeatIntervalSec) * 1000,
+      onStatusChange: (s: HeartbeatStatus) => {
+        // map hb status to our UI
+        setCameraStatus(s === "idle" ? "idle" : "on");
+        if (s === "degraded") {
+          setNotice("Camera health degraded (background or stalled).");
+          window.setTimeout(() => setNotice(null), 1400);
+        }
+      },
+      // include session_id to match backend shape; other fields are additional but harmless
+      extra: { session_id: sessionId },
+    });
+
+    hb.setIdentity({ testSessionId: sessionId, userId: candidateId ?? undefined });
+    hb.setMedia({ stream: streamRef.current, videoEl: videoRef.current });
+    hb.start();
+
+    hbRef.current = hb;
+
+    return () => {
+      try { hb.stop(); } catch {}
+      hbRef.current = null;
+    };
+  }, [sessionId, apiBase, heartbeatIntervalSec, candidateId]);
+
+  // Watchdog to auto-recover camera if track ends or frames stall
+  useEffect(() => {
+    let alive = true;
+    const interval = window.setInterval(() => {
+      if (!alive) return;
+      restartCameraIfNeeded();
+    }, Math.max(heartbeatIntervalSec * 1000, 8000));
+    return () => {
+      alive = false;
+      window.clearInterval(interval);
+    };
+  }, [restartCameraIfNeeded, heartbeatIntervalSec]);
+
+  // Legacy heartbeat (kept for compatibility) — disabled when ProctorHeartbeat is active
   useEffect(() => {
     if (!sessionId) return;
+    if (hbRef.current) return; // ProctorHeartbeat is authoritative
 
     let alive = true;
     const send = () =>
@@ -342,6 +495,7 @@ export default function ProctorGuard({
     const onBeforeUnload = () => {
       // best-effort end (keepalive=true)
       endSession("page_unload");
+      try { hbRef.current?.stop(); } catch {}
       stopCamera();
       if (enforceFullscreen) {
         exitFullscreen();
@@ -350,7 +504,7 @@ export default function ProctorGuard({
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => {
       onBeforeUnload();
-      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("beforeunload", onBeforeUnload as any);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [endSession, stopCamera, exitFullscreen, enforceFullscreen]);

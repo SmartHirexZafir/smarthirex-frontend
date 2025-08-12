@@ -4,6 +4,10 @@
 import { useState, useEffect } from "react";
 import TestEmailModal from "@/app/(shared)/TestEmailModal";
 
+// ✅ NEW: import the scheduler modal + service
+import ScheduleInterviewModal from "@/app/(shared)/ScheduleInterviewModal";
+import { scheduleInterview } from "@/app/meetings/services/scheduleInterview";
+
 type ActionButtonsProps = {
   candidate: {
     _id: string;
@@ -16,8 +20,12 @@ type ActionButtonsProps = {
   onStatusChange: (newStatus: string) => void;
 };
 
+// Safer API base (supports both env names), trims trailing slash
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:10000";
+  (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE || "http://localhost:10000").replace(
+    /\/$/,
+    ""
+  );
 
 export default function ActionButtons({ candidate, onStatusChange }: ActionButtonsProps) {
   const [isShortlisted, setIsShortlisted] = useState(false);
@@ -68,6 +76,9 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
     setIsShortlisted(false);
     updateCandidateStatus(newStatus);
   };
+
+  // ✅ NEW: derive a safe candidate email for scheduling
+  const candidateEmail = candidate.email || candidate.resume?.email || "";
 
   return (
     <>
@@ -137,34 +148,28 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
         </div>
       </div>
 
-      {/* Schedule Modal (placeholder) */}
+      {/* ✅ Real Schedule Modal integration */}
       {showScheduleModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl shadow-lg max-w-md w-full">
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">Schedule Interview</h3>
-            <p className="text-sm text-gray-600 mb-4">This is a placeholder. Integration pending.</p>
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => setShowScheduleModal(false)}
-                className="px-4 py-2 rounded-md text-sm bg-gray-200 hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-              <button className="px-4 py-2 rounded-md text-sm bg-blue-600 text-white hover:bg-blue-700">
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
+        <ScheduleInterviewModal
+          open={showScheduleModal}
+          onClose={() => setShowScheduleModal(false)}
+          candidate={{
+            id: candidate._id,
+            name: candidate.name || undefined,
+            email: candidateEmail,
+          }}
+          // Use service client so it hits your FastAPI backend
+          onSubmit={(payload) => scheduleInterview(payload)}
+          onScheduled={() => {
+            // Close after success; keep simple to not disturb other flows
+            setShowScheduleModal(false);
+          }}
+        />
       )}
 
       {/* Send Test Modal (real integration) */}
       {showTestModal && (
-        <TestEmailModal
-          open={showTestModal}
-          onClose={() => setShowTestModal(false)}
-          candidate={candidate}
-        />
+        <TestEmailModal open={showTestModal} onClose={() => setShowTestModal(false)} candidate={candidate} />
       )}
     </>
   );

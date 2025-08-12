@@ -2,16 +2,21 @@
 
 import { useState, useEffect } from 'react';
 
+const API_BASE =
+  (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
+
 export default function HistoryFilter({ onFilter }) {
   const [filters, setFilters] = useState({
     dateFrom: '',
     dateTo: '',
     search: '',
-    sort: 'latest'
+    sort: 'latest',
   });
 
   // 🔁 Automatically fetch filtered history on filter change
   useEffect(() => {
+    const controller = new AbortController();
+
     const fetchFilteredHistory = async () => {
       const params = new URLSearchParams();
       if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
@@ -20,7 +25,19 @@ export default function HistoryFilter({ onFilter }) {
       if (filters.sort) params.append('sort', filters.sort);
 
       try {
-        const res = await fetch(`http://localhost:10000/history/user-history?${params.toString()}`);
+        const url = new URL(`${API_BASE}/history/user-history`);
+        url.search = params.toString();
+
+        const res = await fetch(url.toString(), {
+          credentials: 'include', // send cookies/session if your API uses them
+          signal: controller.signal,
+        });
+
+        if (!res.ok) {
+          const txt = await res.text().catch(() => '');
+          throw new Error(`HTTP ${res.status} ${txt}`);
+        }
+
         const data = await res.json();
         onFilter(data || []);
       } catch (error) {
@@ -30,7 +47,8 @@ export default function HistoryFilter({ onFilter }) {
     };
 
     fetchFilteredHistory();
-  }, [filters]);
+    return () => controller.abort();
+  }, [filters]); // keep same behavior; only refetch on filter changes
 
   const handleFilterChange = (key, value) => {
     const newFilters = { ...filters, [key]: value };
@@ -42,7 +60,7 @@ export default function HistoryFilter({ onFilter }) {
       dateFrom: '',
       dateTo: '',
       search: '',
-      sort: 'latest'
+      sort: 'latest',
     };
     setFilters(clearedFilters);
   };
@@ -50,7 +68,7 @@ export default function HistoryFilter({ onFilter }) {
   return (
     <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-6 mb-8 relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-blue-500/5"></div>
-      
+
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900 flex items-center">

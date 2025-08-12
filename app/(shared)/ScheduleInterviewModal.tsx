@@ -1,0 +1,355 @@
+// app/(shared)/ScheduleInterviewModal.tsx
+"use client";
+
+import React, { useEffect, useMemo, useState } from "react";
+
+export type CandidateLite = {
+  id: string;
+  name?: string | null;
+  email: string;
+};
+
+export type SchedulePayload = {
+  candidateId: string;
+  email: string;
+  startsAt: string; // ISO string in UTC
+  timezone: string;
+  durationMins: number;
+  title: string;
+  notes?: string;
+  // backend supports this optional field
+  candidate_name?: string | null;
+};
+
+export type ScheduleInterviewModalProps = {
+  open: boolean;
+  onClose: () => void;
+  candidate: CandidateLite;
+  onSubmit?: (payload: SchedulePayload) => Promise<{ meetingUrl?: string } | void>;
+  onScheduled?: (resp: { meetingUrl?: string } & SchedulePayload) => void;
+};
+
+// ---- small helpers (no extra libs) ----
+const parseISO = (s: string) => new Date(s);
+const isAfter = (a: Date, b: Date) => a.getTime() > b.getTime();
+
+const getTimeZones = (): string[] => {
+  const anyIntl = Intl as any;
+  if (anyIntl && typeof anyIntl.supportedValuesOf === "function") {
+    try {
+      const tz = anyIntl.supportedValuesOf("timeZone") as string[];
+      if (Array.isArray(tz) && tz.length) return tz;
+    } catch {}
+  }
+  return [
+    "UTC",
+    "Europe/London",
+    "Europe/Paris",
+    "Europe/Berlin",
+    "Europe/Madrid",
+    "Africa/Cairo",
+    "Asia/Dubai",
+    "Asia/Karachi",
+    "Asia/Kolkata",
+    "Asia/Singapore",
+    "Asia/Tokyo",
+    "Australia/Sydney",
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+  ];
+};
+
+const getTzOffsetMinutes = (date: Date, timeZone: string): number => {
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    hour12: false,
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  const parts = dtf.formatToParts(date);
+  const map: Record<string, number> = { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0 };
+  for (const p of parts) {
+    if (p.type in map) map[p.type] = parseInt(p.value, 10);
+  }
+  const asLocal = Date.UTC(map.year, map.month - 1, map.day, map.hour, map.minute, map.second);
+  return (asLocal - date.getTime()) / (60 * 1000);
+};
+
+const toUtcIso = (dateStr: string, timeStr: string, tz: string): string => {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const [hh, mm] = timeStr.split(":").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, hh, mm, 0));
+  const tzOffsetMinutes = -getTzOffsetMinutes(dt, tz);
+  const shifted = new Date(dt.getTime() - tzOffsetMinutes * 60 * 1000);
+  return shifted.toISOString();
+};
+
+const durations = [30, 45, 60, 90];
+
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_BASE ||
+  "http://localhost:10000"
+).replace(/\/$/, "");
+
+const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
+  open,
+  onClose,
+  candidate,
+  onSubmit,
+  onScheduled,
+}) => {
+  const zones = useMemo(() => getTimeZones(), []);
+  const defaultTz = useMemo(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+    } catch {
+      return "UTC";
+    }
+  }, []);
+
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [timezone, setTimezone] = useState(defaultTz);
+  const [durationMins, setDurationMins] = useState<number>(60);
+  const [title, setTitle] = useState<string>(`Interview with ${candidate.name ?? "Candidate"}`);
+  const [notes, setNotes] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successUrl, setSuccessUrl] = useState<string | null>(null);
+
+  // Reset state when opening
+  useEffect(() => {
+    if (open) {
+      setError(null);
+      setSuccessUrl(null);
+      setTimezone(defaultTz);
+      setDurationMins(60);
+      setTitle(`Interview with ${candidate.name ?? "Candidate"}`);
+      setNotes("");
+      setDate("");
+      setTime("");
+    } else {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  if (!open) return null;
+
+  const canSubmit = useMemo(() => {
+    if (!date || !time || !candidate?.email) return false;
+    try {
+      const utcIso = toUtcIso(date, time, timezone);
+      return isAfter(parseISO(utcIso), new Date());
+    } catch {
+      return false;
+    }
+  }, [date, time, timezone, candidate?.email]);
+
+  const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget && !loading) onClose();
+  };
+
+  const submit = async () => {
+    setError(null);
+    if (!canSubmit) {
+      setError("Please choose a valid future date & time and ensure the candidate email exists.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const payload: SchedulePayload = {
+        candidateId: candidate.id,
+        email: candidate.email,
+        startsAt: toUtcIso(date, time, timezone),
+        timezone,
+        durationMins,
+        title,
+        notes: notes || undefined,
+        candidate_name: candidate.name ?? undefined,
+      };
+
+      let resp: { meetingUrl?: string } | void;
+      if (onSubmit) {
+        resp = await onSubmit(payload);
+      } else {
+        const r = await fetch(`${API_BASE}/interviews/schedule`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          credentials: "include",
+        });
+        if (!r.ok) {
+          let msg = `Request failed with ${r.status}`;
+          try {
+            const data = await r.json();
+            if (data?.detail) msg = typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail);
+          } catch {
+            const t = await r.text().catch(() => "");
+            if (t) msg = t;
+          }
+          throw new Error(msg);
+        }
+        resp = await r.json();
+      }
+
+      const meetingUrl = resp && (resp as any).meetingUrl ? (resp as any).meetingUrl : undefined;
+      setSuccessUrl(meetingUrl ?? null);
+      onScheduled?.({ ...(payload as SchedulePayload), meetingUrl });
+    } catch (e: any) {
+      setError(e?.message || "Failed to schedule interview. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={handleBackdrop}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <h3 className="text-lg font-semibold">Schedule Interview</h3>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+            aria-label="Close"
+            disabled={loading}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="space-y-4 p-6">
+          <div className="text-sm text-gray-600">
+            {candidate.name ? <span className="font-medium">{candidate.name}</span> : null}
+            {candidate.name ? " · " : null}
+            <span>{candidate.email}</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="date" className="mb-1 block text-sm font-medium text-gray-700">Date</label>
+              <input
+                id="date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <div>
+              <label htmlFor="time" className="mb-1 block text-sm font-medium text-gray-700">Time</label>
+              <input
+                id="time"
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Timezone</label>
+              <select
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+              >
+                {zones.map((z) => (
+                  <option key={z} value={z}>{z}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Duration</label>
+              <select
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={String(durationMins)}
+                onChange={(e) => setDurationMins(parseInt(e.target.value))}
+              >
+                {durations.map((d) => (
+                  <option key={d} value={String(d)}>{d} minutes</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="title" className="mb-1 block text-sm font-medium text-gray-700">Title</label>
+            <input
+              id="title"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Interview title"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="notes" className="mb-1 block text-sm font-medium text-gray-700">Notes (optional)</label>
+            <textarea
+              id="notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="h-24 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Anything the candidate should prepare…"
+            />
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          {successUrl && (
+            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+              Interview scheduled!{" "}
+              {successUrl ? (
+                <a className="underline" href={successUrl} target="_blank" rel="noreferrer">
+                  Open meeting link
+                </a>
+              ) : (
+                <>Invite email sent.</>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+              disabled={loading}
+            >
+              Close
+            </button>
+            <button
+              onClick={submit}
+              disabled={!canSubmit || loading}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? "Scheduling…" : "Send Invite"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ScheduleInterviewModal;

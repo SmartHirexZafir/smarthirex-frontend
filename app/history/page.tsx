@@ -6,47 +6,71 @@ import HistoryFilter from './HistoryFilter';
 import HistoryBlocks from './HistoryBlocks';
 import ResultsModal from './ResultsModal';
 
+const API_BASE =
+  (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
+
 export default function HistoryPage() {
-  const [historyData, setHistoryData] = useState([]);
-  const [filteredData, setFilteredData] = useState([]);
-  const [selectedHistory, setSelectedHistory] = useState(null);
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [filteredData, setFilteredData] = useState<any[]>([]);
+  const [selectedHistory, setSelectedHistory] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
-  const fetchHistory = async () => {
+  // accepts optional AbortSignal so we can cancel on unmount
+  const fetchHistory = async (signal?: AbortSignal) => {
     try {
-      const res = await fetch('http://localhost:10000/history/user-history');
+      const res = await fetch(`${API_BASE}/history/user-history`, {
+        credentials: 'include',
+        signal,
+      });
+
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status} ${txt}`);
+      }
+
       const data = await res.json();
       setHistoryData(data || []);
       setFilteredData(data || []);
     } catch (err) {
       console.error('Failed to load history:', err);
+      setHistoryData([]);
+      setFilteredData([]);
     }
   };
 
   useEffect(() => {
-    fetchHistory();
+    const controller = new AbortController();
+    fetchHistory(controller.signal);
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleFilter = (filteredResults) => {
+  const handleFilter = (filteredResults: any[]) => {
     setFilteredData(filteredResults);
   };
 
-  const handleViewResults = (history) => {
+  const handleViewResults = (history: any) => {
     setSelectedHistory(history);
     setShowModal(true);
   };
 
-  const handleRerunPrompt = async (prompt) => {
+  const handleRerunPrompt = async (prompt: string) => {
     try {
-      await fetch('http://localhost:10000/chatbot/query', {
+      const res = await fetch(`${API_BASE}/chatbot/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        credentials: 'include',
+        body: JSON.stringify({ prompt }),
       });
 
-      // 🔁 Instead of injecting manually, re-fetch fresh history from backend
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status} ${txt}`);
+      }
+
+      // 🔁 Re-fetch to get fresh history from backend
       await fetchHistory();
     } catch (err) {
       console.error('Failed to rerun prompt:', err);
@@ -160,7 +184,7 @@ export default function HistoryPage() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-gray-900">
-                      {historyData.reduce((sum, item) => sum + item.totalMatches, 0)}
+                      {historyData.reduce((sum: number, item: any) => sum + (item.totalMatches || 0), 0)}
                     </p>
                     <p className="text-sm text-gray-600">Total Matches</p>
                   </div>

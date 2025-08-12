@@ -78,16 +78,24 @@ const getTzOffsetMinutes = (date: Date, timeZone: string): number => {
     if (p.type in map) map[p.type] = parseInt(p.value, 10);
   }
   const asLocal = Date.UTC(map.year, map.month - 1, map.day, map.hour, map.minute, map.second);
+  // Positive for zones east of UTC (e.g., Asia/Karachi ≈ +300)
   return (asLocal - date.getTime()) / (60 * 1000);
 };
 
+/**
+ * Convert a local date/time (in tz) to a UTC ISO string.
+ * IMPORTANT: the offset must be SUBTRACTED (not added).
+ * Example: 17:00 Asia/Karachi (UTC+5) -> 12:00Z.
+ */
 const toUtcIso = (dateStr: string, timeStr: string, tz: string): string => {
   const [y, m, d] = dateStr.split("-").map(Number);
   const [hh, mm] = timeStr.split(":").map(Number);
+  // Construct a UTC "container" for the chosen wall-clock time
   const dt = new Date(Date.UTC(y, m - 1, d, hh, mm, 0));
-  const tzOffsetMinutes = -getTzOffsetMinutes(dt, tz);
-  const shifted = new Date(dt.getTime() - tzOffsetMinutes * 60 * 1000);
-  return shifted.toISOString();
+  const offsetMinutes = getTzOffsetMinutes(dt, tz);
+  // Convert local wall-clock to real UTC instant by subtracting the offset
+  const utc = new Date(dt.getTime() - offsetMinutes * 60 * 1000);
+  return utc.toISOString();
 };
 
 const durations = [30, 45, 60, 90];
@@ -253,6 +261,7 @@ const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
               <input
                 id="time"
                 type="time"
+                step={60}
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"

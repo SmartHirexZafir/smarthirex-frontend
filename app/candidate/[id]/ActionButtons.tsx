@@ -21,11 +21,11 @@ type ActionButtonsProps = {
 };
 
 // Safer API base (supports both env names), trims trailing slash
-const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE || "http://localhost:10000").replace(
-    /\/$/,
-    ""
-  );
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_BASE ||
+  "http://localhost:10000"
+).replace(/\/$/, "");
 
 export default function ActionButtons({ candidate, onStatusChange }: ActionButtonsProps) {
   const [isShortlisted, setIsShortlisted] = useState(false);
@@ -33,6 +33,10 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showTestModal, setShowTestModal] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // ✅ NEW: simple success popup state
+  const [showInviteToast, setShowInviteToast] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     setIsShortlisted(candidate.status === "shortlisted");
@@ -79,6 +83,14 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
 
   // ✅ NEW: derive a safe candidate email for scheduling
   const candidateEmail = candidate.email || candidate.resume?.email || "";
+
+  // ✅ NEW: show toast helper
+  const showSuccessToast = (url?: string) => {
+    setInviteUrl(url);
+    setShowInviteToast(true);
+    // auto-hide after 4s
+    window.setTimeout(() => setShowInviteToast(false), 4000);
+  };
 
   return (
     <>
@@ -160,9 +172,10 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
           }}
           // Use service client so it hits your FastAPI backend
           onSubmit={(payload) => scheduleInterview(payload)}
-          onScheduled={() => {
-            // Close after success; keep simple to not disturb other flows
+          onScheduled={(resp) => {
+            // Close after success + show small success popup
             setShowScheduleModal(false);
+            showSuccessToast(resp?.meetingUrl);
           }}
         />
       )}
@@ -170,6 +183,39 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
       {/* Send Test Modal (real integration) */}
       {showTestModal && (
         <TestEmailModal open={showTestModal} onClose={() => setShowTestModal(false)} candidate={candidate} />
+      )}
+
+      {/* ✅ NEW: tiny success toast (no dependencies) */}
+      {showInviteToast && (
+        <div className="fixed bottom-6 right-6 z-[60]">
+          <div className="rounded-xl border border-green-200 bg-white shadow-xl px-4 py-3 min-w-[260px]">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 h-2.5 w-2.5 rounded-full bg-green-500"></div>
+              <div className="flex-1 text-sm">
+                <div className="font-medium text-gray-900">Interview invite sent</div>
+                <div className="mt-0.5 text-gray-600">
+                  The candidate has received the invitation email.
+                  {inviteUrl ? (
+                    <>
+                      {" "}
+                      <a className="text-indigo-600 underline" href={inviteUrl} target="_blank" rel="noreferrer">
+                        View meeting page
+                      </a>
+                      .
+                    </>
+                  ) : null}
+                </div>
+              </div>
+              <button
+                onClick={() => setShowInviteToast(false)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

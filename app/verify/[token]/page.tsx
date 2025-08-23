@@ -26,11 +26,18 @@ async function safeJson(res: Response) {
   try { return JSON.parse(text); } catch { return { __raw: text }; }
 }
 
-export default function VerifyPage({ params }: { params: Promise<{ token: string }> | { token: string } }) {
+export default function VerifyPage({
+  params,
+}: {
+  params: Promise<{ token: string }> | { token: string };
+}) {
   const router = useRouter();
 
   // ✅ Next.js 15: unwrap params (which can be a Promise) with React.use()
-  const resolvedParams = typeof (params as any)?.then === 'function' ? use(params as Promise<{ token: string }>) : (params as { token: string });
+  const resolvedParams =
+    typeof (params as any)?.then === 'function'
+      ? use(params as Promise<{ token: string }>)
+      : (params as { token: string });
   const token = resolvedParams?.token ?? '';
 
   const [status, setStatus] = useState<'idle' | 'verifying' | 'done'>('idle');
@@ -55,7 +62,7 @@ export default function VerifyPage({ params }: { params: Promise<{ token: string
           redirect: 'follow',
           credentials: 'include',
           cache: 'no-store',
-          headers: { Accept: 'application/json' }, // helps backend return JSON instead of 307
+          headers: { Accept: 'application/json' },
         });
 
         // If backend issues 3xx to FE login, navigate locally
@@ -121,67 +128,139 @@ export default function VerifyPage({ params }: { params: Promise<{ token: string
   const success = result?.ok;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center">
-        <div className="flex items-center justify-center mb-6">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-r from-blue-600 to-blue-800 flex items-center justify-center shadow-lg">
-            <i className="ri-shield-check-line text-white text-2xl" />
+    <div className="min-h-[calc(100vh-4rem)] grid lg:grid-cols-2 gap-8 py-10 px-4 sm:px-8">
+      {/* Left: Brand / Hero (same look as login/signup) */}
+      <section className="relative hidden lg:flex panel overflow-hidden items-center justify-center rounded-3xl">
+        <div className="absolute inset-0 bg-luxe-radial opacity-70 pointer-events-none" />
+        <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full blur-3xl opacity-20 gradient-ink" />
+        <div className="relative z-10 p-12 max-w-xl">
+          <Link href="/" className="inline-flex items-center gap-3 mb-10">
+            <span className="h-14 w-14 rounded-2xl grid place-items-center gradient-ink shadow-glow">
+              <i className="ri-brain-line text-white text-2xl" />
+            </span>
+            <span className="text-4xl font-bold gradient-text font-pacifico">SmartHirex</span>
+          </Link>
+
+          <h1 className="text-4xl font-semibold leading-tight mb-4">
+            {isVerifying ? (
+              <>Verifying your <span className="gradient-text">email</span>…</>
+            ) : success ? (
+              <>Email <span className="gradient-text">verified</span> successfully</>
+            ) : (
+              <>Verification <span className="gradient-text">failed</span></>
+            )}
+          </h1>
+
+          <p className="text-muted-foreground mb-8">
+            {isVerifying
+              ? 'Please wait while we confirm your verification link.'
+              : success
+              ? 'Your account is now active. Sign in to access your hiring cockpit.'
+              : 'The verification link may be invalid or expired.'}
+          </p>
+
+          <ul className="grid gap-4">
+            {[
+              { icon: 'ri-shield-check-line', text: 'Secure account & encrypted sessions' },
+              { icon: 'ri-sparkling-2-line', text: 'AI-powered shortlisting' },
+              { icon: 'ri-line-chart-line', text: 'Pipeline insights & analytics' },
+            ].map((f, i) => (
+              <li key={i} className="flex items-start gap-3 p-3 rounded-2xl bg-[hsl(var(--muted))/0.35] ring-1 ring-border">
+                <span className="mt-0.5 h-8 w-8 rounded-xl grid place-items-center bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]">
+                  <i className={f.icon} />
+                </span>
+                <p className="text-sm">{f.text}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* Right: Verification Card */}
+      <section className="flex items-center">
+        <div className="w-full">
+          <div className="card p-8 sm:p-10 text-center">
+            <div
+              className={`mx-auto mb-6 h-14 w-14 rounded-2xl grid place-items-center shadow-soft
+                ${
+                  isVerifying
+                    ? 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]'
+                    : success
+                    ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]'
+                    : 'bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))]'
+                }`}
+            >
+              <i
+                className={
+                  isVerifying
+                    ? 'ri-shield-line text-2xl'
+                    : success
+                    ? 'ri-shield-check-line text-2xl'
+                    : 'ri-close-circle-line text-2xl'
+                }
+              />
+            </div>
+
+            {isVerifying && (
+              <>
+                <h1 className="text-2xl font-semibold mb-2">Verifying your email…</h1>
+                <p className="text-muted-foreground mb-6">
+                  Please wait while we confirm your verification link.
+                </p>
+                <div className="w-16 h-16 border-4 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin mx-auto" />
+              </>
+            )}
+
+            {!isVerifying && success && (
+              <>
+                <h1 className="text-2xl font-semibold mb-2">Email Verified <span className="align-middle">✅</span></h1>
+                <p className="text-muted-foreground">
+                  {result?.message || 'Your email has been verified successfully.'}
+                </p>
+
+                <p className="mt-6 text-sm text-muted-foreground">
+                  Redirecting to sign in in <span className="font-medium">{countdown}</span>s…
+                </p>
+
+                <Link
+                  href="/login?verified=1"
+                  className="btn-primary inline-flex items-center justify-center mt-6 px-5 py-3 rounded-2xl"
+                >
+                  <i className="ri-login-circle-line mr-2" />
+                  Go to Login
+                </Link>
+              </>
+            )}
+
+            {!isVerifying && !success && (
+              <>
+                <h1 className="text-2xl font-semibold mb-2">Verification Failed</h1>
+                <p className="text-[hsl(var(--destructive))] mb-4">
+                  {result?.message || 'The verification link is invalid or expired.'}
+                </p>
+                <div className="flex items-center justify-center gap-3">
+                  <Link
+                    href="/signup"
+                    className="btn-outline px-5 py-2.5 rounded-2xl"
+                  >
+                    Back to Signup
+                  </Link>
+                  <Link
+                    href="/login"
+                    className="btn-primary px-5 py-2.5 rounded-2xl"
+                  >
+                    Go to Login
+                  </Link>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="mt-6 text-center text-xs text-muted-foreground">
+            © {new Date().getFullYear()} SmartHirex. All rights reserved.
           </div>
         </div>
-
-        {isVerifying && (
-          <>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Verifying your email…</h1>
-            <p className="text-gray-600 mb-6">
-              Please wait while we confirm your verification link.
-            </p>
-            <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          </>
-        )}
-
-        {!isVerifying && success && (
-          <>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Email Verified ✅</h1>
-            <p className="text-gray-600 mb-4">
-              {(result?.message as string) || 'Your email has been verified successfully.'}
-            </p>
-            <p className="text-sm text-gray-500">
-              Redirecting to sign in in <span className="font-semibold">{countdown}</span>s…
-            </p>
-            <div className="mt-6">
-              <Link
-                href="/login?verified=1"
-                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition"
-              >
-                Go to Login
-              </Link>
-            </div>
-          </>
-        )}
-
-        {!isVerifying && !success && (
-          <>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Verification Failed</h1>
-            <p className="text-red-600 mb-4">
-              {result?.message || 'The verification link is invalid or expired.'}
-            </p>
-            <div className="flex items-center justify-center gap-3">
-              <Link
-                href="/signup"
-                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-gray-100 text-gray-800 font-medium hover:bg-gray-200 transition"
-              >
-                Back to Signup
-              </Link>
-              <Link
-                href="/login"
-                className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition"
-              >
-                Go to Login
-              </Link>
-            </div>
-          </>
-        )}
-      </div>
+      </section>
     </div>
   );
 }

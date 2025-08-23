@@ -10,10 +10,11 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [info, setInfo] = useState('');                 // ✅ success/info banner
-  const [verifPending, setVerifPending] = useState(false); // ✅ show resend button state
+  const [info, setInfo] = useState(''); // success/info banner
+  const [verifPending, setVerifPending] = useState(false); // show resend button state
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMsg, setResendMsg] = useState('');
 
@@ -56,7 +57,6 @@ export default function LoginPage() {
 
       // If backend enforces email verification, it should return 403
       if (res.status === 403) {
-        // Example expected detail: "Email not verified"
         const detail = (data as any)?.detail || 'Email not verified';
         setError(detail);
         setVerifPending(true); // show resend button
@@ -82,7 +82,6 @@ export default function LoginPage() {
     setResendMsg('');
     setResendLoading(true);
     try {
-      // Hit your backend resend endpoint (implement in auth_router)
       const res = await fetch(`${API_BASE}/auth/resend-verification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -101,125 +100,226 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <Link href="/" className="flex items-center justify-center space-x-3 mb-8">
-            <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-blue-800 rounded-xl flex items-center justify-center shadow-lg">
-              <i className="ri-brain-line text-white text-2xl"></i>
-            </div>
-            <span className="text-3xl font-bold bg-gradient-to-r from-blue-700 to-blue-900 bg-clip-text text-transparent font-pacifico">
-              SmartHirex
+    <div className="min-h-[calc(100vh-4rem)] grid lg:grid-cols-2 gap-8">
+      {/* Left: Brand / Hero */}
+      <section className="relative hidden lg:flex rounded-3xl panel overflow-hidden items-center justify-center">
+        {/* Aurora gradient background using tokens */}
+        <div className="absolute inset-0 bg-luxe-radial opacity-70 pointer-events-none" />
+        <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full blur-3xl opacity-20 gradient-ink" />
+        <div className="relative z-10 p-12 max-w-xl">
+          <Link href="/" className="inline-flex items-center gap-3 mb-10">
+            <span className="h-14 w-14 rounded-2xl shadow-glow grid place-items-center gradient-ink">
+              <i className="ri-brain-line text-white text-2xl" />
             </span>
+            <span className="text-4xl font-bold gradient-text font-pacifico">SmartHirex</span>
           </Link>
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h2>
-          <p className="text-gray-600">Sign in to your account to continue</p>
+
+          <h1 className="text-4xl font-semibold leading-tight mb-4">
+            Welcome back to your <span className="gradient-text">hiring cockpit</span>
+          </h1>
+          <p className="text-[hsl(var(--muted-foreground))] mb-8">
+            Upload resumes, filter, score & schedule — all in one place. Secure, fast and delightful.
+          </p>
+
+          <ul className="grid gap-4">
+            {[
+              { icon: 'ri-sparkling-2-line', text: 'AI-powered shortlisting with explainability' },
+              { icon: 'ri-shield-keyhole-line', text: 'Enterprise-grade security & SSO ready' },
+              { icon: 'ri-zoom-in-line', text: 'Beautiful analytics & pipeline visibility' },
+            ].map((f, i) => (
+              <li
+                key={i}
+                className="flex items-start gap-3 p-3 rounded-2xl bg-[hsl(var(--muted))/0.35] ring-1 ring-border"
+              >
+                <span className="mt-0.5 h-8 w-8 rounded-xl grid place-items-center bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]">
+                  <i className={`${f.icon}`} />
+                </span>
+                <p className="text-sm">{f.text}</p>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-10 flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+            <i className="ri-lock-2-line" />
+            <span>We never store your password. Sessions are securely encrypted.</span>
+          </div>
         </div>
+      </section>
 
-        <div className="bg-white py-8 px-6 shadow-xl rounded-2xl border border-gray-100">
-          {/* Info banner (e.g., after verification) */}
-          {info && (
-            <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
-              {info}
-            </div>
-          )}
-
-          <form className="space-y-6" onSubmit={handleSubmit}>
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none relative block w-full px-4 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
-                placeholder="Enter your email"
-              />
+      {/* Right: Auth Card */}
+      <section className="flex items-center">
+        <div className="w-full">
+          <div className="card p-8 shadow-elev-2">
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center gap-3">
+                <div className="h-12 w-12 rounded-2xl gradient-ink grid place-items-center shadow-soft">
+                  <i className="ri-login-circle-line text-white text-xl" />
+                </div>
+                <div className="text-left">
+                  <h2 className="text-2xl font-semibold">Sign in</h2>
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                    Access your SmartHirex workspace
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none relative block w-full px-4 py-3 border border-gray-300 rounded-xl placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
-                placeholder="Enter your password"
-              />
-            </div>
-
-            {error && (
-              <p className="text-red-500 text-sm text-center">{error}</p>
-            )}
-
-            {/* If email not verified, show resend control */}
-            {verifPending && (
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={handleResendVerification}
-                  disabled={resendLoading || !email}
-                  className="text-sm text-blue-600 hover:text-blue-700 underline disabled:opacity-50"
-                >
-                  {resendLoading ? 'Sending…' : 'Resend verification email'}
-                </button>
-                {resendMsg && (
-                  <p className="mt-2 text-xs text-gray-600">{resendMsg}</p>
-                )}
+            {/* Info banner (e.g., after verification) */}
+            {info && (
+              <div className="mb-4 rounded-2xl bg-[hsl(var(--success))/0.12] ring-1 ring-[hsl(var(--success))/0.35] px-4 py-3 text-sm text-[hsl(var(--success))]">
+                <div className="flex items-start gap-2">
+                  <i className="ri-check-double-line mt-0.5" />
+                  <span>{info}</span>
+                </div>
               </div>
             )}
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center text-sm text-gray-900">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mr-2"
-                />
-                Remember me
-              </label>
-              <Link href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-500">
-                Forgot password?
-              </Link>
-            </div>
+            {error && (
+              <div className="mb-4 rounded-2xl bg-[hsl(var(--destructive))/0.12] ring-1 ring-[hsl(var(--destructive))/0.35] px-4 py-3 text-sm text-[hsl(var(--destructive))]">
+                <div className="flex items-start gap-2">
+                  <i className="ri-error-warning-line mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              </div>
+            )}
 
-            <div>
+            <form className="space-y-5" onSubmit={handleSubmit}>
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium mb-2">
+                  Email Address
+                </label>
+                <div className="relative">
+                  <i className="ri-mail-line absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="input pl-10 py-3"
+                    placeholder="you@company.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <i className="ri-key-2-line absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPass ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="input pl-10 pr-12 py-3"
+                    placeholder="Enter your password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 btn-ghost px-2 py-1 rounded-xl"
+                    aria-label={showPass ? 'Hide password' : 'Show password'}
+                  >
+                    <i className={showPass ? 'ri-eye-off-line' : 'ri-eye-line'} />
+                  </button>
+                </div>
+              </div>
+
+              {/* If email not verified, show resend control */}
+              {verifPending && (
+                <div className="rounded-2xl bg-[hsl(var(--info))/0.12] ring-1 ring-[hsl(var(--info))/0.35] px-4 py-3">
+                  <div className="flex flex-col items-start gap-2 text-sm">
+                    <div className="flex items-center gap-2 text-[hsl(var(--info))]">
+                      <i className="ri-mail-send-line" />
+                      <span>Email verification required</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleResendVerification}
+                        disabled={resendLoading || !email}
+                        className="btn-primary px-3 py-1.5 rounded-xl text-xs"
+                      >
+                        {resendLoading ? 'Sending…' : 'Resend verification email'}
+                      </button>
+                      {resendMsg && (
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{resendMsg}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 text-[hsl(var(--primary))] focus:ring-ring border-input rounded"
+                  />
+                  Remember me
+                </label>
+                <Link href="/forgot-password" className="text-sm text-[hsl(var(--secondary))] hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
+
               <button
                 type="submit"
                 disabled={isLoading}
-                className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-xl text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                className="btn-primary w-full py-3 rounded-2xl transition-transform hover:scale-[1.01] active:scale-[0.99] focus-visible:ring-offset-0"
               >
                 {isLoading ? (
-                  <div className="flex items-center">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                    Signing in...
-                  </div>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white/70 border-b-transparent" />
+                    Signing in…
+                  </span>
                 ) : (
-                  <span className="flex items-center">
-                    <i className="ri-login-circle-line mr-2"></i>
+                  <span className="inline-flex items-center gap-2">
+                    <i className="ri-login-circle-line" />
                     Sign In
                   </span>
                 )}
               </button>
-            </div>
-          </form>
 
-          <div className="mt-6 text-center text-sm text-gray-600">
-            Don&apos;t have an account?{' '}
-            <Link href="/signup" className="text-blue-600 hover:text-blue-500 font-medium">
-              Sign up now
-            </Link>
+              <div className="relative my-1">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-card px-3 text-[hsl(var(--muted-foreground))]">or</span>
+                </div>
+              </div>
+
+              {/* Social (non-functional placeholders, safe to remove) */}
+              <div className="grid grid-cols-2 gap-3">
+                <button type="button" className="btn-outline w-full">
+                  <i className="ri-google-fill" /> Google
+                </button>
+                <button type="button" className="btn-outline w-full">
+                  <i className="ri-github-fill" /> GitHub
+                </button>
+              </div>
+            </form>
+
+            <div className="mt-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
+              Don&apos;t have an account?{' '}
+              <Link href="/signup" className="text-[hsl(var(--primary))] hover:underline font-medium">
+                Sign up now
+              </Link>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="mt-6 text-center text-xs text-[hsl(var(--muted-foreground))]">
+            © {new Date().getFullYear()} SmartHirex. All rights reserved.
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

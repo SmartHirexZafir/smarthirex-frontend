@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -22,18 +21,20 @@ export default function Header() {
             </Link>
           </div>
           
+          {/* Login removed per requirement; Sign Up kept intact */}
           <div className="hidden md:flex items-center space-x-4">
-            <Link href="/login" className="text-gray-700 hover:text-blue-700 font-semibold px-6 py-3 rounded-lg transition-all duration-300 hover:bg-blue-50 whitespace-nowrap">
-              Login
-            </Link>
-            <Link href="/signup" className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl whitespace-nowrap">
+            <Link
+              href="/signup"
+              className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl whitespace-nowrap"
+            >
               Sign Up
             </Link>
           </div>
 
-          <button 
+          <button
             className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
+            aria-label="Toggle menu"
           >
             <i className="ri-menu-line text-2xl text-gray-700"></i>
           </button>
@@ -43,10 +44,11 @@ export default function Header() {
           <div className="md:hidden border-t border-gray-100 py-6 bg-white/95 backdrop-blur-sm">
             <div className="flex flex-col space-y-4">
               <div className="pt-4 border-t border-gray-100 space-y-3">
-                <Link href="/login" className="block text-gray-700 hover:text-blue-700 font-semibold py-2 transition-colors">
-                  Login
-                </Link>
-                <Link href="/signup" className="block bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg font-semibold text-center hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg">
+                {/* Login removed in mobile as well */}
+                <Link
+                  href="/signup"
+                  className="block bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg font-semibold text-center hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg"
+                >
                   Sign Up
                 </Link>
               </div>

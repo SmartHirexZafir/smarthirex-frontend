@@ -1,21 +1,38 @@
 // app/candidate/[id]/CandidateDetail.tsx
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import Link from "next/link";
-import CandidateProfile from "./CandidateProfile";
-import ResumePreview from "./ResumePreview";
-import ActionButtons from "./ActionButtons";
-import ScoreAnalysis from "./ScoreAnalysis";
+import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
+import CandidateProfile from './CandidateProfile';
+import ResumePreview from './ResumePreview';
+import ActionButtons from './ActionButtons';
+import ScoreAnalysis from './ScoreAnalysis';
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:10000";
+  (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
+
+/* ---------- helpers ---------- */
+async function safeJson(res: Response) {
+  // handle non-JSON / empty bodies gracefully
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { __raw: text };
+  }
+}
+
+function getAuthHeader() {
+  if (typeof window === 'undefined') return {};
+  const token = localStorage.getItem('token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export default function CandidateDetail({ candidateId }: { candidateId: string }) {
   const [candidate, setCandidate] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"profile" | "analysis" | "history">("profile");
+  const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<'profile' | 'analysis' | 'history'>('profile');
 
   const mountedAtRef = useRef<number>(Date.now()); // for short-lived polling
   const pollingIdRef = useRef<number | null>(null);
@@ -24,15 +41,27 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
     try {
       setLoading(true);
       const res = await fetch(`${API_BASE}/candidate/${candidateId}`, {
-        // help bypass any intermediate caching; we want fresh score if it just changed
-        headers: { "Cache-Control": "no-cache" },
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          ...getAuthHeader(),
+        },
+        // credentials: 'include', // only if you also use cookie auth
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Failed to fetch candidate");
+
+      if (res.status === 401) {
+        setError('Unauthorized. Please log in again.');
+        setCandidate(null);
+        return;
+      }
+
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error((data as any)?.detail || 'Failed to fetch candidate');
+
       setCandidate(data);
-      setError("");
+      setError('');
     } catch (err: any) {
-      setError(err.message || "Something went wrong");
+      setError(err?.message || 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -58,7 +87,6 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
       pollingIdRef.current = null;
     }
 
-    // Start polling if within the live window
     if (shouldPollNow()) {
       pollingIdRef.current = window.setInterval(() => {
         if (!shouldPollNow()) {
@@ -68,9 +96,8 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
           }
           return;
         }
-        // If we don't have a score or it's 0, or user is on analysis tab, try to refresh
         const score = Number(candidate?.test_score ?? 0);
-        if (!candidate || !Number.isFinite(score) || score === 0 || activeTab === "analysis") {
+        if (!candidate || !Number.isFinite(score) || score === 0 || activeTab === 'analysis') {
           fetchCandidate();
         }
       }, POLL_MS) as any;
@@ -86,40 +113,43 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
 
   // refresh when the tab becomes visible / regains focus (common after test completion)
   useEffect(() => {
-    const onFocusOrVisible = () => {
-      // quick refresh to pick up any just-submitted score
-      fetchCandidate();
-    };
+    const onFocusOrVisible = () => fetchCandidate();
     const onVisibility = () => {
-      if (document.visibilityState === "visible") onFocusOrVisible();
+      if (document.visibilityState === 'visible') onFocusOrVisible();
     };
-    window.addEventListener("focus", onFocusOrVisible);
-    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener('focus', onFocusOrVisible);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      window.removeEventListener("focus", onFocusOrVisible);
-      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener('focus', onFocusOrVisible);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [fetchCandidate]);
 
   const handleStatusChange = async (newStatus: string) => {
     try {
       const res = await fetch(`${API_BASE}/candidate/${candidateId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeader(),
+        },
         body: JSON.stringify({ status: newStatus }),
       });
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Failed to update status");
+      if (res.status === 401) {
+        alert('Unauthorized. Please log in again.');
+        return;
       }
+
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error((data as any)?.detail || 'Failed to update status');
 
       setCandidate((prev: any) => ({
         ...prev,
         status: newStatus,
       }));
     } catch (err: any) {
-      alert(err.message || "Status update failed");
+      alert(err?.message || 'Status update failed');
     }
   };
 
@@ -139,7 +169,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50">
         <div className="text-center">
           <i className="ri-user-line text-6xl text-gray-400 mb-4"></i>
-          <p className="text-gray-600 text-lg">{error || "Candidate not found"}</p>
+          <p className="text-gray-600 text-lg">{error || 'Candidate not found'}</p>
           <Link href="/upload" className="text-blue-600 hover:text-blue-800 mt-2 inline-block">
             Back to candidates
           </Link>
@@ -148,14 +178,15 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
     );
   }
 
-  const category = candidate.category || candidate.predicted_role || "Unknown";
-  const confidence = candidate.confidence !== undefined ? `${candidate.confidence}%` : "N/A";
+  const category = candidate.category || candidate.predicted_role || 'Unknown';
+  const confidence =
+    candidate.confidence !== undefined ? `${Number(candidate.confidence).toFixed(2)}%` : 'N/A';
   const matchReason =
-    candidate.match_reason === "Prompt filtered" ? "Filtered by prompt" : "ML classified";
+    candidate.match_reason === 'Prompt filtered' ? 'Filtered by prompt' : 'ML classified';
 
   // fresh test score from backend (tests/submit updates parsed_resumes.test_score)
   const testScore =
-    typeof candidate.test_score === "number" && Number.isFinite(candidate.test_score)
+    typeof candidate.test_score === 'number' && Number.isFinite(candidate.test_score)
       ? Math.round(candidate.test_score)
       : null;
 
@@ -216,11 +247,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
           {/* Left Column */}
           <div className="lg:col-span-1 space-y-4">
             <CandidateProfile candidate={candidate} />
-            {/* ActionButtons keeps the same props; after actions (like Send Test), you can call fetchCandidate() to refresh */}
-            <ActionButtons
-              candidate={candidate}
-              onStatusChange={handleStatusChange}
-            />
+            <ActionButtons candidate={candidate} onStatusChange={handleStatusChange} />
             <ScoreAnalysis candidate={candidate} />
           </div>
 
@@ -230,17 +257,17 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
               <div className="flex items-center justify-between">
                 <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
                   {[
-                    { id: "profile", label: "Resume", icon: "ri-file-text-line" },
-                    { id: "analysis", label: "Analysis", icon: "ri-bar-chart-line" },
-                    { id: "history", label: "History", icon: "ri-history-line" },
+                    { id: 'profile', label: 'Resume', icon: 'ri-file-text-line' },
+                    { id: 'analysis', label: 'Analysis', icon: 'ri-bar-chart-line' },
+                    { id: 'history', label: 'History', icon: 'ri-history-line' },
                   ].map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id as any)}
                       className={`flex-1 flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                         activeTab === tab.id
-                          ? "bg-white text-blue-600 shadow-sm"
-                          : "text-gray-600 hover:text-blue-600"
+                          ? 'bg-white text-blue-600 shadow-sm'
+                          : 'text-gray-600 hover:text-blue-600'
                       }`}
                     >
                       <i className={`${tab.icon} mr-2`}></i>
@@ -249,7 +276,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                   ))}
                 </div>
 
-                {/* Quick manual refresh (useful right after a test) */}
+                {/* Quick manual refresh */}
                 <button
                   onClick={fetchCandidate}
                   className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
@@ -262,10 +289,10 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
             </div>
 
             <div className="bg-white/80 backdrop-blur-md rounded-b-2xl border-x border-b border-gray-200/50">
-              {activeTab === "profile" && <ResumePreview candidate={candidate} />}
-              {activeTab === "analysis" && <ScoreAnalysis candidate={candidate} detailed />}
+              {activeTab === 'profile' && <ResumePreview candidate={candidate} />}
+              {activeTab === 'analysis' && <ScoreAnalysis candidate={candidate} detailed />}
 
-              {activeTab === "history" && (
+              {activeTab === 'history' && (
                 <div className="p-4">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">Interaction History</h3>
@@ -294,7 +321,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                         <p className="text-xs text-gray-500">From database</p>
                       </div>
                     </div>
-                    {/* You can append dynamic items from history API here later */}
+                    {/* TODO: append dynamic items from history API here later */}
                   </div>
                 </div>
               )}

@@ -2,6 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';                 // ✅ added
+import EmptyState from '../../components/EmptyState';         // ✅ added
 
 export default function CandidateResults({ candidates, isProcessing, activePrompt }: {
   candidates: any[];
@@ -10,6 +12,7 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
 }) {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
+  const router = useRouter();                                 // ✅ added
 
   const cleanedCandidates = useMemo(() => {
     const seen = new Set();
@@ -61,6 +64,15 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
                 <p className="text-sm text-gray-600">"{activePrompt}"</p>
               </div>
             </div>
+          ) : cleanedCandidates.length === 0 ? (   // ✅ Empty state when no results
+            <div className="py-12 max-w-2xl mx-auto">
+              <EmptyState
+                title="You have no CVs"
+                description="Upload CVs first, then ask the assistant to filter them. If you already uploaded, make sure you’re logged into the same account."
+                showUploadButton
+                onUploadClick={() => router.push('/upload')}
+              />
+            </div>
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
@@ -79,7 +91,7 @@ export default function CandidateResults({ candidates, isProcessing, activePromp
 
                   const jobRole = predicted_role || category || 'Unknown Role';
                   const expText = experience ? `${experience} years` : 'Not specified';
-                  const confText = confidence !== undefined ? `${confidence.toFixed(2)}%` : 'N/A';
+                  const confText = confidence !== undefined ? `${Number(confidence).toFixed(2)}%` : 'N/A';
                   const score = semantic_score?.toFixed(2) || '0.00';
                   const scoreLabel = score_type || 'Prompt Match';
 

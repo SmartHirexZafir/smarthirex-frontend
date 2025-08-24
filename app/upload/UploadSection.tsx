@@ -161,159 +161,187 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
     }
   }
 
+  // ---------- Render ----------
   return (
-    <div className="bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-gray-200/50 p-8 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5"></div>
+    <section
+      className="card-glass p-8 relative overflow-hidden animate-rise-in"
+      aria-labelledby="upload-title"
+    >
+      {/* Subtle themed ink + noise overlay */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute inset-0 opacity-[0.06] gradient-ink" />
+        <div className="absolute inset-0 noise-overlay" />
+      </div>
 
-      <div className="relative z-10">
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Upload Resume Files</h2>
-          <p className="text-gray-600">Drag & drop your resume files or click to browse</p>
+      <header className="text-center mb-6">
+        <h2 id="upload-title" className="text-2xl md:text-3xl font-extrabold gradient-text glow">
+          Upload Resume Files
+        </h2>
+        <p className="mt-2 text-[hsl(var(--muted-foreground))]">
+          Drag &amp; drop your resume files or click to browse
+        </p>
+      </header>
+
+      {/* Dropzone */}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label="Upload files. Press Enter or Space to open file picker."
+        aria-busy={processingFiles.some((f) => f.status === 'processing')}
+        className={[
+          'surface glass gradient-border rounded-3xl p-10 md:p-12 text-center transition-all ease-lux cursor-pointer',
+          'border-2 border-dashed',
+          isDragOver
+            ? 'ring-2 ring-[hsl(var(--primary)/.45)] bg-[hsl(var(--muted)/.7)] shadow-glow scale-[1.01]'
+            : 'hover:bg-[hsl(var(--muted)/.55)] hover:ring-1 hover:ring-[hsl(var(--primary)/.25)]',
+        ].join(' ')}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
+      >
+        <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-white shadow-glow transition-transform duration-300 hover:scale-105">
+          <i className="ri-upload-cloud-2-line text-4xl" />
         </div>
+        <h3 className="text-xl md:text-2xl font-semibold text-foreground mb-2">
+          {isDragOver ? 'Drop files here' : 'Drop files or click to upload'}
+        </h3>
+        <p className="text-[hsl(var(--muted-foreground))] mb-6">
+          Transform your hiring process with AI-powered resume screening
+        </p>
 
-        <div
-          className={`relative border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 cursor-pointer ${
-            isDragOver
-              ? 'border-blue-500 bg-blue-50/50 transform scale-105'
-              : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50/30'
-          }`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+        <button
+          type="button"
+          className="btn btn-primary shadow-glow"
           onClick={() => fileInputRef.current?.click()}
         >
-          <div className="relative z-10">
-            <div
-              className={`w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center transform transition-all duration-300 shadow-lg ${
-                isDragOver ? 'scale-110 rotate-12' : 'hover:scale-105'
-              }`}
-            >
-              <i className="ri-upload-cloud-2-line text-4xl text-white"></i>
-            </div>
-            <h3 className="text-2xl font-semibold text-gray-900 mb-3">
-              {isDragOver ? 'Drop files here' : 'Drop files or click to upload'}
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Transform your hiring process with AI-powered resume screening
-            </p>
-            <button
-              type="button"
-              className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-8 py-4 rounded-xl font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-200 shadow-md"
-            >
-              <i className="ri-folder-open-line mr-2"></i>
-              Choose Files
-            </button>
-            <p className="text-sm text-gray-500 mt-4">
-              <i className="ri-information-line mr-1"></i>
-              Only PDF and DOCX files up to 10MB are supported
-            </p>
-          </div>
+          <i className="ri-folder-open-line mr-2" />
+          Choose Files
+        </button>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept=".pdf,.docx,.doc"
-            onChange={handleFileSelect}
-            className="hidden"
-          />
-        </div>
+        <p className="mt-4 text-sm text-[hsl(var(--muted-foreground))]">
+          <i className="ri-information-line mr-1" />
+          Only PDF, DOC, and DOCX files up to 10MB are supported
+        </p>
 
-        {processingFiles.length > 0 && (
-          <div className="mt-8 space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Processing Files</h3>
-            {processingFiles.map((file) => (
-              <div
-                key={file.id}
-                className="bg-gray-50/80 rounded-xl p-4 border border-gray-200/50 hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <i className="ri-file-text-line text-blue-600 text-xl"></i>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.doc,.docx"
+          onChange={handleFileSelect}
+          className="hidden"
+          aria-hidden="true"
+        />
+      </div>
+
+      {/* Processing list */}
+      {processingFiles.length > 0 && (
+        <div className="mt-8 space-y-4">
+          <h3 className="text-lg font-semibold text-foreground mb-4">Processing Files</h3>
+
+          {processingFiles.map((file) => (
+            <article
+              key={file.id}
+              className="surface rounded-2xl border border-border p-4 hover:shadow-glow transition-shadow"
+            >
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[hsl(var(--primary)/.12)]">
+                    <i className="ri-file-text-line text-[hsl(var(--primary))] text-xl" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground">{file.name}</p>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                      {(file.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {file.status === 'processing' && (
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-[hsl(var(--primary))] border-t-transparent" />
+                  )}
+                  {file.status === 'completed' && (
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[hsl(var(--success))]">
+                      <i className="ri-check-line text-white text-sm" />
+                    </div>
+                  )}
+                  {file.status === 'error' && (
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[hsl(var(--destructive))]">
+                      <i className="ri-close-line text-white text-sm" />
+                    </div>
+                  )}
+                  <span className="min-w-[40px] text-sm font-medium text-foreground">
+                    {Math.round(file.progress)}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="mb-4 h-2 w-full rounded-full bg-[hsl(var(--muted))]">
+                <div
+                  className={
+                    file.status === 'error'
+                      ? 'h-2 rounded-full bg-[hsl(var(--destructive))] transition-all duration-300'
+                      : 'h-2 rounded-full bg-gradient-to-r from-[hsl(var(--g1))] to-[hsl(var(--g3))] transition-all duration-300'
+                  }
+                  style={{ width: `${file.progress}%` }}
+                />
+              </div>
+
+              {file.status === 'completed' && file.parsedData && (
+                <div className="surface rounded-xl border border-border p-4">
+                  <h4 className="mb-3 flex items-center font-medium text-foreground">
+                    <i className="ri-check-circle-line mr-2 text-[hsl(var(--success))]" />
+                    Extracted Information
+                  </h4>
+                  <dl className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <dt className="text-[hsl(var(--muted-foreground))]">Name</dt>
+                      <dd className="font-medium text-foreground">{file.parsedData.name}</dd>
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">{file.name}</p>
-                      <p className="text-sm text-gray-500">
-                        {(file.size / 1024).toFixed(1)} KB
-                      </p>
+                      <dt className="text-[hsl(var(--muted-foreground))]">Email</dt>
+                      <dd className="font-medium text-foreground">{file.parsedData.email}</dd>
                     </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    {file.status === 'processing' && (
-                      <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    )}
-                    {file.status === 'completed' && (
-                      <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                        <i className="ri-check-line text-white text-sm"></i>
-                      </div>
-                    )}
-                    {file.status === 'error' && (
-                      <div className="w-6 h-6 bg-red-500 rounded-full flex items-center justify-center">
-                        <i className="ri-close-line text-white text-sm"></i>
-                      </div>
-                    )}
-                    <span className="text-sm font-medium text-gray-900 min-w-[40px]">
-                      {Math.round(file.progress)}%
-                    </span>
-                  </div>
-                </div>
-
-                <div className="w-full bg-gray-200 rounded-full h-2 mb-4">
-                  <div
-                    className={`h-2 rounded-full transition-all duration-300 ${
-                      file.status === 'error'
-                        ? 'bg-red-400'
-                        : 'bg-gradient-to-r from-blue-500 to-purple-500'
-                    }`}
-                    style={{ width: `${file.progress}%` }}
-                  ></div>
-                </div>
-
-                {file.status === 'completed' && file.parsedData && (
-                  <div className="bg-white/80 rounded-xl p-4 border border-gray-200/50">
-                    <h4 className="font-medium text-gray-900 mb-3 flex items-center">
-                      <i className="ri-check-circle-line text-green-500 mr-2"></i>
-                      Extracted Information
-                    </h4>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">Name:</span>
-                        <span className="ml-2 font-medium">{file.parsedData.name}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Email:</span>
-                        <span className="ml-2 font-medium">{file.parsedData.email}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Experience:</span>
-                        <span className="ml-2 font-medium">{file.parsedData.experience}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Location:</span>
-                        <span className="ml-2 font-medium">{file.parsedData.location}</span>
-                      </div>
+                    <div>
+                      <dt className="text-[hsl(var(--muted-foreground))]">Experience</dt>
+                      <dd className="font-medium text-foreground">{file.parsedData.experience}</dd>
                     </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+                    <div>
+                      <dt className="text-[hsl(var(--muted-foreground))]">Location</dt>
+                      <dd className="font-medium text-foreground">{file.parsedData.location}</dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
+            </article>
+          ))}
+        </div>
+      )}
 
-        {/* Success Pop-up */}
-        {showSuccessPopup && (
-          <div className="fixed bottom-6 right-6 bg-green-500 text-white px-6 py-4 rounded-xl shadow-lg z-50">
-            <strong>{uploadCount}</strong> CV{uploadCount === 1 ? '' : 's'} successfully uploaded!
-            <button
-              onClick={() => setShowSuccessPopup(false)}
-              className="ml-4 text-sm underline"
-            >
-              Close
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+      {/* Success Pop-up */}
+      {showSuccessPopup && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-6 right-6 z-50 rounded-xl bg-[hsl(var(--success))] px-6 py-4 text-white shadow-glow"
+        >
+          <strong>{uploadCount}</strong> CV{uploadCount === 1 ? '' : 's'} successfully uploaded!
+          <button
+            onClick={() => setShowSuccessPopup(false)}
+            className="ml-4 underline decoration-white/80 decoration-2 underline-offset-2"
+          >
+            Close
+          </button>
+        </div>
+      )}
+    </section>
   );
 }

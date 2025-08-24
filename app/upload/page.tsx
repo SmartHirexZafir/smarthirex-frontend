@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Sidebar from './Sidebar';
 import UploadSection from './UploadSection';
 import ChatbotSection from './ChatbotSection';
 import CandidateResults from './CandidateResults';
@@ -21,7 +20,7 @@ interface Candidate {
   match_score?: number;
   predicted_role?: string;
   filter_skills?: string[];
-  semantic_score?: number; // ✅ Added for semantic matching
+  semantic_score?: number;
 }
 
 interface FileUpload extends File {
@@ -37,22 +36,19 @@ interface User {
 }
 
 export default function UploadPage() {
-  const [uploadedFiles, setUploadedFiles] = useState<FileUpload[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [activePrompt, setActivePrompt] = useState<string>('Show all available candidates');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
+    if (userData) setUser(JSON.parse(userData));
   }, []);
 
-  const handleFileUpload = (files: FileUpload[]) => {
+  const handleFileUpload = (files: any[]) => {
     setUploadedFiles(files);
   };
 
@@ -64,7 +60,7 @@ export default function UploadPage() {
   const navItems = [
     { label: 'Upload CVs', href: '/upload', icon: 'ri-upload-cloud-2-line', active: true },
     { label: 'History', href: '/history', icon: 'ri-history-line' },
-    { label: 'Tests', href: '/meetings', icon: 'ri-file-text-line' }
+    { label: 'Tests', href: '/meetings', icon: 'ri-file-text-line' },
   ];
 
   const getUserInitials = () => {
@@ -74,95 +70,105 @@ export default function UploadPage() {
     return 'JD';
   };
 
-  const getUserName = () => {
-    return user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : 'John Doe';
-  };
+  const getUserName = () =>
+    user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : 'John Doe';
 
-  const getUserSubtext = () => {
-    return user?.jobTitle || user?.company || 'HR Manager';
-  };
+  const getUserSubtext = () => user?.jobTitle || user?.company || 'HR Manager';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <Sidebar collapsed={sidebarCollapsed} onToggle={setSidebarCollapsed} />
+    <div className="min-h-screen bg-background text-foreground">
+      {/* Page-specific nav (global landing nav is gated in RootLayout via HeaderGate) */}
+      <nav className="nav full-bleed sticky top-0 z-30 backdrop-blur supports-[backdrop-filter]:bg-background/70 shadow-glow">
+        <div className="container max-w-[1600px] py-5 md:py-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 items-center gap-4">
+            {/* Brand */}
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] flex items-center justify-center text-white shadow-glow">
+                <i className="ri-briefcase-line text-lg" />
+              </div>
+              <span className="text-2xl md:text-[28px] font-extrabold gradient-text glow leading-none">
+                SmartHirex
+              </span>
+            </div>
 
-      <div className={`flex-1 transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
-        <nav className="bg-white/80 backdrop-blur-md shadow-lg border-b border-gray-200/50 sticky top-0 z-30">
-          <div className="px-8 py-4">
-            <div className="flex items-center justify-between">
-              {/* Logo & Sidebar toggle */}
-              <div className="flex items-center space-x-4">
-                <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
-                  <i className="ri-menu-line text-gray-600"></i>
-                </button>
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                    <i className="ri-briefcase-line text-white text-xl"></i>
-                  </div>
-                  <h1 className="text-xl font-bold text-gray-900">SmartHirex</h1>
+            {/* Center nav */}
+            <div className="hidden md:flex items-center justify-center gap-6">
+              {navItems.map((item) => (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  className={`nav-item ${item.active ? 'aria-[current=page]:nav-item' : ''}`}
+                  aria-current={item.active ? 'page' : undefined}
+                >
+                  <i className={`${item.icon} mr-2`} />
+                  {item.label}
+                </a>
+              ))}
+            </div>
+
+            {/* Profile */}
+            <div className="flex items-center justify-end relative">
+              <button
+                onClick={() => setShowProfileDropdown((s) => !s)}
+                className="surface glass border border-border rounded-xl px-2 py-2 flex items-center gap-3 hover:shadow-glow transition-all"
+                aria-haspopup="menu"
+                aria-expanded={showProfileDropdown}
+              >
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[hsl(var(--g3))] to-[hsl(var(--g1))] text-white font-semibold flex items-center justify-center shadow-glow">
+                  {getUserInitials()}
                 </div>
-              </div>
+                <div className="hidden sm:block text-left leading-tight">
+                  <p className="text-sm font-medium">{getUserName()}</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">{getUserSubtext()}</p>
+                </div>
+                <i className="ri-arrow-down-s-line text-[hsl(var(--muted-foreground))]" />
+              </button>
 
-              {/* Navigation Tabs */}
-              <div className="hidden lg:flex items-center space-x-8">
-                {navItems.map((item) => (
-                  <a
-                    key={item.label}
-                    href={item.href}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-200 hover:bg-gray-100 ${
-                      item.active ? 'text-blue-600 bg-blue-50' : 'text-gray-700'
-                    }`}
-                  >
-                    <i className={`${item.icon} text-lg`}></i>
-                    <span className="font-medium">{item.label}</span>
+              {showProfileDropdown && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full mt-2 w-56 surface glass border border-border rounded-xl shadow-glow py-2 z-50"
+                >
+                  <a className="nav-item block px-4 py-2" href="#">
+                    <i className="ri-user-line mr-2" />
+                    Profile
                   </a>
-                ))}
-              </div>
-
-              {/* User Profile Dropdown */}
-              <div className="relative">
-                <button onClick={() => setShowProfileDropdown(!showProfileDropdown)} className="flex items-center space-x-3 p-2 rounded-lg hover:bg-gray-100 transition-colors">
-                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
-                    {getUserInitials()}
-                  </div>
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-gray-900">{getUserName()}</p>
-                    <p className="text-xs text-gray-500">{getUserSubtext()}</p>
-                  </div>
-                  <i className="ri-arrow-down-s-line text-gray-400"></i>
-                </button>
-
-                {showProfileDropdown && (
-                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-200/50 py-2 z-50">
-                    <a href="#" className="flex items-center space-x-3 px-4 py-2 hover:bg-gray-50 transition-colors">
-                      <i className="ri-user-line text-gray-500"></i>
-                      <span className="text-sm text-gray-700">Profile</span>
-                    </a>
-                    <a href="#" className="flex items-center space-x-3 px-4 py-2 hover:bg-gray-50 transition-colors">
-                      <i className="ri-settings-line text-gray-500"></i>
-                      <span className="text-sm text-gray-700">Settings</span>
-                    </a>
-                    <hr className="my-2 border-gray-200" />
-                    <a href="#" className="flex items-center space-x-3 px-4 py-2 hover:bg-gray-50 transition-colors text-red-600">
-                      <i className="ri-logout-circle-line"></i>
-                      <span className="text-sm">Logout</span>
-                    </a>
-                  </div>
-                )}
-              </div>
+                  <a className="nav-item block px-4 py-2" href="#">
+                    <i className="ri-settings-line mr-2" />
+                    Settings
+                  </a>
+                  <hr className="my-2 border-border" />
+                  <a className="nav-item block px-4 py-2 text-[hsl(var(--destructive))]" href="#">
+                    <i className="ri-logout-circle-line mr-2" />
+                    Logout
+                  </a>
+                </div>
+              )}
             </div>
           </div>
-        </nav>
-
-        {/* Main Content */}
-        <div className="p-8 max-w-6xl mx-auto space-y-8">
-          <UploadSection onFileUpload={handleFileUpload} uploadedFiles={uploadedFiles} />
-          <div className="max-w-4xl mx-auto">
-            <ChatbotSection onPromptSubmit={handlePromptSubmit} isProcessing={isProcessing} activePrompt={activePrompt} />
-          </div>
-          <CandidateResults candidates={candidates} isProcessing={isProcessing} activePrompt={activePrompt} />
         </div>
-      </div>
+      </nav>
+
+      {/* Main — full width with responsive padding; sections handle their own containers */}
+      <main id="main" className="w-full px-4 sm:px-6 lg:px-8 py-6 md:py-8 space-y-8">
+        <UploadSection onFileUpload={handleFileUpload} uploadedFiles={uploadedFiles} />
+
+        <section className="animate-rise-in">
+          <ChatbotSection
+            onPromptSubmit={handlePromptSubmit}
+            isProcessing={isProcessing}
+            activePrompt={activePrompt}
+          />
+        </section>
+
+        <section className="animate-rise-in">
+          <CandidateResults
+            candidates={candidates}
+            isProcessing={isProcessing}
+            activePrompt={activePrompt}
+          />
+        </section>
+      </main>
     </div>
   );
 }

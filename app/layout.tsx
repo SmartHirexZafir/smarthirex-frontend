@@ -43,13 +43,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body
         className={`page-shell antialiased bg-background text-foreground
-          font-sans
-          ${orbitron.variable} ${spaceGrotesk.variable} ${geistMono.variable}`}
+          ${orbitron.variable} ${spaceGrotesk.variable} ${geistMono.variable}
+          min-h-screen flex flex-col`}
       >
-        {/* Ambient background layers: aurora + noise + subtle conic sheen */}
+        {/* Ambient background (soft, non-repetitive cool gradient + texture) */}
         <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-          <div className="absolute inset-0 bg-luxe-radial animate-aurora-slow" />
-          <div className="absolute inset-0 opacity-[0.07] bg-luxe-conic" />
+          <div className="absolute inset-0 opacity-[0.06] gradient-ink" />
           <div className="absolute inset-0 noise-overlay" />
         </div>
 
@@ -61,42 +60,55 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
 
-        {/* Premium Glass Nav */}
-        <nav className="nav">
-          <div className="container flex items-center justify-between py-5">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl font-extrabold gradient-text glow">SmartHirex</span>
-              <span className="hidden md:inline-block rounded-full px-3 py-1 text-[12px] bg-[hsl(var(--muted)/0.6)] gradient-border">
-                Nebula Luxe Pro
-              </span>
+        {/* Premium Glass Nav — full width, more prominent, centered links */}
+        <nav className="nav full-bleed">
+          <div className="container max-w-[1600px] py-5 md:py-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 items-center gap-4">
+              {/* Left: Brand */}
+              <div className="flex items-center gap-3">
+                <span className="text-2xl md:text-[28px] font-extrabold gradient-text glow leading-none">
+                  SmartHirex
+                </span>
+              </div>
+
+              {/* Center: Links (equal spacing) */}
+              <div className="hidden md:flex items-center justify-center gap-8">
+                <a className="nav-item" href="/features">Features</a>
+                <a className="nav-item" href="/pricing">Pricing</a>
+              </div>
+
+              {/* Right: CTA */}
+              <div className="flex items-center justify-end">
+                <a className="btn btn-primary" href="/signup">
+                  <i className="ri-rocket-2-line" />
+                  Get Started
+                </a>
+              </div>
+
+              {/* Mobile menu button (kept on small screens) */}
+              <button className="md:hidden icon-btn justify-self-end" aria-label="Open Menu">
+                <i className="ri-menu-5-line" />
+              </button>
             </div>
-            <div className="hidden md:flex items-center gap-6">
-              <a className="nav-item" href="/features">Features</a>
-              <a className="nav-item" href="/pricing">Pricing</a>
-              <a className="btn btn-primary" href="/login">
-                <i className="ri-rocket-2-line" />
-                Get Started
-              </a>
-            </div>
-            <button className="md:hidden icon-btn" aria-label="Open Menu">
-              <i className="ri-menu-5-line" />
-            </button>
           </div>
         </nav>
 
-        {/* Main */}
-        <main id="main" className="container py-10 md:py-12">
+        {/* Main — no container here, so sections aren’t “mid-restricted”.
+            Each section can decide: use its own container OR add `full-bleed` for edge-to-edge. */}
+        <main id="main" className="flex-1 w-full">
           {children}
         </main>
 
         {/* Footer (minimal & luxe) */}
-        <footer className="container py-10 text-sm text-[hsl(var(--muted-foreground))]">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <p>© {new Date().getFullYear()} SmartHirex. All rights reserved.</p>
-            <div className="flex items-center gap-4">
-              <a className="nav-item" href="/privacy">Privacy</a>
-              <a className="nav-item" href="/terms">Terms</a>
-              <a className="nav-item" href="/contact">Contact</a>
+        <footer className="w-full">
+          <div className="container max-w-[1600px] px-4 sm:px-6 lg:px-8 py-10 text-sm text-[hsl(var(--muted-foreground))]">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <p>© {new Date().getFullYear()} SmartHirex. All rights reserved.</p>
+              <div className="flex items-center gap-4">
+                <a className="nav-item" href="/privacy">Privacy</a>
+                <a className="nav-item" href="/terms">Terms</a>
+                <a className="nav-item" href="/contact">Contact</a>
+              </div>
             </div>
           </div>
         </footer>

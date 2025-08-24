@@ -1,19 +1,17 @@
-
+// app/page.tsx
 'use client';
 
-import Link from 'next/link';
-import { useState, useEffect } from 'react';
-import Header from '../components/Header';
 import Hero from '../components/Hero';
 import FeaturesCarousel from '../components/FeaturesCarousel';
 import LiveStats from '../components/LiveStats';
 import Testimonials from '../components/Testimonials';
-import Footer from '../components/Footer';
+import Footer from '@/components/Footer';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-white">
-      <Header />
+    // No extra header/footer here — layout.tsx provides the single nav + minimal footer
+    // Keep background neutral so sections manage their own look
+    <div className="min-h-screen bg-transparent">
       <Hero />
       <FeaturesCarousel />
       <LiveStats />

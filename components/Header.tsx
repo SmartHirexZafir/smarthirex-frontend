@@ -7,53 +7,62 @@ export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <header className="w-full bg-white/95 backdrop-blur-sm shadow-lg border-b border-gray-100 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
+    <header className="nav">
+      <div className="container">
+        <div className="flex items-center justify-between h-16 md:h-20">
+          {/* Brand */}
           <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-blue-800 rounded-xl flex items-center justify-center shadow-lg">
-                <i className="ri-brain-line text-white text-xl"></i>
+            <Link href="/" className="flex items-center gap-3 group" aria-label="SmartHirex Home">
+              <div className="w-10 h-10 rounded-2xl grid place-items-center gradient-border glow
+                              bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g2))] text-white">
+                <i className="ri-brain-line text-xl"></i>
               </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-blue-700 to-blue-900 bg-clip-text text-transparent font-pacifico">
+              <span className="text-2xl md:text-[1.6rem] font-bold tracking-tight gradient-text">
                 SmartHirex
               </span>
             </Link>
           </div>
-          
-          {/* Login removed per requirement; Sign Up kept intact */}
-          <div className="hidden md:flex items-center space-x-4">
+
+          {/* Desktop CTA (Login intentionally removed) */}
+          <div className="hidden md:flex items-center gap-3">
             <Link
               href="/signup"
-              className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl whitespace-nowrap"
+              className="btn btn-primary"
             >
               Sign Up
             </Link>
           </div>
 
+          {/* Mobile menu toggle */}
           <button
-            className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border hover:bg-muted/40 transition-colors"
+            onClick={() => setIsMenuOpen((v) => !v)}
             aria-label="Toggle menu"
+            aria-expanded={isMenuOpen}
+            aria-controls="mobile-menu"
           >
-            <i className="ri-menu-line text-2xl text-gray-700"></i>
+            <i className="ri-menu-line text-2xl text-foreground/80"></i>
           </button>
         </div>
 
+        {/* Mobile menu */}
         {isMenuOpen && (
-          <div className="md:hidden border-t border-gray-100 py-6 bg-white/95 backdrop-blur-sm">
-            <div className="flex flex-col space-y-4">
-              <div className="pt-4 border-t border-gray-100 space-y-3">
-                {/* Login removed in mobile as well */}
-                <Link
-                  href="/signup"
-                  className="block bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg font-semibold text-center hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg"
-                >
-                  Sign Up
-                </Link>
-              </div>
+          <nav
+            id="mobile-menu"
+            className="md:hidden border-t border-border py-6 glass-strong bg-background/90"
+            role="navigation"
+            aria-label="Mobile Navigation"
+          >
+            <div className="flex flex-col gap-4">
+              {/* Login intentionally removed on mobile as well */}
+              <Link
+                href="/signup"
+                className="btn btn-primary w-full text-center"
+              >
+                Sign Up
+              </Link>
             </div>
-          </div>
+          </nav>
         )}
       </div>
     </header>

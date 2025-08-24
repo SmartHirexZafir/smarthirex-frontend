@@ -1,4 +1,4 @@
-// app/components/EmptyState.tsx
+// components/EmptyState.tsx
 'use client';
 
 import React from 'react';
@@ -16,16 +16,23 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   onUploadClick,
   showUploadButton = true,
 }) => {
+  // Static id to avoid styled-jsx transformations; sufficient for single-instance usage
+  const headingId = 'empty-state-title';
+
   return (
-    <div className="flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-dashed border-gray-300 bg-white shadow-sm animate-[fadeIn_0.3s_ease]">
+    <div
+      role="region"
+      aria-labelledby={headingId}
+      className="flex flex-col items-center justify-center text-center p-8 rounded-2xl glass shadow-soft border border-dashed border-border bg-background/40 animate-[fadeIn_0.3s_ease]"
+    >
       {/* simple icon (no external lib) */}
-      <div className="p-4 rounded-full bg-gray-100 mb-4">
+      <div className="p-4 rounded-full bg-[hsl(var(--muted)/0.4)] mb-4 ring-1 ring-border">
         <svg
           width="40"
           height="40"
           viewBox="0 0 24 24"
           fill="none"
-          className="text-gray-500"
+          className="text-[hsl(var(--muted-foreground))]"
           aria-hidden="true"
         >
           <path
@@ -51,14 +58,18 @@ const EmptyState: React.FC<EmptyStateProps> = ({
         </svg>
       </div>
 
-      <h2 className="text-lg font-semibold text-gray-800">{title}</h2>
-      <p className="text-gray-500 mt-2 max-w-md">{description}</p>
+      <h2 id={headingId} className="text-lg font-semibold text-foreground">
+        {title}
+      </h2>
+      <p className="text-[hsl(var(--muted-foreground))] mt-2 max-w-md">
+        {description}
+      </p>
 
       {showUploadButton && (
         <button
           type="button"
           onClick={onUploadClick}
-          className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition"
+          className="btn btn-primary mt-6"
         >
           {/* upload arrow icon */}
           <svg
@@ -81,8 +92,8 @@ const EmptyState: React.FC<EmptyStateProps> = ({
         </button>
       )}
 
-      {/* tiny keyframes (no external CSS needed) */}
-      <style jsx>{`
+      {/* Keyframes globalized so styled-jsx scoped class injection na ho */}
+      <style jsx global>{`
         @keyframes fadeIn {
           from {
             opacity: 0;

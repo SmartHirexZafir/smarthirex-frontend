@@ -1,172 +1,246 @@
-'use client';
+// app/candidate/[id]/ResumePreview.tsx
+"use client";
 
-import { useState } from 'react';
+import React from "react";
 
-export default function ResumePreview({ candidate }: { candidate: any }) {
-  const [showFullResume, setShowFullResume] = useState(true);
+/* ===================== Types ===================== */
+type Education = {
+  degree?: string;
+  school?: string;
+  year?: string | number;
+  gpa?: string | number;
+};
 
-  if (!candidate || !candidate.resume) return null;
+type WorkItem = {
+  title?: string;
+  company?: string;
+  duration?: string;
+  description?: string;
+};
+
+type ProjectObj = {
+  name?: string;
+  description?: string;
+  tech?: string[];
+};
+
+type Resume = {
+  url?: string;
+  filename?: string;
+  summary?: string;
+  education?: Education[];
+  workHistory?: WorkItem[];
+  projects?: Array<string | ProjectObj>;
+  email?: string;
+};
+
+type Candidate = {
+  resume?: Resume;
+  skills?: string[];
+  matchedSkills?: string[];
+};
+
+/* ===================== Component ===================== */
+export default function ResumePreview({ candidate }: { candidate: Candidate }) {
+  if (!candidate?.resume) return null;
 
   const { resume } = candidate;
 
   return (
     <div className="p-4">
-      {/* Resume Header */}
+      {/* Header */}
       <div className="mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-gray-900">Resume Preview</h3>
-          {resume.url && (
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-card-foreground">Resume Preview</h3>
+
+          {resume.url ? (
             <a
               href={resume.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center space-x-2 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors cursor-pointer"
+              aria-label="Download resume"
+              className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-primary-foreground shadow-soft transition-all hover:shadow-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              <i className="ri-download-line text-sm"></i>
+              <i className="ri-download-line text-sm" aria-hidden />
               <span className="text-sm">Download</span>
             </a>
-          )}
+          ) : null}
         </div>
 
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 border border-blue-200/50">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-              <i className="ri-file-pdf-line text-red-600 text-lg"></i>
+        <div className="rounded-xl border border-border bg-card/80 backdrop-blur-md p-3 shadow-soft">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/15">
+              <i className="ri-file-pdf-line text-lg text-destructive" aria-hidden />
             </div>
             <div>
-              <p className="font-medium text-gray-900 text-sm">
-                {resume.filename || 'Resume.pdf'}
+              <p className="text-sm font-medium text-card-foreground">
+                {resume.filename || "Resume.pdf"}
               </p>
-              <p className="text-xs text-gray-600">Uploaded via system</p>
+              <p className="text-xs text-muted-foreground">Uploaded via system</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Summary */}
-      {resume.summary && (
-        <div className="mb-4">
-          <h4 className="text-md font-semibold text-gray-900 mb-2">Professional Summary</h4>
-          <p className="text-gray-700 leading-relaxed bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg p-3 text-sm whitespace-pre-line">
+      {resume.summary ? (
+        <section className="mb-4">
+          <h4 className="mb-2 text-base font-semibold text-card-foreground">
+            Professional Summary
+          </h4>
+          <p className="whitespace-pre-line rounded-xl bg-muted/40 p-3 text-sm leading-relaxed text-foreground/90 ring-1 ring-inset ring-border">
             {resume.summary}
           </p>
-        </div>
-      )}
+        </section>
+      ) : null}
 
       {/* Education */}
-      {Array.isArray(resume.education) && resume.education.length > 0 && (
-        <div className="mb-4">
-          <h4 className="text-md font-semibold text-gray-900 mb-2">Education</h4>
+      {Array.isArray(resume.education) && resume.education.length > 0 ? (
+        <section className="mb-4">
+          <h4 className="mb-2 text-base font-semibold text-card-foreground">Education</h4>
           <div className="space-y-2">
-            {resume.education.map((edu: any, index: number) => (
+            {resume.education.map((edu: Education, index: number) => (
               <div
                 key={index}
-                className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-3 border border-blue-200/50"
+                className="rounded-xl border border-border bg-card/70 p-3 backdrop-blur-md shadow-soft"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h5 className="font-medium text-gray-900 text-sm">{edu.degree}</h5>
-                    <p className="text-blue-600 font-medium text-sm">{edu.school}</p>
-                    <p className="text-xs text-gray-600">Graduated {edu.year}</p>
+                    <h5 className="text-sm font-medium text-card-foreground">{edu.degree}</h5>
+                    <p className="text-sm font-medium text-primary">{edu.school}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {edu.year ? <>Graduated {edu.year}</> : null}
+                    </p>
                   </div>
-                  {edu.gpa && (
+
+                  {edu.gpa ? (
                     <div className="text-right">
-                      <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
+                      <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20">
                         GPA: {edu.gpa}
                       </span>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        </section>
+      ) : null}
 
       {/* Work Experience */}
-      {Array.isArray(resume.workHistory) && resume.workHistory.length > 0 && (
-        <div className="mb-4">
-          <h4 className="text-md font-semibold text-gray-900 mb-2">Work Experience</h4>
+      {Array.isArray(resume.workHistory) && resume.workHistory.length > 0 ? (
+        <section className="mb-4">
+          <h4 className="mb-2 text-base font-semibold text-card-foreground">Work Experience</h4>
           <div className="space-y-3">
-            {resume.workHistory.map((work: any, index: number) => (
+            {resume.workHistory.map((work: WorkItem, index: number) => (
               <div
                 key={index}
-                className="border-l-4 border-blue-500 pl-3 bg-gradient-to-r from-blue-50/50 to-purple-50/50 rounded-r-lg py-2"
+                className="rounded-r-xl border-l-4 border-primary bg-card/60 pl-3 py-2 backdrop-blur-md shadow-soft ring-1 ring-border"
               >
-                <div className="flex items-start justify-between mb-1">
+                <div className="mb-1 flex items-start justify-between">
                   <div>
-                    <h5 className="font-medium text-gray-900 text-sm">{work.title}</h5>
-                    <p className="text-blue-600 font-medium text-sm">{work.company}</p>
+                    <h5 className="text-sm font-medium text-card-foreground">{work.title}</h5>
+                    <p className="text-sm font-medium text-primary">{work.company}</p>
                   </div>
-                  <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium">
-                    {work.duration}
-                  </span>
+                  {work.duration ? (
+                    <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium text-foreground/90 ring-1 ring-inset ring-border">
+                      {work.duration}
+                    </span>
+                  ) : null}
                 </div>
-                <p className="text-gray-700 text-xs whitespace-pre-line">{work.description}</p>
+
+                {work.description ? (
+                  <p className="whitespace-pre-line text-xs text-foreground/80">
+                    {work.description}
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>
-        </div>
-      )}
+        </section>
+      ) : null}
 
       {/* Projects */}
-      {Array.isArray(resume.projects) && resume.projects.length > 0 && (
-        <div className="mb-4">
-          <h4 className="text-md font-semibold text-gray-900 mb-2">Key Projects</h4>
+      {Array.isArray(resume.projects) && resume.projects.length > 0 ? (
+        <section className="mb-4">
+          <h4 className="mb-2 text-base font-semibold text-card-foreground">Key Projects</h4>
           <div className="space-y-3">
-            {resume.projects.map((project: any, index: number) => {
-              const name = typeof project === 'string' ? project.slice(0, 40) + '...' : project.name;
-              const desc = typeof project === 'string' ? project : project.description;
-              const tech = Array.isArray(project.tech) ? project.tech : [];
+            {resume.projects.map((project: string | ProjectObj, index: number) => {
+              const isString = typeof project === "string";
+              const rawName = isString
+                ? (project as string)
+                : (project as ProjectObj)?.name || "Project";
+
+              const displayName =
+                typeof rawName === "string" && rawName.length > 40
+                  ? `${rawName.slice(0, 40)}…`
+                  : rawName;
+
+              const desc = isString
+                ? (project as string)
+                : (project as ProjectObj)?.description || "";
+
+              const tech = Array.isArray((project as ProjectObj)?.tech)
+                ? ((project as ProjectObj).tech as string[])
+                : [];
 
               return (
                 <div
                   key={index}
-                  className="bg-gradient-to-r from-gray-50 to-green-50 rounded-lg p-3 border border-gray-200/50"
+                  className="rounded-xl border border-border bg-card/70 p-3 backdrop-blur-md shadow-soft"
                 >
-                  <h5 className="font-medium text-gray-900 mb-1 text-sm">{name}</h5>
-                  <p className="text-gray-700 text-xs mb-2 whitespace-pre-line">{desc}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {tech.map((t: string, i: number) => (
-                      <span
-                        key={i}
-                        className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium"
-                      >
-                        {t}
-                      </span>
-                    ))}
-                  </div>
+                  <h5 className="mb-1 text-sm font-medium text-card-foreground">{displayName}</h5>
+
+                  {desc ? (
+                    <p className="mb-2 whitespace-pre-line text-xs text-foreground/80">{desc}</p>
+                  ) : null}
+
+                  {tech.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {tech.map((t: string, i: number) => (
+                        <span
+                          key={`${t}-${i}`}
+                          className="rounded-full bg-secondary/15 px-2 py-1 text-xs font-medium text-secondary ring-1 ring-inset ring-secondary/25"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
+        </section>
+      ) : null}
 
       {/* Skills */}
-      {Array.isArray(candidate.skills) && candidate.skills.length > 0 && (
-        <div>
-          <h4 className="text-md font-semibold text-gray-900 mb-2">Technical Skills</h4>
+      {Array.isArray(candidate.skills) && candidate.skills.length > 0 ? (
+        <section>
+          <h4 className="mb-2 text-base font-semibold text-card-foreground">Technical Skills</h4>
           <div className="flex flex-wrap gap-2">
             {candidate.skills.map((skill: string, index: number) => {
-              const isMatched = (candidate.matchedSkills || []).includes(skill);
+              const matched =
+                Array.isArray(candidate.matchedSkills) &&
+                candidate.matchedSkills.includes(skill);
+
               return (
                 <span
-                  key={index}
-                  className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    isMatched
-                      ? 'bg-green-100 text-green-800 border border-green-200'
-                      : 'bg-gray-100 text-gray-600 border border-gray-200'
+                  key={`${skill}-${index}`}
+                  className={`rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${
+                    matched
+                      ? "bg-success/15 text-success ring-success/30"
+                      : "bg-muted text-foreground/80 ring-border"
                   }`}
                 >
                   {skill}
-                  {isMatched && <i className="ri-check-line ml-1"></i>}
+                  {matched && <i className="ri-check-line ml-1" aria-hidden />}
                 </span>
               );
             })}
           </div>
-        </div>
-      )}
+        </section>
+      ) : null}
     </div>
   );
 }

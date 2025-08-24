@@ -220,116 +220,141 @@ const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur"
       onClick={handleBackdrop}
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <h3 className="text-lg font-semibold">Schedule Interview</h3>
+      {/* Panel */}
+      <div className="w-full max-w-xl rounded-2xl surface glass gradient-border shadow-glow animate-blur-in">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border/70">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-luxe-aurora text-white grid place-items-center shadow-glow">
+              <i className="ri-calendar-event-line text-base" aria-hidden />
+            </div>
+            <h3 className="text-lg font-semibold tracking-wide">Schedule Interview</h3>
+          </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+            className="icon-btn rounded-xl hover:shadow-glow focus-visible:outline-none"
             aria-label="Close"
             disabled={loading}
           >
-            ✕
+            <i className="ri-close-line" />
           </button>
         </div>
 
-        <div className="space-y-4 p-6">
-          <div className="text-sm text-gray-600">
-            {candidate.name ? <span className="font-medium">{candidate.name}</span> : null}
+        {/* Body */}
+        <div className="p-6 space-y-5">
+          <div className="text-sm text-muted-foreground">
+            {candidate.name ? <span className="font-medium text-foreground">{candidate.name}</span> : null}
             {candidate.name ? " · " : null}
             <span>{candidate.email}</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Date & Time */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label htmlFor="date" className="mb-1 block text-sm font-medium text-gray-700">Date</label>
+              <label htmlFor="date" className="block text-sm font-medium text-foreground mb-1">
+                Date
+              </label>
               <input
                 id="date"
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl bg-background/60 border border-border px-3 py-2 text-sm focus:ring-2 focus:ring-ring focus:outline-none shadow-inner-highlight"
               />
             </div>
             <div>
-              <label htmlFor="time" className="mb-1 block text-sm font-medium text-gray-700">Time</label>
+              <label htmlFor="time" className="block text-sm font-medium text-foreground mb-1">
+                Time
+              </label>
               <input
                 id="time"
                 type="time"
                 step={60}
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl bg-background/60 border border-border px-3 py-2 text-sm focus:ring-2 focus:ring-ring focus:outline-none shadow-inner-highlight"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* TZ & Duration */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Timezone</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Timezone</label>
               <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl bg-background/60 border border-border px-3 py-2 text-sm focus:ring-2 focus:ring-ring focus:outline-none shadow-inner-highlight"
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
               >
                 {zones.map((z) => (
-                  <option key={z} value={z}>{z}</option>
+                  <option key={z} value={z}>
+                    {z}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Duration</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Duration</label>
               <select
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded-xl bg-background/60 border border-border px-3 py-2 text-sm focus:ring-2 focus:ring-ring focus:outline-none shadow-inner-highlight"
                 value={String(durationMins)}
                 onChange={(e) => setDurationMins(parseInt(e.target.value))}
               >
                 {durations.map((d) => (
-                  <option key={d} value={String(d)}>{d} minutes</option>
+                  <option key={d} value={String(d)}>
+                    {d} minutes
+                  </option>
                 ))}
               </select>
             </div>
           </div>
 
+          {/* Title */}
           <div>
-            <label htmlFor="title" className="mb-1 block text-sm font-medium text-gray-700">Title</label>
+            <label htmlFor="title" className="block text-sm font-medium text-foreground mb-1">
+              Title
+            </label>
             <input
               id="title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded-xl bg-background/60 border border-border px-3 py-2 text-sm focus:ring-2 focus:ring-ring focus:outline-none shadow-inner-highlight"
               placeholder="Interview title"
             />
           </div>
 
+          {/* Notes */}
           <div>
-            <label htmlFor="notes" className="mb-1 block text-sm font-medium text-gray-700">Notes (optional)</label>
+            <label htmlFor="notes" className="block text-sm font-medium text-foreground mb-1">
+              Notes (optional)
+            </label>
             <textarea
               id="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="h-24 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="h-28 w-full rounded-xl bg-background/60 border border-border px-3 py-2 text-sm focus:ring-2 focus:ring-ring focus:outline-none shadow-inner-highlight"
               placeholder="Anything the candidate should prepare…"
             />
           </div>
 
+          {/* Alerts */}
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </div>
           )}
 
           {successUrl && (
-            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+            <div className="rounded-xl border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
               Interview scheduled!{" "}
               {successUrl ? (
-                <a className="underline" href={successUrl} target="_blank" rel="noreferrer">
+                <a className="underline hover:opacity-90" href={successUrl} target="_blank" rel="noreferrer">
                   Open meeting link
                 </a>
               ) : (
@@ -338,11 +363,12 @@ const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
             </div>
           )}
 
+          {/* Actions */}
           <div className="flex items-center justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+              className="btn variant-ghost"
               disabled={loading}
             >
               Close
@@ -350,7 +376,7 @@ const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
             <button
               onClick={submit}
               disabled={!canSubmit || loading}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "Scheduling…" : "Send Invite"}
             </button>

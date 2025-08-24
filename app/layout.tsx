@@ -1,30 +1,21 @@
 import type { Metadata, Viewport } from "next";
 import { Orbitron, Space_Grotesk, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import HeaderGate from "./components/HeaderGate"; // shows marketing header only on landing pages
-import Footer from "../components/Footer";         // ✅ your global footer
 
-/* --- Premium Futuristic Fonts --- */
-const orbitron = Orbitron({
-  subsets: ["latin"],
-  variable: "--font-orbitron",
-  display: "swap",
-});
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-space-grotesk",
-  display: "swap",
-});
-const geistMono = Geist_Mono({
-  subsets: ["latin"],
-  variable: "--font-geist-mono",
-  display: "swap",
-});
+import HeaderGate from "./components/HeaderGate";        // shows children on app routes
+import MarketingGate from "./components/MarketingGate";  // shows children on landing routes
+
+import AppHeader from "../components/AppHeader";         // 👈 use the new app header
+import Footer from "../components/Footer";               // global footer
+
+/* --- Fonts --- */
+const orbitron = Orbitron({ subsets: ["latin"], variable: "--font-orbitron", display: "swap" });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk", display: "swap" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
 
 export const metadata: Metadata = {
   title: "SmartHirex — Nebula Luxe Pro",
-  description:
-    "Ultra-modern AI recruitment platform with a world-class Nebula Luxe Pro UI: glossy glassmorphism, neon glows, and luxury motion.",
+  description: "Ultra-modern AI recruitment platform with a world-class Nebula Luxe Pro UI.",
 };
 
 export const viewport: Viewport = {
@@ -62,8 +53,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
 
-        {/* Marketing header ONLY on landing/marketing routes */}
+        {/* App header on ALL app routes (hidden on landing) */}
         <HeaderGate>
+          <AppHeader />
+        </HeaderGate>
+
+        {/* Marketing header ONLY on landing/marketing routes */}
+        <MarketingGate>
           <nav className="nav full-bleed">
             <div className="container max-w-[1600px] py-5 md:py-6">
               <div className="grid grid-cols-2 md:grid-cols-3 items-center gap-4">
@@ -95,14 +91,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </div>
             </div>
           </nav>
-        </HeaderGate>
+        </MarketingGate>
 
         {/* Main content */}
         <main id="main" className="flex-1 w-full">
           {children}
         </main>
 
-        {/* ✅ Your landing footer, now global across every page */}
+        {/* Global footer on every page */}
         <Footer />
       </body>
     </html>

@@ -6,38 +6,44 @@ import TestAssignment from './TestAssignment';
 import InterviewScheduler from './InterviewScheduler';
 import StatusDashboard from './StatusDashboard';
 
+type HubTab = 'tests' | 'schedule' | 'dashboard';
+
 export default function MeetingsHub() {
-  const [activeTab, setActiveTab] = useState('tests');
+  const [activeTab, setActiveTab] = useState<HubTab>('tests');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-background page-aurora">
       {/* Header */}
-      <div className="bg-white/90 backdrop-blur-sm shadow-lg border-b border-gray-200/50 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-8 py-6">
+      <div className="bg-card/90 backdrop-blur-sm shadow-lg border-b border-border sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-6 md:px-8 py-5 md:py-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link 
-                href="/upload" 
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            <div className="flex items-center gap-4">
+              <Link
+                href="/upload"
+                className="p-2 rounded-lg transition-colors text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Go back"
               >
-                <i className="ri-arrow-left-line text-xl text-gray-600"></i>
+                <i className="ri-arrow-left-line text-xl" />
               </Link>
+
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-                  <i className="ri-calendar-event-line mr-3 text-blue-600"></i>
-                  Interviews & Tests Center
+                <h1 className="text-2xl font-bold text-foreground flex items-center">
+                  <i className="ri-calendar-event-line mr-3 text-foreground/80" />
+                  Interviews &amp; Tests Center
                 </h1>
-                <p className="text-gray-600">Manage interviews, tests, and candidate assessments</p>
+                <p className="text-sm text-muted-foreground">
+                  Manage interviews, tests, and candidate assessments
+                </p>
               </div>
             </div>
-            
-            <div className="flex items-center space-x-3">
-              <div className="bg-gradient-to-r from-green-500 to-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium">
-                <i className="ri-calendar-check-line mr-2"></i>
+
+            <div className="flex items-center gap-3">
+              <div className="px-4 py-2 rounded-full text-sm font-medium bg-primary text-primary-foreground">
+                <i className="ri-calendar-check-line mr-2" />
                 5 Scheduled Today
               </div>
-              <div className="bg-purple-100 text-purple-800 px-4 py-2 rounded-full text-sm font-medium">
-                <i className="ri-test-tube-line mr-2"></i>
+              <div className="px-4 py-2 rounded-full text-sm font-medium bg-muted text-foreground border border-border">
+                <i className="ri-test-tube-line mr-2" />
                 12 Tests Pending
               </div>
             </div>
@@ -46,27 +52,32 @@ export default function MeetingsHub() {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="max-w-7xl mx-auto px-8 py-6">
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200/50 p-6 mb-6">
-          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
-            {[
+      <div className="max-w-7xl mx-auto px-6 md:px-8 py-6">
+        <div className="bg-card/90 backdrop-blur-sm rounded-2xl shadow-lg border border-border p-4 md:p-6 mb-6">
+          <div className="flex gap-1 bg-muted p-1 rounded-lg border border-border">
+            {([
               { id: 'tests', label: 'Assign Tests', icon: 'ri-test-tube-line' },
               { id: 'schedule', label: 'Schedule Interviews', icon: 'ri-calendar-event-line' },
-              { id: 'dashboard', label: 'Status Dashboard', icon: 'ri-dashboard-line' }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center px-6 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  activeTab === tab.id
-                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg transform scale-105'
-                    : 'text-gray-600 hover:text-blue-600 hover:bg-gray-50'
-                }`}
-              >
-                <i className={`${tab.icon} mr-2`}></i>
-                {tab.label}
-              </button>
-            ))}
+              { id: 'dashboard', label: 'Status Dashboard', icon: 'ri-dashboard-line' },
+            ] as Array<{ id: HubTab; label: string; icon: string }>).map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  type="button"
+                  className={`flex-1 flex items-center justify-center px-4 md:px-6 py-3 rounded-lg text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    isActive
+                      ? 'bg-background text-primary shadow-sm border border-border'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                  }`}
+                  aria-pressed={isActive}
+                >
+                  <i className={`${tab.icon} mr-2`} />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 

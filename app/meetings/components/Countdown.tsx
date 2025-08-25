@@ -68,7 +68,11 @@ export default function Countdown({
   const showDays = alwaysShowDays || days > 0;
 
   return (
-    <div className={`flex items-center justify-center gap-2 ${className}`}>
+    <div
+      className={`flex items-center justify-center gap-2 text-foreground ${className}`}
+      role="timer"
+      aria-live="polite"
+    >
       {showDays && (
         <TimeBox value={String(days)} label={showLabels ? "days" : undefined} />
       )}
@@ -85,16 +89,18 @@ export default function Countdown({
 function TimeBox({ value, label }: { value: string; label?: string }) {
   return (
     <div className="flex flex-col items-center">
-      <div className="min-w-[3.5rem] rounded-lg bg-white px-3 py-2 text-center text-2xl font-semibold text-gray-900 shadow-sm border border-gray-200">
+      <div className="min-w-[3.5rem] rounded-xl bg-card px-3 py-2 text-center text-2xl font-semibold text-foreground shadow-sm border border-border">
         {value}
       </div>
       {label ? (
-        <div className="mt-1 text-xs uppercase tracking-wide text-gray-500">{label}</div>
+        <div className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">
+          {label}
+        </div>
       ) : null}
     </div>
   );
 }
 
 function Separator() {
-  return <div className="text-xl font-semibold text-gray-600">:</div>;
+  return <div className="text-xl font-semibold text-foreground/70">:</div>;
 }

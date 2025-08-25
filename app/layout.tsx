@@ -1,51 +1,108 @@
+// app/layout.tsx
+import "@fortawesome/fontawesome-free/css/all.min.css"; // Font Awesome (global)
+import "remixicon/fonts/remixicon.css";                 // Remix Icon (global)
+
 import type { Metadata, Viewport } from "next";
-import { Orbitron, Space_Grotesk, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Inter, IBM_Plex_Mono } from "next/font/google";
 
-import HeaderGate from "./components/HeaderGate";        // shows children on app routes
-import MarketingGate from "./components/MarketingGate";  // shows children on landing routes
+import { AppHeaderGate, MarketingHeaderGate } from "./components/HeaderGate";
 
-import AppHeader from "../components/AppHeader";         // 👈 use the new app header
-import Footer from "../components/Footer";               // global footer
+//   - components/navigation/AppHeader.tsx = MARKETING header
+//   - components/AppHeader.tsx            = APP header
+import MarketingHeader from "@/components/navigation/AppHeader";
+import AppHeader from "@/components/AppHeader";
 
-/* --- Fonts --- */
-const orbitron = Orbitron({ subsets: ["latin"], variable: "--font-orbitron", display: "swap" });
-const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk", display: "swap" });
-const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
+// Single footer everywhere
+import Footer from "@/components/Footer";
+
+// Toast provider
+import Toaster from "@/components/system/Toaster";
+
+// Route progress
+import RouteLoader from "@/components/system/RouteLoader";
+
+// Suspense fallback
+import LoaderOverlay from "@/components/system/LoaderOverlay";
+
+import { Suspense } from "react";
+
+/** Google fonts */
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
+
+const plexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  variable: "--font-ibm-plex-mono",
+  weight: ["400", "500"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "SmartHirex — Nebula Luxe Pro",
-  description: "Ultra-modern AI recruitment platform with a world-class Nebula Luxe Pro UI.",
+  metadataBase: new URL("https://example.com"),
+  title: {
+    default: "Smart HireX",
+    template: "%s — Smart HireX",
+  },
+  description:
+    "Smart HireX is an AI-powered recruitment platform that lets you upload resumes, analyze candidates, and filter the best matches with intelligent scoring and chat assistance.",
+  icons: [{ rel: "icon", url: "/favicon.ico" }],
+  openGraph: {
+    title: "Smart HireX",
+    description:
+      "AI-powered recruitment assistant for smarter hiring. Upload, analyze, and filter resumes instantly with Smart HireX.",
+    url: "https://example.com",
+    siteName: "Smart HireX",
+    images: [{ url: "/og.png", width: 1200, height: 630 }],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Smart HireX",
+    description:
+      "AI-powered recruitment assistant for smarter hiring. Upload, analyze, and filter resumes instantly with Smart HireX.",
+    images: ["/og.png"],
+  },
+  robots: { index: true, follow: true },
+  category: "technology",
 };
 
 export const viewport: Viewport = {
+  colorScheme: "dark light",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#050810" },
   ],
 };
 
+/** No-FOUC theme setter — runs before paint */
+const themeScript = `
+  try {
+    const stored = localStorage.getItem("theme");
+    const prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
+    const desired = stored || (prefersLight ? "light" : "dark");
+    const el = document.documentElement;
+    if (desired === "light") el.classList.add("light"); else el.classList.remove("light");
+  } catch (e) {}
+`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${inter.variable} ${plexMono.variable}`}
+    >
       <head>
-        <link
-          href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css"
-          rel="stylesheet"
-        />
+        <script id="theme-script" dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body
-        className={`page-shell antialiased bg-background text-foreground
-          ${orbitron.variable} ${spaceGrotesk.variable} ${geistMono.variable}
-          min-h-screen flex flex-col`}
-      >
-        {/* Ambient background */}
-        <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-          <div className="absolute inset-0 opacity-[0.06] gradient-ink" />
-          <div className="absolute inset-0 noise-overlay" />
-        </div>
 
-        {/* Skip link */}
+      <body className="min-h-screen flex flex-col page-aurora">
+        {/* a11y skip link */}
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[9999] focus:rounded-full focus:bg-black/70 focus:px-4 focus:py-2 focus:text-white"
@@ -53,53 +110,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
 
-        {/* App header on ALL app routes (hidden on landing) */}
-        <HeaderGate>
-          <AppHeader />
-        </HeaderGate>
+        <Toaster>
+          <RouteLoader />
 
-        {/* Marketing header ONLY on landing/marketing routes */}
-        <MarketingGate>
-          <nav className="nav full-bleed">
-            <div className="container max-w-[1600px] py-5 md:py-6">
-              <div className="grid grid-cols-2 md:grid-cols-3 items-center gap-4">
-                {/* Left: Brand */}
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl md:text-[28px] font-extrabold gradient-text glow leading-none">
-                    SmartHirex
-                  </span>
-                </div>
+          <MarketingHeaderGate>
+            <MarketingHeader />
+          </MarketingHeaderGate>
+          <AppHeaderGate>
+            <AppHeader />
+          </AppHeaderGate>
 
-                {/* Center: Links */}
-                <div className="hidden md:flex items-center justify-center gap-8">
-                  <a className="nav-item" href="/features">Features</a>
-                  <a className="nav-item" href="/pricing">Pricing</a>
-                </div>
+          <main id="main" className="flex-1 w-full">
+            <Suspense fallback={<LoaderOverlay fullscreen />}>
+              {children}
+            </Suspense>
+          </main>
 
-                {/* Right: CTA */}
-                <div className="flex items-center justify-end">
-                  <a className="btn btn-primary" href="/signup">
-                    <i className="ri-rocket-2-line" />
-                    Get Started
-                  </a>
-                </div>
-
-                {/* Mobile menu */}
-                <button className="md:hidden icon-btn justify-self-end" aria-label="Open Menu">
-                  <i className="ri-menu-5-line" />
-                </button>
-              </div>
-            </div>
-          </nav>
-        </MarketingGate>
-
-        {/* Main content */}
-        <main id="main" className="flex-1 w-full">
-          {children}
-        </main>
-
-        {/* Global footer on every page */}
-        <Footer />
+          <Footer />
+        </Toaster>
       </body>
     </html>
   );

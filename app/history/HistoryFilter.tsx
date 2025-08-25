@@ -2,18 +2,32 @@
 
 import { useState, useEffect } from 'react';
 
-const API_BASE =
+const API_BASE: string =
   (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
 
-export default function HistoryFilter({ onFilter }) {
-  const [filters, setFilters] = useState({
+type SortKey = 'latest' | 'oldest' | 'mostMatches';
+
+interface Filters {
+  dateFrom: string;
+  dateTo: string;
+  search: string;
+  sort: SortKey;
+}
+
+type HistoryItem = any; // backend shape untouched
+type Props = {
+  onFilter: (data: HistoryItem[]) => void;
+};
+
+export default function HistoryFilter({ onFilter }: Props) {
+  const [filters, setFilters] = useState<Filters>({
     dateFrom: '',
     dateTo: '',
     search: '',
     sort: 'latest',
   });
 
-  // 🔁 Automatically fetch filtered history on filter change
+  // 🔁 Auto-fetch on filter change
   useEffect(() => {
     const controller = new AbortController();
 
@@ -29,7 +43,7 @@ export default function HistoryFilter({ onFilter }) {
         url.search = params.toString();
 
         const res = await fetch(url.toString(), {
-          credentials: 'include', // send cookies/session if your API uses them
+          credentials: 'include',
           signal: controller.signal,
         });
 
@@ -38,25 +52,29 @@ export default function HistoryFilter({ onFilter }) {
           throw new Error(`HTTP ${res.status} ${txt}`);
         }
 
-        const data = await res.json();
+        const data: HistoryItem[] = await res.json();
         onFilter(data || []);
-      } catch (error) {
+      } catch (error: any) {
+        // ✅ Ignore AbortError (expected during rapid filter changes/unmount)
+        if (error?.name === 'AbortError' || error?.code === 20) return;
         console.error('Failed to fetch filtered history:', error);
-        onFilter([]);
+        onFilter([]); // keep previous behavior for real failures
       }
     };
 
     fetchFilteredHistory();
-    return () => controller.abort();
-  }, [filters]); // keep same behavior; only refetch on filter changes
+    return () => {
+      controller.abort(); // cleanup without logging as error
+    };
+  }, [filters, onFilter]);
 
-  const handleFilterChange = (key, value) => {
-    const newFilters = { ...filters, [key]: value };
-    setFilters(newFilters);
+  // Fully typed key/value (no implicit any)
+  const handleFilterChange = <K extends keyof Filters>(key: K, value: Filters[K]) => {
+    setFilters((prev) => ({ ...prev, [key]: value } as Filters));
   };
 
   const handleClearFilters = () => {
-    const clearedFilters = {
+    const clearedFilters: Filters = {
       dateFrom: '',
       dateTo: '',
       search: '',
@@ -66,20 +84,25 @@ export default function HistoryFilter({ onFilter }) {
   };
 
   return (
-    <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-6 mb-8 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-blue-500/5"></div>
+    <div className="card p-6 mb-8 relative overflow-hidden">
+      {/* Soft aurora wash using theme gradient stops */}
+      <div className="pointer-events-none absolute inset-0 opacity-[.18] bg-[radial-gradient(800px_400px_at_0%_-10%,hsl(var(--g1)/.35),transparent_60%),radial-gradient(700px_500px_at_120%_-10%,hsl(var(--g2)/.30),transparent_55%),radial-gradient(800px_700px_at_85%_110%,hsl(var(--g3)/.25),transparent_60%)]" />
 
-      <div className="relative z-10">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-900 flex items-center">
-            <i className="ri-filter-3-line mr-2 text-purple-600"></i>
-            Filter & Search History
+      <div className="relative z-10 space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold tracking-tight">
+            <span className="inline-flex items-center gap-2">
+              <i className="ri-filter-3-line text-[hsl(var(--primary))]" />
+              <span className="gradient-text">Filter &amp; Search History</span>
+            </span>
           </h2>
+
           <button
             onClick={handleClearFilters}
-            className="text-gray-500 hover:text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-100 transition-colors text-sm"
+            className="btn-ghost text-sm"
+            aria-label="Clear all filters"
           >
-            <i className="ri-refresh-line mr-1"></i>
+            <i className="ri-refresh-line" />
             Clear Filters
           </button>
         </div>
@@ -87,73 +110,90 @@ export default function HistoryFilter({ onFilter }) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Date From */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">From Date</label>
+            <label className="block text-sm font-medium text-muted-foreground" htmlFor="dateFrom">
+              From Date
+            </label>
             <div className="relative">
               <input
+                id="dateFrom"
                 type="date"
                 value={filters.dateFrom}
                 onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200/50 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 bg-white/80 backdrop-blur-sm text-sm pr-10"
+                className="input pr-11 bg-card"
+                aria-label="From date"
               />
-              <i className="ri-calendar-line absolute right-3 top-3 text-gray-400"></i>
+              <i className="ri-calendar-line absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             </div>
           </div>
 
           {/* Date To */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">To Date</label>
+            <label className="block text-sm font-medium text-muted-foreground" htmlFor="dateTo">
+              To Date
+            </label>
             <div className="relative">
               <input
+                id="dateTo"
                 type="date"
                 value={filters.dateTo}
                 onChange={(e) => handleFilterChange('dateTo', e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200/50 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 bg-white/80 backdrop-blur-sm text-sm pr-10"
+                className="input pr-11 bg-card"
+                aria-label="To date"
               />
-              <i className="ri-calendar-line absolute right-3 top-3 text-gray-400"></i>
+              <i className="ri-calendar-line absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             </div>
           </div>
 
           {/* Search */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Search Prompts</label>
+            <label className="block text-sm font-medium text-muted-foreground" htmlFor="searchPrompts">
+              Search Prompts
+            </label>
             <div className="relative">
               <input
+                id="searchPrompts"
                 type="text"
                 value={filters.search}
                 onChange={(e) => handleFilterChange('search', e.target.value)}
                 placeholder="React, UI/UX, 5+ years..."
-                className="w-full px-4 py-3 rounded-xl border border-gray-200/50 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 bg-white/80 backdrop-blur-sm text-sm pr-10"
+                className="input pr-11 bg-card"
+                aria-label="Search prompts"
               />
-              <i className="ri-search-line absolute right-3 top-3 text-gray-400"></i>
+              <i className="ri-search-line absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             </div>
           </div>
 
           {/* Sort */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Sort By</label>
+            <label className="block text-sm font-medium text-muted-foreground" htmlFor="sortBy">
+              Sort By
+            </label>
             <div className="relative">
               <select
+                id="sortBy"
                 value={filters.sort}
-                onChange={(e) => handleFilterChange('sort', e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200/50 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 bg-white/80 backdrop-blur-sm text-sm pr-10 appearance-none"
+                onChange={(e) => handleFilterChange('sort', e.target.value as SortKey)}
+                className="select appearance-none bg-card"
+                aria-label="Sort history"
               >
                 <option value="latest">Latest First</option>
                 <option value="oldest">Oldest First</option>
                 <option value="mostMatches">Most Matches</option>
               </select>
-              <i className="ri-arrow-down-s-line absolute right-3 top-3 text-gray-400 pointer-events-none"></i>
+              <i className="ri-arrow-down-s-line absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             </div>
           </div>
         </div>
 
         {/* Quick Filter Buttons */}
-        <div className="mt-6 flex flex-wrap gap-2">
-          <span className="text-sm text-gray-600 mr-2">Quick filters:</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">Quick filters:</span>
           {['React', 'Python', 'UI/UX', '5+ years', 'full-stack'].map((tag) => (
             <button
               key={tag}
               onClick={() => handleFilterChange('search', tag)}
-              className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs hover:bg-blue-200 transition-colors"
+              className="btn-secondary !px-3 !py-1.5 text-xs"
+              aria-label={`Quick filter ${tag}`}
             >
               {tag}
             </button>

@@ -2,26 +2,41 @@
 
 import { useState } from 'react';
 
-export default function HistoryBlocks({ historyData, onViewResults, onRerunPrompt }) {
-  const [rerunningId, setRerunningId] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
+type HistoryItem = {
+  id: string;
+  prompt: string;
+  timestamp?: string;
+  totalMatches: number;
+  // backend se agar extra fields aayen to yahan add ho sakte hain
+};
+
+type Props = {
+  historyData: HistoryItem[];
+  onViewResults: (history: HistoryItem) => void;
+  onRerunPrompt: (prompt: string) => void;
+};
+
+export default function HistoryBlocks({ historyData, onViewResults, onRerunPrompt }: Props) {
+  const [rerunningId, setRerunningId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 5;
 
-  const handleRerun = async (id, prompt) => {
+  const handleRerun = async (id: string, prompt: string) => {
     setRerunningId(id);
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     onRerunPrompt(prompt);
     setRerunningId(null);
   };
 
-  const getMatchColor = (count) => {
-    if (count >= 15) return 'bg-gradient-to-r from-green-500 to-emerald-500 text-white';
-    if (count >= 10) return 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white';
-    if (count >= 5) return 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white';
-    return 'bg-gradient-to-r from-red-500 to-pink-500 text-white';
+  const getMatchBadgeClasses = (count: number) => {
+    // Theme-aware semantic colors
+    if (count >= 15) return 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]';
+    if (count >= 10) return 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]';
+    if (count >= 5) return 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]';
+    return 'bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))]';
   };
 
-  const getMatchIcon = (count) => {
+  const getMatchIcon = (count: number) => {
     if (count >= 15) return 'ri-trophy-line';
     if (count >= 10) return 'ri-award-line';
     if (count >= 5) return 'ri-star-line';
@@ -43,34 +58,40 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
   return (
     <div className="space-y-6">
       {historyData.length === 0 ? (
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200/50 p-12 text-center">
-          <div className="w-24 h-24 bg-gradient-to-br from-purple-500/10 to-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-            <i className="ri-history-line text-4xl text-gray-400"></i>
+        <div className="card p-12 text-center animate-fade-in">
+          <div className="w-24 h-24 rounded-full mx-auto mb-6 flex items-center justify-center bg-[hsl(var(--primary)/.10)] shadow-glow">
+            <i className="ri-history-line text-4xl text-[hsl(var(--muted-foreground))]"></i>
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">No History Found</h3>
-          <p className="text-gray-600">Try adjusting your filters or search terms</p>
+          <h3 className="text-xl font-semibold">No History Found</h3>
+          <p className="text-[hsl(var(--muted-foreground))]">Try adjusting your filters or search terms</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {currentItems.map((history, index) => (
+          {currentItems.map((history: HistoryItem, index: number) => (
             <div
               key={history.id}
-              className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200/50 p-6 hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] relative overflow-hidden animate-slide-in"
-              style={{ animationDelay: `${index * 0.1}s` }}
+              className="card p-6 hover:shadow-glow transition-transform duration-300 ease-lux animate-rise-in relative overflow-hidden"
+              style={{ animationDelay: `${index * 0.08}s` }}
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/3 to-blue-500/3"></div>
+              {/* soft ambient gradient veil */}
+              <div className="pointer-events-none absolute inset-0 opacity-[.06] bg-luxe-aurora" />
 
               <div className="relative z-10">
-                <div className="flex items-start justify-between mb-6">
+                <div className="flex items-start justify-between mb-6 gap-4">
                   <div className="flex-1">
-                    <div className="flex items-center space-x-4 mb-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-full flex items-center justify-center shadow-lg">
+                    <div className="flex items-center gap-4 mb-3">
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center shadow-glow gradient-border"
+                        style={{
+                          backgroundImage:
+                            'linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)), linear-gradient(135deg, hsl(var(--g1)) 0%, hsl(var(--g2)) 45%, hsl(var(--g3)) 100%)'
+                        }}
+                      >
                         <i className="ri-brain-line text-white text-xl"></i>
                       </div>
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-1">{history.prompt}</h3>
-                        <div className="flex items-center space-x-3">
-                          <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm font-medium">
+                      <div className="min-w-0">
+                        <h3 className="text-xl font-bold truncate">{history.prompt}</h3>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="px-3 py-1 rounded-full text-sm font-medium bg-[hsl(var(--muted)/.6)] text-[hsl(var(--muted-foreground))] gradient-border">
                             <i className="ri-time-line mr-1"></i>
                             {history.timestamp}
                           </span>
@@ -79,35 +100,39 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
                     </div>
                   </div>
 
-                  <div className={`px-4 py-2 rounded-full text-sm font-medium shadow-lg ${getMatchColor(history.totalMatches)}`}>
+                  <div
+                    className={`px-4 py-2 rounded-full text-sm font-semibold shadow-glow whitespace-nowrap gradient-border ${getMatchBadgeClasses(
+                      history.totalMatches
+                    )}`}
+                  >
                     <i className={`${getMatchIcon(history.totalMatches)} mr-2`}></i>
                     {history.totalMatches} candidates
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-4">
+                <div className="flex items-center gap-4">
                   <button
                     onClick={() => onViewResults(history)}
-                    className="flex-1 bg-gradient-to-r from-purple-500 to-blue-500 text-white px-8 py-3 rounded-xl font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105 whitespace-nowrap"
+                    className="btn-primary flex-1 whitespace-nowrap"
                   >
-                    <i className="ri-eye-line mr-2"></i>
-                    View Results
+                    <i className="ri-eye-line"></i>
+                    <span>View Results</span>
                   </button>
 
                   <button
                     onClick={() => handleRerun(history.id, history.prompt)}
                     disabled={rerunningId === history.id}
-                    className="px-8 py-3 rounded-xl font-medium bg-white border-2 border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300 transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap shadow-sm"
+                    className="btn-outline whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed shadow-soft"
                   >
                     {rerunningId === history.id ? (
                       <div className="flex items-center">
-                        <div className="w-4 h-4 border-2 border-purple-700 border-t-transparent rounded-full animate-spin mr-2"></div>
+                        <div className="w-4 h-4 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin mr-2" />
                         Running...
                       </div>
                     ) : (
                       <>
-                        <i className="ri-refresh-line mr-2"></i>
-                        Re-run Prompt
+                        <i className="ri-refresh-line"></i>
+                        <span>Re-run Prompt</span>
                       </>
                     )}
                   </button>
@@ -119,25 +144,25 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center space-x-6 pt-8">
+        <div className="flex items-center justify-center gap-6 pt-8">
           <button
             onClick={prevPage}
             disabled={currentPage === 1}
-            className="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-sm"
+            className="btn-outline shadow-soft disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <i className="ri-arrow-left-line"></i>
             <span className="font-medium">Previous</span>
           </button>
 
-          <div className="flex space-x-2">
+          <div className="flex gap-2">
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
               <button
                 key={page}
                 onClick={() => setCurrentPage(page)}
-                className={`w-12 h-12 rounded-xl text-sm font-semibold transition-all duration-200 transform hover:scale-110 ${
+                className={`h-12 min-w-12 px-3 rounded-xl text-sm font-semibold transition-transform duration-200 ${
                   currentPage === page
-                    ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg'
-                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm'
+                    ? 'btn-primary'
+                    : 'btn-outline'
                 }`}
               >
                 {page}
@@ -148,7 +173,7 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
           <button
             onClick={nextPage}
             disabled={currentPage === totalPages}
-            className="flex items-center space-x-2 px-6 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-105 shadow-sm"
+            className="btn-outline shadow-soft disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className="font-medium">Next</span>
             <i className="ri-arrow-right-line"></i>
@@ -158,28 +183,11 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
 
       {historyData.length > 0 && (
         <div className="text-center pt-4">
-          <p className="text-sm text-gray-600 bg-white/50 backdrop-blur-sm rounded-full px-4 py-2 inline-block">
+          <p className="text-sm text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted)/.5)] rounded-full px-4 py-2 inline-block gradient-border">
             Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, historyData.length)} of {historyData.length} search results
           </p>
         </div>
       )}
-
-      <style jsx>{`
-        @keyframes slide-in {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .animate-slide-in {
-          animation: slide-in 0.6s ease-out;
-        }
-      `}</style>
     </div>
   );
 }

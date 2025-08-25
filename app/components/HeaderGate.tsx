@@ -4,30 +4,56 @@ import { PropsWithChildren } from "react";
 import { usePathname } from "next/navigation";
 
 /**
- * HeaderGate decides whether to render its children (App Header)
- * based on the current route.
+ * Gates for headers based on route.
  *
- * - Hides on pure marketing routes ("/", "/marketing/*", "/landing/*")
- * - ALWAYS shows on app routes like "/candidate/[id]", "/upload", "/client", etc.
+ * - MarketingHeaderGate => shows children ONLY on marketing/public routes
+ * - AppHeaderGate       => shows children ONLY on app (post-login) routes
+ *
+ * Update patterns below if you add new routes.
  */
-export default function HeaderGate({ children }: PropsWithChildren) {
+
+// App/product routes (post-login)
+const APP_ROUTES: RegExp[] = [
+  /^\/candidate\/[^/]+(\/.*)?$/,
+  /^\/upload(\/.*)?$/,
+  /^\/history(\/.*)?$/,
+  /^\/test(\/.*)?$/,
+  /^\/meetings(\/.*)?$/,
+  /^\/client(\/.*)?$/,
+  /^\/dashboard(\/.*)?$/,
+  /^\/jobs(\/.*)?$/,
+  /^\/settings(\/.*)?$/,
+  /^\/profile(\/.*)?$/,
+];
+
+// Marketing/public routes (pre-login)
+const MARKETING_ROUTES: RegExp[] = [
+  /^\/$/,                         // landing
+  /^\/marketing(\/.*)?$/,         // marketing pages
+  /^\/landing(\/.*)?$/,           // alt landing pages
+  /^\/login(\/.*)?$/,             // auth pages
+  /^\/signup(\/.*)?$/,
+];
+
+function useFlags() {
   const pathname = usePathname() || "/";
+  const isApp = APP_ROUTES.some((r) => r.test(pathname));
+  const isMarketing = MARKETING_ROUTES.some((r) => r.test(pathname));
+  return { isApp, isMarketing };
+}
 
-  // Marketing-only pages where app header should be hidden
-  const HIDE_ON: RegExp[] = [/^\/$/, /^\/marketing(\/.*)?$/, /^\/landing(\/.*)?$/];
-
-  // App/product routes where header must always be visible
-  const ALWAYS_SHOW_ON: RegExp[] = [
-    /^\/candidate\/[^/]+(\/.*)?$/,
-    /^\/upload(\/.*)?$/,
-    /^\/client(\/.*)?$/,
-    /^\/dashboard(\/.*)?$/,
-    /^\/jobs(\/.*)?$/,
-  ];
-
-  const shouldAlwaysShow = ALWAYS_SHOW_ON.some((r) => r.test(pathname));
-  const shouldHide = HIDE_ON.some((r) => r.test(pathname));
-
-  if (!shouldAlwaysShow && shouldHide) return null;
+/** Shows children only on app routes */
+export function AppHeaderGate({ children }: PropsWithChildren) {
+  const { isApp } = useFlags();
+  if (!isApp) return null;
   return <>{children}</>;
 }
+
+/** Shows children only on marketing/public routes */
+export function MarketingHeaderGate({ children }: PropsWithChildren) {
+  const { isApp } = useFlags();
+  if (isApp) return null;
+  return <>{children}</>;
+}
+
+export default AppHeaderGate;

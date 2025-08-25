@@ -13,7 +13,7 @@ import { AppHeaderGate, MarketingHeaderGate } from "./components/HeaderGate";
 import MarketingHeader from "@/components/navigation/AppHeader";
 import AppHeader from "@/components/AppHeader";
 
-// Single footer everywhere
+// ✅ Single footer everywhere (ONLY this one)
 import Footer from "@/components/Footer";
 
 // Toast provider
@@ -110,9 +110,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
 
+        {/* App wrappers */}
         <Toaster>
           <RouteLoader />
 
+          {/* Headers via gates */}
           <MarketingHeaderGate>
             <MarketingHeader />
           </MarketingHeaderGate>
@@ -120,14 +122,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <AppHeader />
           </AppHeaderGate>
 
+          {/* Page content */}
           <main id="main" className="flex-1 w-full">
             <Suspense fallback={<LoaderOverlay fullscreen />}>
               {children}
             </Suspense>
           </main>
-
-          <Footer />
         </Toaster>
+
+        {/* ✅ Footer always visible on every route */}
+        <Footer />
       </body>
     </html>
   );

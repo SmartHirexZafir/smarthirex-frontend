@@ -1,4 +1,3 @@
-// app/verify/[token]/page.tsx
 'use client';
 
 import React, { use, useEffect, useRef, useState } from 'react';
@@ -6,11 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 /**
- * Clean, single-call verification:
- * - Extract token from param
- * - Make ONE request:  GET /auth/verify?token=...
- * - Backend may 307-redirect → we push to /login?verified=1
- * - StrictMode double-render guard prevents duplicate requests
+ * Verify flow (No timer, no render-time router updates):
+ * - Read token from params (Next 15 may pass Promise, so unwrap with React.use()).
+ * - Call GET /auth/verify?token=...
+ * - If backend 3xx → immediate client redirect to /login?verified=1
+ * - If 200 JSON → show success momentarily but also redirect immediately from an effect.
+ * - If error → show friendly error card.
  */
 
 type VerifyResult =
@@ -33,7 +33,7 @@ export default function VerifyPage({
 }) {
   const router = useRouter();
 
-  // ✅ Next.js 15: unwrap params (which can be a Promise) with React.use()
+  // ✅ Next.js 15: unwrap params (can be a Promise) using React.use()
   const resolvedParams =
     typeof (params as any)?.then === 'function'
       ? use(params as Promise<{ token: string }>)
@@ -42,8 +42,7 @@ export default function VerifyPage({
 
   const [status, setStatus] = useState<'idle' | 'verifying' | 'done'>('idle');
   const [result, setResult] = useState<VerifyResult | null>(null);
-  const [countdown, setCountdown] = useState(4);
-  const called = useRef(false); // ✅ prevents double requests in React Strict Mode
+  const called = useRef(false); // guard against double-call in StrictMode
 
   useEffect(() => {
     if (!token || called.current) return;
@@ -80,7 +79,7 @@ export default function VerifyPage({
           throw new Error(msg);
         }
 
-        // 200 OK case (backend returned JSON)
+        // 200 OK case (backend returned JSON or empty)
         try {
           const data = await res.json();
           const msg = data?.message || 'Email verified successfully';
@@ -89,7 +88,6 @@ export default function VerifyPage({
             setStatus('done');
           }
         } catch {
-          // even if body is empty, consider it success
           if (!cancelled) {
             setResult({ ok: true, message: 'Email verified successfully' });
             setStatus('done');
@@ -106,22 +104,13 @@ export default function VerifyPage({
     return () => { cancelled = true; };
   }, [token, router]);
 
-  // Auto-redirect on success
+  // ✅ Redirect immediately on success (no timer; not during render)
   useEffect(() => {
-    if (status !== 'done' || !result?.ok) return;
-
-    const id = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) {
-          clearInterval(id);
-          router.replace('/login?verified=1');
-          return 0;
-        }
-        return c - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(id);
+    if (status === 'done' && result?.ok) {
+      // small microtask to ensure state settled
+      const t = setTimeout(() => router.replace('/login?verified=1'), 0);
+      return () => clearTimeout(t);
+    }
   }, [status, result?.ok, router]);
 
   const isVerifying = status === 'verifying' || status === 'idle';
@@ -129,23 +118,26 @@ export default function VerifyPage({
 
   return (
     <div className="min-h-[calc(100vh-4rem)] grid lg:grid-cols-2 gap-8 py-10 px-4 sm:px-8">
-      {/* Left: Brand / Hero (same look as login/signup) */}
-      <section className="relative hidden lg:flex panel overflow-hidden items-center justify-center rounded-3xl">
-        <div className="absolute inset-0 bg-luxe-radial opacity-70 pointer-events-none" />
-        <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full blur-3xl opacity-20 gradient-ink" />
+      {/* Left: Brand / Hero (polished theme) */}
+      <section className="relative hidden lg:flex overflow-hidden items-center justify-center rounded-3xl ring-1 ring-border bg-gradient-to-br from-[hsl(var(--background))] via-[hsl(var(--muted))/0.5] to-transparent">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full blur-3xl opacity-25 gradient-ink" />
+          <div className="absolute -bottom-24 -right-24 h-[28rem] w-[28rem] rounded-full blur-3xl opacity-20 bg-[hsl(var(--primary)/0.35)]" />
+        </div>
+
         <div className="relative z-10 p-12 max-w-xl">
-          <Link href="/" className="inline-flex items-center gap-3 mb-10">
-            <span className="h-14 w-14 rounded-2xl grid place-items-center gradient-ink shadow-glow">
-              <i className="ri-brain-line text-white text-2xl" />
+          <Link href="/" className="inline-flex items-center gap-3 mb-10 group">
+            <span className="h-14 w-14 rounded-2xl grid place-items-center bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-glow group-hover:scale-105 transition">
+              <i className="ri-mail-check-line text-2xl" />
             </span>
             <span className="text-4xl font-bold gradient-text font-pacifico">SmartHirex</span>
           </Link>
 
-          <h1 className="text-4xl font-semibold leading-tight mb-4">
+          <h1 className="text-4xl font-semibold leading-tight mb-3">
             {isVerifying ? (
               <>Verifying your <span className="gradient-text">email</span>…</>
             ) : success ? (
-              <>Email <span className="gradient-text">verified</span> successfully</>
+              <>Email <span className="gradient-text">verified</span></>
             ) : (
               <>Verification <span className="gradient-text">failed</span></>
             )}
@@ -153,19 +145,19 @@ export default function VerifyPage({
 
           <p className="text-muted-foreground mb-8">
             {isVerifying
-              ? 'Please wait while we confirm your verification link.'
+              ? 'Hang tight while we confirm your verification link.'
               : success
-              ? 'Your account is now active. Sign in to access your hiring cockpit.'
-              : 'The verification link may be invalid or expired.'}
+              ? 'You’re all set. Taking you to the sign-in page…'
+              : 'Your link may be invalid or expired. You can try again or sign in.'}
           </p>
 
           <ul className="grid gap-4">
             {[
-              { icon: 'ri-shield-check-line', text: 'Secure account & encrypted sessions' },
+              { icon: 'ri-shield-check-line', text: 'Account security & encrypted sessions' },
               { icon: 'ri-sparkling-2-line', text: 'AI-powered shortlisting' },
               { icon: 'ri-line-chart-line', text: 'Pipeline insights & analytics' },
             ].map((f, i) => (
-              <li key={i} className="flex items-start gap-3 p-3 rounded-2xl bg-[hsl(var(--muted))/0.35] ring-1 ring-border">
+              <li key={i} className="flex items-start gap-3 p-3 rounded-2xl bg-[hsl(var(--muted))/0.4] ring-1 ring-border/70">
                 <span className="mt-0.5 h-8 w-8 rounded-xl grid place-items-center bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]">
                   <i className={f.icon} />
                 </span>
@@ -179,9 +171,9 @@ export default function VerifyPage({
       {/* Right: Verification Card */}
       <section className="flex items-center">
         <div className="w-full">
-          <div className="card p-8 sm:p-10 text-center">
+          <div className="card p-8 sm:p-10 text-center ring-1 ring-border/70 bg-card/95 backdrop-blur">
             <div
-              className={`mx-auto mb-6 h-14 w-14 rounded-2xl grid place-items-center shadow-soft
+              className={`mx-auto mb-6 h-16 w-16 rounded-2xl grid place-items-center shadow-soft
                 ${
                   isVerifying
                     ? 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]'
@@ -193,10 +185,10 @@ export default function VerifyPage({
               <i
                 className={
                   isVerifying
-                    ? 'ri-shield-line text-2xl'
+                    ? 'ri-shield-line text-3xl'
                     : success
-                    ? 'ri-shield-check-line text-2xl'
-                    : 'ri-close-circle-line text-2xl'
+                    ? 'ri-shield-check-line text-3xl'
+                    : 'ri-close-circle-line text-3xl'
                 }
               />
             </div>
@@ -213,21 +205,19 @@ export default function VerifyPage({
 
             {!isVerifying && success && (
               <>
-                <h1 className="text-2xl font-semibold mb-2">Email Verified <span className="align-middle">✅</span></h1>
+                <h1 className="text-2xl font-semibold mb-2">
+                  Email Verified <span className="align-middle">✅</span>
+                </h1>
                 <p className="text-muted-foreground">
                   {result?.message || 'Your email has been verified successfully.'}
                 </p>
-
-                <p className="mt-6 text-sm text-muted-foreground">
-                  Redirecting to sign in in <span className="font-medium">{countdown}</span>s…
-                </p>
-
+                {/* Fallback CTA (in case auto-redirect fails due to blockers) */}
                 <Link
                   href="/login?verified=1"
                   className="btn-primary inline-flex items-center justify-center mt-6 px-5 py-3 rounded-2xl"
                 >
                   <i className="ri-login-circle-line mr-2" />
-                  Go to Login
+                  Continue to Login
                 </Link>
               </>
             )}
@@ -239,16 +229,10 @@ export default function VerifyPage({
                   {result?.message || 'The verification link is invalid or expired.'}
                 </p>
                 <div className="flex items-center justify-center gap-3">
-                  <Link
-                    href="/signup"
-                    className="btn-outline px-5 py-2.5 rounded-2xl"
-                  >
+                  <Link href="/signup" className="btn-outline px-5 py-2.5 rounded-2xl">
                     Back to Signup
                   </Link>
-                  <Link
-                    href="/login"
-                    className="btn-primary px-5 py-2.5 rounded-2xl"
-                  >
+                  <Link href="/login" className="btn-primary px-5 py-2.5 rounded-2xl">
                     Go to Login
                   </Link>
                 </div>

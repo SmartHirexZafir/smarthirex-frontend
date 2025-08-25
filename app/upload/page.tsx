@@ -41,25 +41,35 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* 👇 Global AppHeader is rendered by RootLayout; no page-local nav here */}
+      {/* Global AppHeader comes from RootLayout */}
 
-      <main id="main" className="w-full px-4 sm:px-6 lg:px-8 py-6 md:py-8 space-y-8">
-        <UploadSection onFileUpload={handleFileUpload} uploadedFiles={uploadedFiles} />
+      <main id="main">
+        {/* Match History layout: centered container + constrained width */}
+        <section className="py-12 md:py-16">
+          <div className="container max-w-6xl space-y-10">
+            {/* Upload area width similar to History cards */}
+            <div className="mx-auto w-full max-w-5xl">
+              <UploadSection onFileUpload={handleFileUpload} uploadedFiles={uploadedFiles} />
+            </div>
 
-        <section className="animate-rise-in">
-          <ChatbotSection
-            onPromptSubmit={handlePromptSubmit}
-            isProcessing={isProcessing}
-            activePrompt={activePrompt}
-          />
-        </section>
+            {/* Chatbot section — same ring/glow as upload */}
+            <div className="mx-auto w-full max-w-5xl animate-rise-in rounded-3xl ring-1 ring-[hsl(var(--primary)/.45)] gradient-border shadow-glow bg-card/60 backdrop-blur-sm p-4 sm:p-6">
+              <ChatbotSection
+                onPromptSubmit={handlePromptSubmit}
+                isProcessing={isProcessing}
+                activePrompt={activePrompt}
+              />
+            </div>
 
-        <section className="animate-rise-in">
-          <CandidateResults
-            candidates={candidates}
-            isProcessing={isProcessing}
-            activePrompt={activePrompt}
-          />
+            {/* Results — same ring/glow as upload */}
+            <div className="mx-auto w-full max-w-6xl animate-rise-in rounded-3xl ring-1 ring-[hsl(var(--primary)/.45)] gradient-border shadow-glow bg-card/60 backdrop-blur-sm p-4 sm:p-6">
+              <CandidateResults
+                candidates={candidates}
+                isProcessing={isProcessing}
+                activePrompt={activePrompt}
+              />
+            </div>
+          </div>
         </section>
       </main>
     </div>

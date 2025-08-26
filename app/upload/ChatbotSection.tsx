@@ -56,6 +56,70 @@ export default function ChatbotSection({
     scrollToBottom();
   }, [messages]);
 
+  // ---- helpers --------------------------------------------------------------
+
+  async function postJSON(url: string, body: any, token: string | null) {
+    // send cookies if backend uses cookie auth; allow CORS
+    const resp = await fetch(url, {
+      method: 'POST',
+      mode: 'cors',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+    return resp;
+  }
+
+  async function callChatbot(prompt: string, token: string | null) {
+    // try with /chatbot/query first, then fallback to /query (some apps mount without prefix)
+    const paths = ['/chatbot/query', '/query'];
+    let lastErr: any = null;
+
+    for (const p of paths) {
+      try {
+        const url = `${API_BASE}${p}`;
+        const resp = await postJSON(url, { prompt }, token);
+
+        // If 401, surface it to UI
+        if (resp.status === 401) {
+          return { kind: 'unauth' as const, data: null };
+        }
+
+        // Non-2xx: try to parse JSON error; if not JSON, throw text
+        if (!resp.ok) {
+          let errPayload: any = {};
+          try {
+            errPayload = await resp.json();
+          } catch {
+            errPayload = { detail: await resp.text() };
+          }
+          // 404 might indicate wrong prefix — continue to next path
+          if (resp.status === 404) {
+            lastErr = { status: 404, payload: errPayload };
+            continue;
+          }
+          // other errors -> stop and return
+          return { kind: 'error' as const, data: errPayload, status: resp.status };
+        }
+
+        // OK
+        const data = await resp.json();
+        return { kind: 'ok' as const, data };
+      } catch (e) {
+        // network/CORS error — try next path
+        lastErr = e;
+      }
+    }
+
+    // if both attempts failed:
+    throw lastErr ?? new Error('Network error');
+  }
+
+  // --------------------------------------------------------------------------
+
   const handleSubmit = async (prompt = inputValue.trim()) => {
     if (!prompt) return;
 
@@ -73,17 +137,9 @@ export default function ChatbotSection({
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
-      const response = await fetch(`${API_BASE}/chatbot/query`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        // credentials: 'include',
-        body: JSON.stringify({ prompt }),
-      });
+      const result = await callChatbot(prompt, token);
 
-      if (response.status === 401) {
+      if (result.kind === 'unauth') {
         setMessages((prev) => [
           ...prev,
           {
@@ -97,10 +153,43 @@ export default function ChatbotSection({
         return;
       }
 
-      const data = await response.json().catch(() => ({} as any));
+      if (result.kind === 'error') {
+        const msg =
+          result.data?.detail ||
+          result.data?.message ||
+          `Server error (${result.status || 'unknown'})`;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 2,
+            type: 'bot',
+            content: `Sorry, I couldn't process your request: ${msg}`,
+            timestamp: formatTime(),
+          },
+        ]);
+        onPromptSubmit(prompt, []);
+        return;
+      }
+
+      const data = result.data || {};
+
+      // ✅ Handle special case: no CV uploaded
+      if (data?.no_cvs_uploaded === true || data?.message === 'no_cvs_uploaded') {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 3,
+            type: 'bot',
+            content: 'There is no CV uploaded from your side.',
+            timestamp: formatTime(),
+          },
+        ]);
+        onPromptSubmit(prompt, []);
+        return;
+      }
 
       const botMessage: ChatMsg = {
-        id: Date.now() + 2,
+        id: Date.now() + 4,
         type: 'bot',
         content: data.reply || 'Got it! Let me find some candidates for you.',
         timestamp: formatTime(),
@@ -108,14 +197,15 @@ export default function ChatbotSection({
 
       setMessages((prev) => [...prev, botMessage]);
       onPromptSubmit(prompt, Array.isArray(data.resumes_preview) ? data.resumes_preview : []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error);
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now() + 3,
+          id: Date.now() + 5,
           type: 'bot',
-          content: "Sorry, I couldn't process your request. Please try again later.",
+          content:
+            "Sorry, I couldn't reach the server. Please check your API URL or CORS settings.",
           timestamp: formatTime(),
         },
       ]);
@@ -126,7 +216,10 @@ export default function ChatbotSection({
   };
 
   return (
-    <section className="card-glass relative overflow-hidden animate-rise-in" aria-labelledby="ai-assistant-title">
+    <section
+      className="card-glass relative overflow-hidden animate-rise-in"
+      aria-labelledby="ai-assistant-title"
+    >
       {/* Ambient overlays */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute inset-0 opacity-[0.06] gradient-ink" />
@@ -160,7 +253,10 @@ export default function ChatbotSection({
           aria-relevant="additions"
         >
           {messages.map((message) => (
-            <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div
+              key={message.id}
+              className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
               <div
                 className={[
                   'max-w-xs lg:max-w-md px-4 py-3 rounded-2xl transition-all duration-300',
@@ -208,7 +304,9 @@ export default function ChatbotSection({
 
         {/* Suggested Prompts */}
         <div className="px-6 pb-4">
-          <p className="mb-3 text-center text-sm text-[hsl(var(--muted-foreground))]">💡 Try these suggestions:</p>
+          <p className="mb-3 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            💡 Try these suggestions:
+          </p>
           <div className="flex flex-wrap justify-center gap-2">
             {suggestedPrompts.slice(0, 4).map((prompt, index) => (
               <button

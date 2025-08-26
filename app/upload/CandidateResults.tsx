@@ -75,14 +75,14 @@ export default function CandidateResults({
               </div>
             </div>
           ) : cleanedCandidates.length === 0 ? (
-            // Empty state (as requested)
+            // Empty state (modified as per requirement)
             <div className="py-14 max-w-2xl mx-auto text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-white shadow-glow">
                 <i className="ri-filter-3-line text-2xl" />
               </div>
-              <h4 className="text-xl font-semibold text-foreground">No candidates filtered yet</h4>
+              <h4 className="text-xl font-semibold text-foreground">No CVs found</h4>
               <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-                Try a prompt above to filter the uploaded resumes.
+                There is no CV uploaded from your side.
               </p>
             </div>
           ) : (

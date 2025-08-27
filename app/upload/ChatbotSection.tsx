@@ -7,6 +7,101 @@ const API_BASE =
 
 type ChatMsg = { id: number; type: 'bot' | 'user'; content: string; timestamp: string };
 
+/* ---------------------------
+   Normalization (frontend)
+---------------------------- */
+const SYNONYMS: Record<string, string> = {
+  // tech
+  js: 'javascript',
+  ts: 'typescript',
+  reactjs: 'react',
+  nodejs: 'node',
+  'next.js': 'next',
+  nextjs: 'next',
+  py: 'python',
+  tf: 'tensorflow',
+  sklearn: 'scikit',
+  'sk-learn': 'scikit',
+  k8s: 'kubernetes',
+  // roles/areas
+  ml: 'machine learning',
+  ai: 'artificial intelligence',
+  cv: 'computer vision',
+  nlp: 'natural language processing',
+  fe: 'frontend',
+  be: 'backend',
+  fullstack: 'full-stack',
+};
+
+const PLURAL_SINGULAR: Record<string, string> = {
+  developers: 'developer',
+  engineers: 'engineer',
+  scientists: 'scientist',
+  designers: 'designer',
+  managers: 'manager',
+  analysts: 'analyst',
+  architects: 'architect',
+  candidates: 'candidate',
+};
+
+const STOPWORDS = new Set([
+  'show',
+  'find',
+  'me',
+  'with',
+  'and',
+  'in',
+  'of',
+  'for',
+  'to',
+  'a',
+  'an',
+  'the',
+  'please',
+  'pls',
+  'candidate',
+  'candidates',
+  'experience',
+  'years',
+  'based',
+  'developer',
+  'developers',
+  'engineer',
+  'engineers',
+  'scientist',
+  'scientists',
+  'designer',
+  'designers',
+  'manager',
+  'managers',
+]);
+
+function normalizePrompt(raw: string) {
+  let s = (raw || '').toLowerCase().trim().replace(/\s+/g, ' ');
+
+  // plural -> singular
+  for (const [pl, sg] of Object.entries(PLURAL_SINGULAR)) {
+    s = s.replace(new RegExp(`\\b${pl}\\b`, 'g'), sg);
+  }
+  // synonyms
+  for (const [k, v] of Object.entries(SYNONYMS)) {
+    s = s.replace(new RegExp(`\\b${k}\\b`, 'g'), v);
+  }
+
+  const cleaned = s.replace(/[^a-z0-9+ ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const tokens = cleaned.split(' ').filter(Boolean);
+  const keywords: string[] = [];
+  const seen = new Set<string>();
+  for (const t of tokens) {
+    if (!STOPWORDS.has(t) && !seen.has(t)) {
+      seen.add(t);
+      keywords.push(t);
+    }
+  }
+  const isRoleLike = cleaned.split(' ').length <= 4;
+  return { normalized_prompt: s, keywords, isRoleLike };
+}
+
 export default function ChatbotSection({
   onPromptSubmit,
   isProcessing,
@@ -32,11 +127,11 @@ export default function ChatbotSection({
 
   const suggestedPrompts = [
     'Show me candidates with React + Django experience',
-    'Find frontend developers with 3+ years experience',
-    'Show Python developers in San Francisco',
+    'Find frontend developer with 3+ years experience',
+    'Show Python developer in San Francisco',
     'Find candidates with Machine Learning skills',
-    'Show full-stack developers with AWS experience',
-    'Find UI/UX designers with Figma skills',
+    'Show full-stack developer with AWS experience',
+    'Find UI/UX designer with Figma skills',
   ];
 
   const formatTime = () => new Date().toLocaleTimeString();
@@ -59,7 +154,6 @@ export default function ChatbotSection({
   // ---- helpers --------------------------------------------------------------
 
   async function postJSON(url: string, body: any, token: string | null) {
-    // send cookies if backend uses cookie auth; allow CORS
     const resp = await fetch(url, {
       method: 'POST',
       mode: 'cors',
@@ -74,6 +168,14 @@ export default function ChatbotSection({
   }
 
   async function callChatbot(prompt: string, token: string | null) {
+    // client-side normalization (aligned with backend)
+    const norm = normalizePrompt(prompt);
+    const payload = {
+      prompt,
+      normalized_prompt: norm.normalized_prompt,
+      keywords: norm.keywords,
+    };
+
     // try with /chatbot/query first, then fallback to /query (some apps mount without prefix)
     const paths = ['/chatbot/query', '/query'];
     let lastErr: any = null;
@@ -81,14 +183,12 @@ export default function ChatbotSection({
     for (const p of paths) {
       try {
         const url = `${API_BASE}${p}`;
-        const resp = await postJSON(url, { prompt }, token);
+        const resp = await postJSON(url, payload, token);
 
-        // If 401, surface it to UI
         if (resp.status === 401) {
           return { kind: 'unauth' as const, data: null };
         }
 
-        // Non-2xx: try to parse JSON error; if not JSON, throw text
         if (!resp.ok) {
           let errPayload: any = {};
           try {
@@ -96,25 +196,20 @@ export default function ChatbotSection({
           } catch {
             errPayload = { detail: await resp.text() };
           }
-          // 404 might indicate wrong prefix — continue to next path
           if (resp.status === 404) {
             lastErr = { status: 404, payload: errPayload };
             continue;
           }
-          // other errors -> stop and return
           return { kind: 'error' as const, data: errPayload, status: resp.status };
         }
 
-        // OK
         const data = await resp.json();
         return { kind: 'ok' as const, data };
       } catch (e) {
-        // network/CORS error — try next path
         lastErr = e;
       }
     }
 
-    // if both attempts failed:
     throw lastErr ?? new Error('Network error');
   }
 
@@ -134,9 +229,11 @@ export default function ChatbotSection({
     setInputValue('');
     setIsTyping(true);
 
+    // ✅ Immediately clear old candidates & show loader in parent
+    onPromptSubmit(prompt, []);
+
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-
       const result = await callChatbot(prompt, token);
 
       if (result.kind === 'unauth') {
@@ -149,7 +246,7 @@ export default function ChatbotSection({
             timestamp: formatTime(),
           },
         ]);
-        onPromptSubmit(prompt, []);
+        // parent already in "loading" state; keep it empty
         return;
       }
 
@@ -167,7 +264,7 @@ export default function ChatbotSection({
             timestamp: formatTime(),
           },
         ]);
-        onPromptSubmit(prompt, []);
+        // keep cleared state
         return;
       }
 
@@ -184,7 +281,7 @@ export default function ChatbotSection({
             timestamp: formatTime(),
           },
         ]);
-        onPromptSubmit(prompt, []);
+        // keep cleared state
         return;
       }
 
@@ -196,6 +293,7 @@ export default function ChatbotSection({
       };
 
       setMessages((prev) => [...prev, botMessage]);
+      // ✅ Deliver fresh results to parent (this turns loader off in your UploadPage)
       onPromptSubmit(prompt, Array.isArray(data.resumes_preview) ? data.resumes_preview : []);
     } catch (error: any) {
       console.error('Error:', error);
@@ -209,7 +307,7 @@ export default function ChatbotSection({
           timestamp: formatTime(),
         },
       ]);
-      onPromptSubmit(prompt, []);
+      // keep cleared state
     } finally {
       setIsTyping(false);
     }
@@ -228,13 +326,13 @@ export default function ChatbotSection({
 
       <div className="relative z-10">
         {/* Header */}
-        <header className="border-b border-border bg-gradient-to-r from-[hsl(var(--muted)/.5)] to-[hsl(var(--muted)/.35)] px-6 py-5">
+        <header className="border-b border-border bg-gradient-to-r from-[hsl(var(--muted)/.5)] to-[hsl(var(--muted)/.35)] px-6 py-6">
           <div className="flex items-center justify-center gap-4">
             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] flex items-center justify-center text-white shadow-glow">
               <i className="ri-robot-line text-2xl" />
             </div>
             <div className="text-center">
-              <h3 id="ai-assistant-title" className="text-2xl font-extrabold gradient-text glow">
+              <h3 id="ai-assistant-title" className="text-2xl md:text-3xl font-extrabold gradient-text glow">
                 AI Assistant
               </h3>
               <p className="text-sm text-[hsl(var(--muted-foreground))]">
@@ -303,7 +401,7 @@ export default function ChatbotSection({
         </div>
 
         {/* Suggested Prompts */}
-        <div className="px-6 pb-4">
+        <div className="px-6 pb-5">
           <p className="mb-3 text-center text-sm text-[hsl(var(--muted-foreground))]">
             💡 Try these suggestions:
           </p>
@@ -321,7 +419,7 @@ export default function ChatbotSection({
         </div>
 
         {/* Input */}
-        <div className="border-t border-border bg-gradient-to-r from-[hsl(var(--muted)/.4)] to-[hsl(var(--muted)/.25)] px-6 py-5">
+        <div className="border-t border-border bg-gradient-to-r from-[hsl(var(--muted)/.4)] to-[hsl(var(--muted)/.25)] px-6 py-6">
           <div className="flex gap-4">
             <input
               type="text"

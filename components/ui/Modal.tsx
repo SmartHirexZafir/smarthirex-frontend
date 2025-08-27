@@ -19,7 +19,7 @@ export default function Modal({ open, onClose, labelledBy, className, children }
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
     const handleKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    const trap = (e: FocusEvent) => {
+    const trap = () => {
       if (!ref.current) return;
       if (!ref.current.contains(document.activeElement)) {
         const focusable = ref.current.querySelector<HTMLElement>(

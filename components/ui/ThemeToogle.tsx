@@ -8,15 +8,12 @@ import { useEffect, useState } from "react";
  * - Uses Remix Icon (global import is already in layout)
  */
 export default function ThemeToggle() {
-  // Helper to check current theme safely (SSR-safe)
   const getIsLight = () =>
     typeof document !== "undefined" &&
     document.documentElement.classList.contains("light");
 
-  // Initialize from document (no flicker after themeScript runs)
   const [isLight, setIsLight] = useState<boolean>(() => getIsLight());
 
-  // Sync on mount in case class was changed before hydration
   useEffect(() => {
     setIsLight(getIsLight());
   }, []);
@@ -35,29 +32,17 @@ export default function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      className="icon-btn relative"
+      className="icon-btn relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       aria-pressed={isLight}
       aria-label={isLight ? "Switch to dark mode" : "Switch to light mode"}
       title={isLight ? "Switch to dark mode" : "Switch to light mode"}
     >
-      {/* We keep both icons mounted and just cross-fade to avoid layout shift */}
-      <span
-        aria-hidden="true"
-        className={`pointer-events-none transition-opacity duration-200 ${
-          isLight ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        {/* Sun (light mode) */}
+      {/* Keep both icons mounted and just cross-fade */}
+      <span aria-hidden="true" className={`pointer-events-none transition-opacity duration-200 ${isLight ? "opacity-100" : "opacity-0"}`}>
         <i className="ri-sun-line text-[18px] leading-none" />
       </span>
 
-      <span
-        aria-hidden="true"
-        className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
-          isLight ? "opacity-0" : "opacity-100"
-        }`}
-      >
-        {/* Moon (dark mode) */}
+      <span aria-hidden="true" className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${isLight ? "opacity-0" : "opacity-100"}`}>
         <i className="ri-moon-line text-[18px] leading-none" />
       </span>
     </button>

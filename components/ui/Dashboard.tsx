@@ -20,7 +20,7 @@ export default function Dashboard() {
               <div className="text-2xl font-semibold">{k.value}</div>
               <div className="mt-4 h-14 w-full rounded-xl bg-[hsl(var(--muted)/.6)] overflow-hidden">
                 {/* Lightweight inline sparkline placeholder */}
-                <svg viewBox="0 0 100 24" className="w-full h-full">
+                <svg viewBox="0 0 100 24" className="w-full h-full" aria-hidden="true">
                   <polyline fill="none" stroke="currentColor" strokeOpacity=".5" strokeWidth="2"
                     points="0,18 15,16 30,19 45,14 60,12 75,10 90,13 100,9" />
                   <polyline fill="none" stroke="currentColor" strokeWidth="2"

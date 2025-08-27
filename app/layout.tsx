@@ -1,6 +1,6 @@
 // app/layout.tsx
-import "@fortawesome/fontawesome-free/css/all.min.css"; // Font Awesome (global)
-import "remixicon/fonts/remixicon.css";                 // Remix Icon (global)
+import "@fortawesome/fontawesome-free/css/all.min.css";
+import "remixicon/fonts/remixicon.css";
 
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
@@ -13,16 +13,12 @@ import { AppHeaderGate, MarketingHeaderGate } from "./components/HeaderGate";
 import MarketingHeader from "@/components/navigation/AppHeader";
 import AppHeader from "@/components/AppHeader";
 
-// ✅ Single footer everywhere (ONLY this one)
+// Single footer
 import Footer from "@/components/Footer";
 
-// Toast provider
+// Toast + route progress + suspense fallback
 import Toaster from "@/components/system/Toaster";
-
-// Route progress
 import RouteLoader from "@/components/system/RouteLoader";
-
-// Suspense fallback
 import LoaderOverlay from "@/components/system/LoaderOverlay";
 
 import { Suspense } from "react";
@@ -87,7 +83,7 @@ const themeScript = `
     const desired = stored || (prefersLight ? "light" : "dark");
     const el = document.documentElement;
     if (desired === "light") el.classList.add("light"); else el.classList.remove("light");
-  } catch (e) {}
+  } catch {}
 `;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -98,6 +94,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${inter.variable} ${plexMono.variable}`}
     >
       <head>
+        {/* Preconnect for faster font fetch */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <script id="theme-script" dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
 
@@ -130,7 +129,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </main>
         </Toaster>
 
-        {/* ✅ Footer always visible on every route */}
+        {/* Footer everywhere */}
         <Footer />
       </body>
     </html>

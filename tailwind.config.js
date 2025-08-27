@@ -5,6 +5,7 @@ module.exports = {
     "./app/**/*.{ts,tsx,js,jsx,mdx}",
     "./components/**/*.{ts,tsx,js,jsx,mdx}",
     "./pages/**/*.{ts,tsx,js,jsx,mdx}",
+    "./src/**/*.{ts,tsx,js,jsx,mdx}",
   ],
   theme: {
     container: {
@@ -13,7 +14,7 @@ module.exports = {
       screens: { "2xl": "1440px", "3xl": "1680px", "4xl": "1920px" },
     },
     extend: {
-      screens: { "3xl": "1680px", "4xl": "1920px" },
+      screens: { sm: "480px", xl: "1280px", "3xl": "1680px", "4xl": "1920px" },
       fontFamily: {
         sans: ["var(--font-inter)", "ui-sans-serif", "system-ui"],
         display: ["var(--font-inter)", "ui-sans-serif", "system-ui"],
@@ -36,20 +37,16 @@ module.exports = {
         warning: { DEFAULT: "hsl(var(--warning))", foreground: "hsl(var(--warning-foreground))" },
         info: { DEFAULT: "hsl(var(--info))", foreground: "hsl(var(--info-foreground))" },
       },
-      borderRadius: {
-        lg: "0.9rem",
-        xl: "1.25rem",
-        "2xl": "1.75rem",
-        "3xl": "2.25rem",
-      },
+      borderRadius: { lg: "0.9rem", xl: "1.25rem", "2xl": "1.75rem", "3xl": "2.25rem" },
       boxShadow: {
-        soft: "0 10px 30px rgba(0,0,0,.25)",
-        lux: "0 1px 0 rgba(255,255,255,.06) inset, 0 24px 60px rgba(0,0,0,.5)",
+        soft: "0 10px 30px rgba(0,0,0,0.25)",
+        lux: "0 1px 0 rgba(255,255,255,0.06) inset, 0 24px 60px rgba(0,0,0,0.05)",
         glow: "0 0 0 1px rgba(255,255,255,0.05), 0 0 24px hsl(var(--primary)/.5)",
-        "elev-1": "0 2px 10px rgba(0,0,0,.35)",
-        "elev-2": "0 18px 50px rgba(0,0,0,.55)",
+        "elev-1": "0 2px 10px rgba(0,0,0,0.35)",
+        "elev-2": "0 18px 50px rgba(0,0,0,0.55)",
       },
       transitionTimingFunction: {
+        // fixed decimals:
         lux: "cubic-bezier(.21,.86,.24,.99)",
         spring: "cubic-bezier(.16,1,.3,1)",
       },

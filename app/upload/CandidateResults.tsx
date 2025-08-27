@@ -1,43 +1,171 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+
+type Candidate = {
+  _id?: string;
+  id?: string;
+  name?: string;
+  predicted_role?: string;
+  category?: string;
+  currentRole?: string;
+  experience?: number | string;
+  total_experience_years?: number;
+  years_of_experience?: number;
+  experience_years?: number;
+  yoe?: number;
+  location?: string;
+  confidence?: number;
+  semantic_score?: number;
+  final_score?: number;
+  score_type?: string;
+  skills?: string[];
+  related_roles?: { role: string; match?: number }[];
+  is_strict_match?: boolean;
+  match_type?: 'exact' | 'close';
+};
 
 export default function CandidateResults({
   candidates,
   isProcessing,
   activePrompt,
 }: {
-  candidates: any[];
+  candidates: Candidate[];
   isProcessing: boolean;
   activePrompt: string;
 }) {
   const [currentPage, setCurrentPage] = useState(1);
+  const [displayed, setDisplayed] = useState<Candidate[]>([]);
+  const [promptChanging, setPromptChanging] = useState(false);
+  const lastPromptRef = useRef<string>('');
+
   const itemsPerPage = 6;
 
-  const cleanedCandidates = useMemo(() => {
-    const seen = new Set();
-    return candidates
-      .filter((c) => c && c._id && !seen.has(c._id) && c.semantic_score !== undefined)
-      .map((c) => {
-        seen.add(c._id);
-        return c;
-      })
-      // keep original sorting field to avoid touching backend assumptions
-      .sort((a, b) => (b.final_score || 0) - (a.final_score || 0));
-  }, [candidates]);
+  // Helpers
+  const safeName = (n: any) => (String(n || '').trim() ? String(n).trim() : 'No Name');
+  const safeNum = (v: any, d = 0) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : d;
+  };
+  const take = <T,>(arr: T[] | undefined, n: number) => (Array.isArray(arr) ? arr.slice(0, n) : []);
 
-  const totalPages = Math.ceil(cleanedCandidates.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
+  // Clear immediately when a new prompt is set
+  useEffect(() => {
+    if (activePrompt !== lastPromptRef.current) {
+      lastPromptRef.current = activePrompt;
+      setPromptChanging(true);        // show skeleton
+      setDisplayed([]);               // clear old candidates immediately
+      setCurrentPage(1);
+    }
+  }, [activePrompt]);
+
+  // When processing ends, commit the latest candidates to UI
+  useEffect(() => {
+    if (!isProcessing) {
+      setDisplayed(Array.isArray(candidates) ? candidates : []);
+      setPromptChanging(false);
+    }
+  }, [isProcessing, candidates]);
+
+  // Clean/sort candidates for rendering
+  const cleanedCandidates = useMemo(() => {
+    const seen = new Set<string>();
+    return (Array.isArray(displayed) ? displayed : [])
+      .filter((c) => c && (c._id ?? c.id) !== undefined)
+      .filter((c) => {
+        const key = String(c._id ?? c.id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => {
+        const s1 = safeNum(b.final_score) - safeNum(a.final_score);
+        if (s1 !== 0) return s1;
+        const s2 = safeNum(b.semantic_score) - safeNum(a.semantic_score);
+        return s2;
+      });
+  }, [displayed]);
+
+  const totalPages = Math.ceil(Math.max(1, cleanedCandidates.length) / itemsPerPage);
+  const page = Math.min(currentPage, totalPages);
+  const startIndex = (page - 1) * itemsPerPage;
   const currentCandidates = cleanedCandidates.slice(startIndex, startIndex + itemsPerPage);
 
   const nextPage = () => {
-    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+    if (page < totalPages) setCurrentPage(page + 1);
+  };
+  const prevPage = () => {
+    if (page > 1) setCurrentPage(page - 1);
   };
 
-  const prevPage = () => {
-    if (currentPage > 1) setCurrentPage(currentPage - 1);
+  const Pill = ({ children }: { children: React.ReactNode }) => (
+    <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground">
+      {children}
+    </span>
+  );
+
+  const Avatar = ({ name }: { name: string }) => {
+    const initials = name
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((s) => s[0]?.toUpperCase())
+      .join('');
+    return (
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-white shadow-glow text-sm font-bold">
+        {initials || 'CN'}
+      </div>
+    );
   };
+
+  // Match summary for header message (exact vs close)
+  const matchMeta = useMemo(() => {
+    let strictCount = 0;
+    let closeCount = 0;
+    for (const c of cleanedCandidates) {
+      if (c?.is_strict_match === true || c?.match_type === 'exact') strictCount++;
+      else if (c?.is_strict_match === false || c?.match_type === 'close') closeCount++;
+      else strictCount++; // default to exact when flag missing
+    }
+    return {
+      strictCount,
+      closeCount,
+      total: cleanedCandidates.length,
+      hasExact: strictCount > 0,
+      hasClose: closeCount > 0 || (cleanedCandidates.length > 0 && strictCount < cleanedCandidates.length),
+    };
+  }, [cleanedCandidates]);
+
+  const HeaderStatus = () => {
+    if (isProcessing || promptChanging) return <>AI is analyzing candidates...</>;
+    if (matchMeta.total === 0) return <>No candidates matched your filters.</>;
+    if (matchMeta.hasExact) return <>Found {matchMeta.total} matching candidate{matchMeta.total === 1 ? '' : 's'}</>;
+    return <>No exact matches found, showing closest results instead ({matchMeta.total}).</>;
+  };
+
+  const SkeletonGrid = () => (
+    <div className="mb-8 grid grid-cols-1 gap-7 md:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: itemsPerPage }).map((_, i) => (
+        <div
+          key={i}
+          className="surface glass border border-border rounded-2xl p-6 animate-pulse"
+          aria-hidden="true"
+        >
+          <div className="mb-4 flex items-start gap-4">
+            <div className="h-12 w-12 rounded-full bg-[hsl(var(--muted))]" />
+            <div className="flex-1 min-w-0">
+              <div className="h-4 w-40 bg-[hsl(var(--muted))] rounded mb-2" />
+              <div className="h-3 w-28 bg-[hsl(var(--muted))] rounded" />
+            </div>
+          </div>
+          <div className="h-2 w-full bg-[hsl(var(--muted))] rounded mb-2" />
+          <div className="h-2 w-3/4 bg-[hsl(var(--muted))] rounded mb-5" />
+          <div className="h-10 w-full bg-[hsl(var(--muted))] rounded" />
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <section className="card-glass relative overflow-hidden animate-rise-in" aria-labelledby="filtered-title">
@@ -49,104 +177,147 @@ export default function CandidateResults({
 
       <div className="relative z-10">
         {/* Header */}
-        <header className="px-6 py-5 border-b border-border bg-gradient-to-r from-[hsl(var(--muted)/.5)] to-[hsl(var(--muted)/.35)]">
+        <header className="px-6 py-6 border-b border-border bg-gradient-to-r from-[hsl(var(--muted)/.5)] to-[hsl(var(--muted)/.35)]">
           <div className="flex items-center justify-between">
             <div>
-              <h3 id="filtered-title" className="text-2xl font-extrabold gradient-text glow">
+              <h3 id="filtered-title" className="text-2xl md:text-3xl font-extrabold gradient-text glow">
                 Filtered Candidates
               </h3>
               <p className="mt-1 text-[hsl(var(--muted-foreground))]">
-                {isProcessing
-                  ? 'AI is analyzing candidates...'
-                  : `Found ${cleanedCandidates.length} matching candidates`}
+                <HeaderStatus />
               </p>
+              {!isProcessing && !promptChanging && activePrompt && (
+                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Query: “{activePrompt}”</p>
+              )}
             </div>
           </div>
         </header>
 
         <div className="p-6">
-          {isProcessing ? (
-            // Loading state
-            <div className="flex items-center justify-center py-16">
-              <div className="text-center">
-                <div className="mx-auto mb-4 h-16 w-16 animate-spin rounded-full border-4 border-[hsl(var(--primary))] border-t-transparent" />
-                <p className="mb-2 font-medium text-foreground">Analyzing candidates...</p>
-                <p className="text-sm text-[hsl(var(--muted-foreground))]">"{activePrompt}"</p>
-              </div>
+          {isProcessing || promptChanging ? (
+            // Skeleton while loading or switching prompts
+            <div className="py-6">
+              <SkeletonGrid />
             </div>
           ) : cleanedCandidates.length === 0 ? (
-            // Empty state (modified as per requirement)
+            // Empty state
             <div className="py-14 max-w-2xl mx-auto text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-white shadow-glow">
                 <i className="ri-filter-3-line text-2xl" />
               </div>
-              <h4 className="text-xl font-semibold text-foreground">No CVs found</h4>
+              <h4 className="text-xl font-semibold text-foreground">No candidates</h4>
               <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-                There is no CV uploaded from your side.
+                No candidates matched your filters. Try adjusting the criteria.
               </p>
             </div>
           ) : (
             <>
               {/* Cards grid */}
-              <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="mb-8 grid grid-cols-1 gap-7 md:grid-cols-2 lg:grid-cols-3">
                 {currentCandidates.map((candidate) => {
-                  const {
-                    _id,
-                    name = 'Unnamed',
-                    predicted_role,
-                    category,
-                    experience,
-                    confidence,
-                    semantic_score,
-                    score_type,
-                    related_roles,
-                  } = candidate;
-
-                  const jobRole = predicted_role || category || 'Unknown Role';
+                  const id = String(candidate._id ?? candidate.id);
+                  const name = safeName(candidate.name);
+                  const jobRole =
+                    candidate.predicted_role || candidate.category || candidate.currentRole || 'Unknown Role';
+                  const experience = safeNum(
+                    candidate.total_experience_years ??
+                      candidate.years_of_experience ??
+                      candidate.experience_years ??
+                      candidate.yoe ??
+                      candidate.experience
+                  );
                   const expText = experience ? `${experience} years` : 'Not specified';
-                  const confText =
-                    confidence !== undefined ? `${Number(confidence).toFixed(2)}%` : 'N/A';
-                  const score = semantic_score?.toFixed(2) || '0.00';
-                  const scoreLabel = score_type || 'Prompt Match';
-
-                  const topRelatedRoles = Array.isArray(related_roles)
-                    ? related_roles.slice(0, 3)
-                    : [];
+                  const confidence =
+                    candidate.confidence !== undefined ? `${safeNum(candidate.confidence).toFixed(2)}%` : 'N/A';
+                  const semScore =
+                    candidate.semantic_score !== undefined
+                      ? `${safeNum(candidate.semantic_score).toFixed(2)}%`
+                      : null;
+                  const scoreType = candidate.score_type || (semScore ? 'Prompt Match' : '');
+                  const skills = take(candidate.skills, 6);
+                  const location = (candidate.location && String(candidate.location).trim()) || 'N/A';
+                  const relatedRoles = Array.isArray(candidate.related_roles) ? candidate.related_roles : [];
 
                   return (
                     <article
-                      key={_id}
+                      key={id}
                       className="surface glass border border-border rounded-2xl p-6 hover:shadow-glow transition-all duration-300"
                     >
-                      <div className="mb-4 flex items-start justify-between">
-                        <div className="flex-1">
-                          <h4 className="mb-1 text-lg font-bold text-foreground">{name}</h4>
-                          <p className="mb-1 text-sm font-semibold text-[hsl(var(--g3))]">{jobRole}</p>
-                          <p className="mb-1 text-xs text-[hsl(var(--muted-foreground))]">
-                            <span className="font-semibold">Experience:</span> {expText}
-                          </p>
-                          <p className="mb-1 text-xs text-[hsl(var(--muted-foreground))]">
-                            <span className="font-semibold">Model Confidence:</span> {confText}
-                          </p>
+                      <div className="mb-4 flex items-start gap-4">
+                        <Avatar name={name} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h4 className="mb-0.5 truncate text-lg font-bold text-foreground">{name}</h4>
+                              <p className="truncate text-sm font-semibold text-[hsl(var(--g3))]">{jobRole}</p>
+                            </div>
+                            <div className="text-right">
+                              {semScore && (
+                                <div className="px-3 py-1 rounded-full text-sm font-semibold text-[hsl(var(--primary))] border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)]">
+                                  {semScore}
+                                </div>
+                              )}
+                              {scoreType && (
+                                <div className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">{scoreType}</div>
+                              )}
+                            </div>
+                          </div>
 
-                          {topRelatedRoles.length > 0 && (
-                            <p className="mt-1 text-xs text-[hsl(var(--primary))]">
-                              <span className="font-semibold">Also matches:</span>{' '}
-                              {topRelatedRoles.map((r) => `${r.role} (${r.match}%)`).join(', ')}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="px-3 py-1 rounded-full text-sm font-semibold text-[hsl(var(--primary))] border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)] text-center">
-                          <div>{score}%</div>
-                          <div className="text-xs text-[hsl(var(--muted-foreground))]">{scoreLabel}</div>
+                          {/* meta pills */}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Pill>
+                              <i className="ri-briefcase-2-line" /> {expText}
+                            </Pill>
+                            <Pill>
+                              <i className="ri-map-pin-line" /> {location}
+                            </Pill>
+                            <Pill>
+                              <i className="ri-shield-check-line" /> {confidence} conf.
+                            </Pill>
+                          </div>
                         </div>
                       </div>
 
-                      <Link
-                        href={`/candidate/${_id}`}
-                        className="btn btn-primary w-full justify-center"
-                      >
+                      {/* Skills */}
+                      <div className="mb-5">
+                        <div className="mb-2 text-xs font-semibold text-[hsl(var(--muted-foreground))]">Core skills</div>
+                        {skills.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {skills.map((s: any, idx: number) => (
+                              <span
+                                key={idx}
+                                className="rounded-full border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)] px-2.5 py-1 text-xs text-[hsl(var(--primary))]"
+                              >
+                                {String(s)}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-[hsl(var(--muted-foreground))]">No skills mentioned</p>
+                        )}
+                      </div>
+
+                      {/* Related Roles (bring back) */}
+                      {relatedRoles.length > 0 && (
+                        <div className="mb-5">
+                          <div className="mb-2 text-xs font-semibold text-[hsl(var(--muted-foreground))]">
+                            Related roles
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {relatedRoles.slice(0, 3).map((r, idx) => (
+                              <span
+                                key={idx}
+                                className="rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground"
+                                title={r.match ? `Similarity: ${r.match}%` : undefined}
+                              >
+                                {r.role}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <Link href={`/candidate/${id}`} className="btn btn-primary w-full justify-center">
                         <i className="ri-eye-line mr-2" />
                         View Profile
                       </Link>
@@ -160,7 +331,7 @@ export default function CandidateResults({
                 <div className="flex items-center justify-center gap-4 border-t border-border pt-6">
                   <button
                     onClick={prevPage}
-                    disabled={currentPage === 1}
+                    disabled={page === 1}
                     className="surface rounded-lg px-4 py-2 text-foreground hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed transition"
                   >
                     <i className="ri-arrow-left-line mr-2" />
@@ -168,24 +339,22 @@ export default function CandidateResults({
                   </button>
 
                   <div className="flex gap-2">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                       <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
+                        key={p}
+                        onClick={() => setCurrentPage(p)}
                         className={`h-10 w-10 rounded-lg text-sm font-medium transition ${
-                          currentPage === page
-                            ? 'btn btn-primary'
-                            : 'surface text-foreground hover:shadow-glow'
+                          page === p ? 'btn btn-primary' : 'surface text-foreground hover:shadow-glow'
                         }`}
                       >
-                        {page}
+                        {p}
                       </button>
                     ))}
                   </div>
 
                   <button
                     onClick={nextPage}
-                    disabled={currentPage === totalPages}
+                    disabled={page === totalPages}
                     className="surface rounded-lg px-4 py-2 text-foreground hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed transition"
                   >
                     Next
@@ -196,8 +365,7 @@ export default function CandidateResults({
 
               <div className="mt-6 text-center">
                 <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                  Showing {startIndex + 1}-
-                  {Math.min(startIndex + itemsPerPage, cleanedCandidates.length)} of{' '}
+                  Showing {startIndex + 1}-{Math.min(startIndex + itemsPerPage, cleanedCandidates.length)} of{' '}
                   {cleanedCandidates.length} candidates
                 </p>
               </div>

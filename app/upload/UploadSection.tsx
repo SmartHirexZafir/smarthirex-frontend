@@ -15,22 +15,39 @@ type ProcessingFile = {
 
 interface UploadSectionProps {
   onFileUpload: (files: ProcessingFile[]) => void;
-  /** optional banaya to TS prop mismatch se bache */
   uploadedFiles?: FileWithPreview[];
 }
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
 
-export default function UploadSection({ onFileUpload }: UploadSectionProps) {
-  const [isDragOver, setIsDragOver] = useState<boolean>(false);
-  const [processingFiles, setProcessingFiles] = useState<ProcessingFile[]>([]);
-  const [allDone, setAllDone] = useState<boolean>(false);
+// concurrency for parallel uploads
+const CONCURRENCY = 8;
 
-  // Visibility / toast
-  const [showProgress, setShowProgress] = useState<boolean>(false);
-  const [showToast, setShowToast] = useState<boolean>(false);
-  const [toastMsg, setToastMsg] = useState<string>('');
+// Hold durations
+const TOAST_HOLD_MS = 3000;   // ⬅️ exact 3s
+const PROGRESS_HOLD_MS = 2000;
+
+// ✅ fallback paths (handles router prefix/no-prefix)
+const UPLOAD_PATHS = ['/upload/upload-resumes', '/upload-resumes'];
+
+export default function UploadSection({ onFileUpload }: UploadSectionProps) {
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [processingFiles, setProcessingFiles] = useState<ProcessingFile[]>([]);
+  const [showProgress, setShowProgress] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
   const [toastType, setToastType] = useState<'success' | 'warning'>('success');
+
+  // aggregated counters (across many requests)
+  const [agg, setAgg] = useState({
+    received: 0,
+    inserted: 0,
+    duplicates: 0,
+    unsupported: 0,
+    empty: 0,
+    too_large: 0,
+    parse_error: 0,
+  });
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const timersRef = useRef<number[]>([]);
@@ -42,93 +59,86 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
   // Derived counts
   const totalCount = processingFiles.length;
   const completedCount = processingFiles.filter((f) => f.status === 'completed').length;
-  const errorCount = processingFiles.filter((f) => f.status === 'error').length;
 
-  // Overall % (average of per-file progress)
+  // Overall % (average across rows)
   const overallPct =
     totalCount === 0
       ? 0
       : Math.round(
-          processingFiles.reduce((sum, f) => sum + (Number.isFinite(f.progress) ? f.progress : 0), 0) /
-            totalCount
+          processingFiles.reduce((sum, f) => sum + (Number.isFinite(f.progress) ? f.progress : 0), 0) / totalCount
         );
 
+  // auto-hide toast + progress after done
   useEffect(() => {
-    if (processingFiles.length && processingFiles.every((f) => f.status !== 'processing')) {
-      setAllDone(true);
-    } else {
-      setAllDone(false);
-    }
-  }, [processingFiles]);
+    const allDone = totalCount > 0 && processingFiles.every((f) => f.status !== 'processing');
 
-  // Auto-dismiss progress + toast when done
-  useEffect(() => {
-    if (!allDone || totalCount === 0) return;
+    if (!allDone) return;
+    // build one clear summary toast
+    const skipped =
+      agg.duplicates + agg.unsupported + agg.empty + agg.too_large + agg.parse_error;
 
-    // Toast message
-    if (errorCount === 0) {
-      setToastType('success');
-      setToastMsg(`All ${totalCount} resumes uploaded successfully.`);
-    } else {
-      setToastType('warning');
-      setToastMsg(`Uploaded ${completedCount} of ${totalCount} resumes. Some failed.`);
-    }
+    const summary = `Uploaded ${agg.inserted} of ${agg.received} · Duplicates: ${agg.duplicates} · Unsupported: ${agg.unsupported} · Empty: ${agg.empty} · Too large: ${agg.too_large} · Parse errors: ${agg.parse_error}`;
+
+    setToastType(skipped === 0 ? 'success' : 'warning');
+    setToastMsg(summary);
     setShowToast(true);
 
-    // Hide after a short delay
-    const t1 = window.setTimeout(() => setShowToast(false), 2600);
+    const t1 = window.setTimeout(() => setShowToast(false), TOAST_HOLD_MS);
     const t2 = window.setTimeout(() => {
       setShowProgress(false);
       setProcessingFiles([]);
-      setAllDone(false);
-    }, 3000);
-
+      setAgg({
+        received: 0,
+        inserted: 0,
+        duplicates: 0,
+        unsupported: 0,
+        empty: 0,
+        too_large: 0,
+        parse_error: 0,
+      });
+    }, PROGRESS_HOLD_MS);
     timersRef.current.push(t1, t2);
 
     return () => {
       timersRef.current.forEach((id) => window.clearTimeout(id));
       timersRef.current = [];
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allDone]); // run when done flips to true
+  }, [processingFiles, totalCount, agg]);
 
-  // ---------- Drag & Drop handlers ----------
+  // ---------- DnD ----------
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(true);
   };
-
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(false);
   };
-
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(false);
     const files = Array.from(e.dataTransfer.files) as FileWithPreview[];
     processFiles(files);
   };
-
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []) as FileWithPreview[];
     processFiles(files);
   };
 
-  // ---------- Core upload logic (REAL progress) ----------
+  // ---------- Core upload (true per-file progress, parallel with limit) ----------
   const clearTimers = () => {
     timersRef.current.forEach((id) => window.clearTimeout(id));
     timersRef.current = [];
   };
 
-  const processFiles = async (files: FileWithPreview[]) => {
+  async function processFiles(files: FileWithPreview[]) {
     if (!files.length) return;
 
     clearTimers();
-    setAllDone(false);
     setShowToast(false);
     setShowProgress(true);
 
+    // rows for UI
     const rows: ProcessingFile[] = files.map((file) => ({
       id: Date.now() + Math.floor(Math.random() * 100000),
       name: file.name,
@@ -136,83 +146,153 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
       progress: 0,
       status: 'processing',
     }));
-
     setProcessingFiles(rows);
+
+    // init aggregate
+    setAgg({
+      received: files.length,
+      inserted: 0,
+      duplicates: 0,
+      unsupported: 0,
+      empty: 0,
+      too_large: 0,
+      parse_error: 0,
+    });
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
-    // helper: upload one file with per-file progress
-    const uploadSingle = (row: ProcessingFile, file: File) =>
+    const uploadSingle = (idx: number, file: File) =>
       new Promise<void>((resolve) => {
+        const row = rows[idx];
+
         const fd = new FormData();
-        fd.append('files', file);
+        fd.append('files', file); // one file per request
 
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${API_BASE}/upload/upload-resumes`);
-        if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-
-        // REAL bytes progress
-        xhr.upload.onprogress = (evt) => {
-          if (!evt.lengthComputable) return;
-          const pct = Math.min(100, Math.round((evt.loaded / evt.total) * 100));
-          setProcessingFiles((prev) =>
-            prev.map((f) => (f.id === row.id ? { ...f, progress: pct } : f))
-          );
-        };
-
-        xhr.onload = async () => {
-          const ok = xhr.status >= 200 && xhr.status < 300;
-          if (!ok) {
-            let detail = 'Upload failed';
-            try {
-              const json = JSON.parse(xhr.responseText || '{}');
-              if (typeof json?.detail === 'string') detail = json.detail;
-            } catch {
-              if (xhr.responseText) detail = xhr.responseText;
-            }
+        // ✅ attempt paths one by one with the same XHR progress UX
+        const tryPath = (pathIndex: number) => {
+          if (pathIndex >= UPLOAD_PATHS.length) {
+            // all tried
             setProcessingFiles((prev) =>
               prev.map((f) =>
-                f.id === row.id ? { ...f, status: 'error', progress: 0, errorMsg: detail } : f
+                f.id === row.id ? { ...f, status: 'error', progress: 0, errorMsg: 'Upload endpoint not reachable' } : f
               )
             );
-            resolve();
-            return;
+            return resolve();
           }
 
-          // success -> mark 100%
-          setProcessingFiles((prev) =>
-            prev.map((f) => (f.id === row.id ? { ...f, progress: 100, status: 'completed' } : f))
-          );
-          resolve();
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `${API_BASE}${UPLOAD_PATHS[pathIndex]}`);
+          if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+          // file byte progress
+          xhr.upload.onprogress = (evt) => {
+            if (!evt.lengthComputable) return;
+            const pct = Math.min(100, Math.round((evt.loaded / evt.total) * 100));
+            setProcessingFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, progress: pct } : f)));
+          };
+
+          xhr.onload = () => {
+            const status = xhr.status;
+            let resp: any = {};
+            try {
+              resp = JSON.parse(xhr.responseText || '{}');
+            } catch {
+              resp = {};
+            }
+
+            // If endpoint missing/blocked, try next path
+            if (status === 404 || status === 405) {
+              // reset progress for next attempt (visual clarity)
+              setProcessingFiles((prev) =>
+                prev.map((f) => (f.id === row.id ? { ...f, progress: 0 } : f))
+              );
+              return tryPath(pathIndex + 1);
+            }
+
+            const ok = status >= 200 && status < 300;
+            if (!ok) {
+              setProcessingFiles((prev) =>
+                prev.map((f) =>
+                  f.id === row.id ? { ...f, status: 'error', progress: 0, errorMsg: 'Upload failed' } : f
+                )
+              );
+              return resolve();
+            }
+
+            // determine outcome for this single file
+            const inserted = Number(resp?.inserted ?? 0);
+            const dup = Number(resp?.skipped?.duplicates ?? 0);
+            const unsup = Number(resp?.skipped?.unsupported ?? 0);
+            const empty = Number(resp?.skipped?.empty ?? 0);
+            const tooLarge = Number(resp?.skipped?.too_large ?? 0);
+            const parseErr = Number(resp?.skipped?.parse_error ?? 0);
+
+            setAgg((a) => ({
+              received: a.received,
+              inserted: a.inserted + inserted,
+              duplicates: a.duplicates + dup,
+              unsupported: a.unsupported + unsup,
+              empty: a.empty + empty,
+              too_large: a.too_large + tooLarge,
+              parse_error: a.parse_error + parseErr,
+            }));
+
+            if (inserted > 0) {
+              setProcessingFiles((prev) =>
+                prev.map((f) => (f.id === row.id ? { ...f, status: 'completed', progress: 100 } : f))
+              );
+            } else {
+              // show reason if we have it
+              const reason =
+                dup ? 'duplicate' :
+                unsup ? 'unsupported' :
+                empty ? 'empty' :
+                tooLarge ? 'too large' :
+                parseErr ? 'parse error' : 'skipped';
+              setProcessingFiles((prev) =>
+                prev.map((f) =>
+                  f.id === row.id ? { ...f, status: 'error', progress: 0, errorMsg: reason } : f
+                )
+              );
+            }
+            return resolve();
+          };
+
+          xhr.onerror = () => {
+            // network glitch? try next path
+            setProcessingFiles((prev) =>
+              prev.map((f) =>
+                f.id === row.id ? { ...f, progress: 0 } : f
+              )
+            );
+            tryPath(pathIndex + 1);
+          };
+
+          xhr.send(fd);
         };
 
-        xhr.onerror = () => {
-          setProcessingFiles((prev) =>
-            prev.map((f) =>
-              f.id === row.id ? { ...f, status: 'error', progress: 0, errorMsg: 'Network error' } : f
-            )
-          );
-          resolve();
-        };
-
-        xhr.send(fd);
+        // kick off first attempt
+        tryPath(0);
       });
 
-    // upload sequentially (simpler; avoids server overload)
-    for (let i = 0; i < rows.length; i++) {
-      await uploadSingle(rows[i], files[i]);
-    }
+    // run with bounded concurrency
+    let index = 0;
+    const runners = Array.from({ length: Math.min(CONCURRENCY, files.length) }, async () => {
+      while (index < files.length) {
+        const myIdx = index++;
+        await uploadSingle(myIdx, files[myIdx]);
+      }
+    });
 
-    // parent ko batado ke upload flow khatam ho gaya -> FINAL statuses
+    await Promise.all(runners);
+
+    // tell parent with final statuses
     onFileUpload(procRef.current);
-  };
+  }
 
   // ---------- Render ----------
   return (
-    <section
-      className="card-glass p-10 md:p-12 relative overflow-hidden animate-rise-in"
-      aria-labelledby="upload-title"
-    >
+    <section className="card-glass p-10 md:p-12 relative overflow-hidden animate-rise-in" aria-labelledby="upload-title">
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute inset-0 opacity-[0.06] gradient-ink" />
         <div className="absolute inset-0 noise-overlay" />
@@ -222,9 +302,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
         <h2 id="upload-title" className="text-3xl md:text-4xl font-extrabold gradient-text glow">
           Upload Resume Files
         </h2>
-        <p className="mt-2 text-[hsl(var(--muted-foreground))]">
-          Drag &amp; drop your resume files or click to browse
-        </p>
+        <p className="mt-2 text-[hsl(var(--muted-foreground))]">Drag &amp; drop your resume files or click to browse</p>
       </header>
 
       {/* Dropzone */}
@@ -256,15 +334,9 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
         <h3 className="text-2xl md:text-3xl font-semibold text-foreground mb-3">
           {isDragOver ? 'Drop files here' : 'Drop files or click to upload'}
         </h3>
-        <p className="text-[hsl(var(--muted-foreground))] mb-6">
-          Transform your hiring process with AI-powered resume screening
-        </p>
+        <p className="text-[hsl(var(--muted-foreground))] mb-6">Transform your hiring process with AI-powered resume screening</p>
 
-        <button
-          type="button"
-          className="btn btn-primary shadow-glow px-6 py-3 text-base"
-          onClick={() => fileInputRef.current?.click()}
-        >
+        <button type="button" className="btn btn-primary shadow-glow px-6 py-3 text-base" onClick={() => fileInputRef.current?.click()}>
           <i className="ri-folder-open-line mr-2" />
           Upload CVs
         </button>
@@ -280,7 +352,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
         />
       </div>
 
-      {/* Overall Progress ONLY (no per-file rows) */}
+      {/* Overall Progress (live) */}
       {showProgress && totalCount > 0 && (
         <div className="mt-8">
           <div className="flex items-center justify-between mb-2">
@@ -309,24 +381,20 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
         </div>
       )}
 
-      {/* Auto-dismiss Toast */}
+      {/* Big, high-contrast toast */}
       {showToast && (
         <div
-          className={`fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 shadow-lg border ${
+          className={`fixed bottom-6 right-6 z-50 rounded-xl px-5 py-4 shadow-xl border text-base font-medium ${
             toastType === 'success'
-              ? 'bg-[hsl(var(--success)/.12)] border-[hsl(var(--success))] text-[hsl(var(--success-foreground))]'
-              : 'bg-[hsl(var(--warning)/.12)] border-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]'
+              ? 'bg-[hsl(var(--success))] text-white border-transparent'
+              : 'bg-[hsl(var(--warning))] text-black border-black/10'
           }`}
           role="status"
           aria-live="polite"
         >
-          <div className="flex items-center gap-2">
-            <i
-              className={
-                toastType === 'success' ? 'ri-check-line text-xl' : 'ri-alert-line text-xl'
-              }
-            />
-            <span className="text-sm">{toastMsg}</span>
+          <div className="flex items-center gap-3">
+            <i className={toastType === 'success' ? 'ri-check-line text-xl' : 'ri-alert-line text-xl'} />
+            <span>{toastMsg}</span>
           </div>
         </div>
       )}

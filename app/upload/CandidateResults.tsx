@@ -48,7 +48,17 @@ export default function CandidateResults({
     const n = Number(v);
     return Number.isFinite(n) ? n : d;
   };
-  const take = <T,>(arr: T[] | undefined, n: number) => (Array.isArray(arr) ? arr.slice(0, n) : []);
+  const clamp2 = (n?: number | null) =>
+    typeof n === 'number' && Number.isFinite(n) ? n.toFixed(2) : undefined;
+
+  // ✅ experience formatter per requirement
+  const formatYears = (v: any): string => {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return 'Not specified';
+    if (n > 0 && n < 1) return '< 1 year';
+    if (n >= 1) return `${Math.round(n)} year${Math.round(n) === 1 ? '' : 's'}`;
+    return 'Not specified';
+  };
 
   // Clear immediately when a new prompt is set
   useEffect(() => {
@@ -80,6 +90,7 @@ export default function CandidateResults({
         return true;
       })
       .sort((a, b) => {
+        // sort by final_score, then semantic_score
         const s1 = safeNum(b.final_score) - safeNum(a.final_score);
         if (s1 !== 0) return s1;
         const s2 = safeNum(b.semantic_score) - safeNum(a.semantic_score);
@@ -119,7 +130,7 @@ export default function CandidateResults({
     );
   };
 
-  // Match summary for header message (exact vs close)
+  // Match summary (flags kept for future, but header is standardized)
   const matchMeta = useMemo(() => {
     let strictCount = 0;
     let closeCount = 0;
@@ -132,16 +143,13 @@ export default function CandidateResults({
       strictCount,
       closeCount,
       total: cleanedCandidates.length,
-      hasExact: strictCount > 0,
-      hasClose: closeCount > 0 || (cleanedCandidates.length > 0 && strictCount < cleanedCandidates.length),
     };
   }, [cleanedCandidates]);
 
+  // Standardized header line (as required)
   const HeaderStatus = () => {
     if (isProcessing || promptChanging) return <>AI is analyzing candidates...</>;
-    if (matchMeta.total === 0) return <>No candidates matched your filters.</>;
-    if (matchMeta.hasExact) return <>Found {matchMeta.total} matching candidate{matchMeta.total === 1 ? '' : 's'}</>;
-    return <>No exact matches found, showing closest results instead ({matchMeta.total}).</>;
+    return <>Showing {matchMeta.total} result{matchMeta.total === 1 ? '' : 's'} for your query.</>;
   };
 
   const SkeletonGrid = () => (
@@ -186,8 +194,10 @@ export default function CandidateResults({
               <p className="mt-1 text-[hsl(var(--muted-foreground))]">
                 <HeaderStatus />
               </p>
-              {!isProcessing && !promptChanging && activePrompt && (
-                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Query: “{activePrompt}”</p>
+              {!isProcessing && !promptChanging && (
+                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                  {`Query: “${(activePrompt || '').toString()}”`}
+                </p>
               )}
             </div>
           </div>
@@ -205,9 +215,9 @@ export default function CandidateResults({
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-white shadow-glow">
                 <i className="ri-filter-3-line text-2xl" />
               </div>
-              <h4 className="text-xl font-semibold text-foreground">No candidates</h4>
+              <h4 className="text-xl font-semibold text-foreground">No results</h4>
               <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
-                No candidates matched your filters. Try adjusting the criteria.
+                Try widening your criteria or changing the query.
               </p>
             </div>
           ) : (
@@ -217,49 +227,65 @@ export default function CandidateResults({
                 {currentCandidates.map((candidate) => {
                   const id = String(candidate._id ?? candidate.id);
                   const name = safeName(candidate.name);
+
+                  // Role line: show complete, no truncation
                   const jobRole =
                     candidate.predicted_role || candidate.category || candidate.currentRole || 'Unknown Role';
-                  const experience = safeNum(
+
+                  // Experience (various aliases)
+                  const experienceRaw =
                     candidate.total_experience_years ??
-                      candidate.years_of_experience ??
-                      candidate.experience_years ??
-                      candidate.yoe ??
-                      candidate.experience
-                  );
-                  const expText = experience ? `${experience} years` : 'Not specified';
-                  const confidence =
-                    candidate.confidence !== undefined ? `${safeNum(candidate.confidence).toFixed(2)}%` : 'N/A';
-                  const semScore =
-                    candidate.semantic_score !== undefined
-                      ? `${safeNum(candidate.semantic_score).toFixed(2)}%`
-                      : null;
-                  const scoreType = candidate.score_type || (semScore ? 'Prompt Match' : '');
-                  const skills = take(candidate.skills, 6);
+                    candidate.years_of_experience ??
+                    candidate.experience_years ??
+                    candidate.yoe ??
+                    candidate.experience;
+
+                  const expText = formatYears(experienceRaw);
+
+                  const confNum = safeNum(candidate.confidence);
+                  const confText = Number.isFinite(confNum) ? `${confNum.toFixed(2)}%` : 'N/A';
+
+                  const semScoreNum = safeNum(candidate.semantic_score);
+                  const semScoreText = Number.isFinite(semScoreNum) ? `${semScoreNum.toFixed(2)}%` : null;
+
+                  // Skills overflow handling (single line)
+                  const allSkills = Array.isArray(candidate.skills)
+                    ? candidate.skills.filter((s) => String(s || '').trim() !== '')
+                    : [];
+                  const maxSkills = 6; // show up to 6 chips on one line; rest becomes +N
+                  const shownSkills = allSkills.slice(0, maxSkills);
+                  const restCount = Math.max(0, allSkills.length - shownSkills.length);
+
                   const location = (candidate.location && String(candidate.location).trim()) || 'N/A';
+
                   const relatedRoles = Array.isArray(candidate.related_roles) ? candidate.related_roles : [];
 
                   return (
                     <article
                       key={id}
-                      className="surface glass border border-border rounded-2xl p-6 hover:shadow-glow transition-all duration-300"
+                      className="surface glass border border-border rounded-2xl p-6 hover:shadow-glow transition-all duration-300 h-full flex flex-col"
                     >
                       <div className="mb-4 flex items-start gap-4">
                         <Avatar name={name} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <h4 className="mb-0.5 truncate text-lg font-bold text-foreground">{name}</h4>
-                              <p className="truncate text-sm font-semibold text-[hsl(var(--g3))]">{jobRole}</p>
+                              {/* ✅ Full name & role (no truncate) */}
+                              <h4 className="mb-0.5 break-words text-lg font-bold text-foreground">{name}</h4>
+                              <p className="break-words text-sm font-semibold text-[hsl(var(--g3))]">{jobRole}</p>
                             </div>
+
                             <div className="text-right">
-                              {semScore && (
-                                <div className="px-3 py-1 rounded-full text-sm font-semibold text-[hsl(var(--primary))] border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)]">
-                                  {semScore}
+                              {/* smaller badge */}
+                              {semScoreText && (
+                                <div className="px-2 py-1 rounded-full text-xs font-semibold text-[hsl(var(--primary))] border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)]">
+                                  {semScoreText}
                                 </div>
                               )}
-                              {scoreType && (
-                                <div className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">{scoreType}</div>
-                              )}
+                              {/* fixed subtitle */}
+                              <div className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">
+                                Prompt Matching score
+                              </div>
                             </div>
                           </div>
 
@@ -272,52 +298,67 @@ export default function CandidateResults({
                               <i className="ri-map-pin-line" /> {location}
                             </Pill>
                             <Pill>
-                              <i className="ri-shield-check-line" /> {confidence} conf.
+                              <i className="ri-shield-check-line" /> Model Confidence {confText}
                             </Pill>
                           </div>
                         </div>
                       </div>
 
-                      {/* Skills */}
+                      {/* Skills — single line with +N overflow */}
                       <div className="mb-5">
                         <div className="mb-2 text-xs font-semibold text-[hsl(var(--muted-foreground))]">Core skills</div>
-                        {skills.length > 0 ? (
-                          <div className="flex flex-wrap gap-2">
-                            {skills.map((s: any, idx: number) => (
+                        {shownSkills.length > 0 ? (
+                          <div className="flex flex-nowrap items-center gap-2 overflow-hidden">
+                            {shownSkills.map((s: any, idx: number) => (
                               <span
                                 key={idx}
-                                className="rounded-full border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)] px-2.5 py-1 text-xs text-[hsl(var(--primary))]"
+                                className="whitespace-nowrap rounded-full border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)] px-2.5 py-1 text-xs text-[hsl(var(--primary))]"
                               >
                                 {String(s)}
                               </span>
                             ))}
+                            {restCount > 0 && (
+                              <span
+                                className="ml-1 whitespace-nowrap rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground"
+                                title={`${restCount} more skill${restCount === 1 ? '' : 's'}`}
+                              >
+                                +{restCount}
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <p className="text-xs text-[hsl(var(--muted-foreground))]">No skills mentioned</p>
                         )}
                       </div>
 
-                      {/* Related Roles (bring back) */}
+                      {/* Related Roles with visible score */}
                       {relatedRoles.length > 0 && (
                         <div className="mb-5">
                           <div className="mb-2 text-xs font-semibold text-[hsl(var(--muted-foreground))]">
                             Related roles
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {relatedRoles.slice(0, 3).map((r, idx) => (
-                              <span
-                                key={idx}
-                                className="rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground"
-                                title={r.match ? `Similarity: ${r.match}%` : undefined}
-                              >
-                                {r.role}
-                              </span>
-                            ))}
+                            {relatedRoles.slice(0, 3).map((r, idx) => {
+                              const pct =
+                                typeof r.match === 'number' && Number.isFinite(r.match)
+                                  ? ` (${Math.round(r.match)}%)`
+                                  : '';
+                              return (
+                                <span
+                                  key={idx}
+                                  className="rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground"
+                                >
+                                  {r.role}
+                                  {pct}
+                                </span>
+                              );
+                            })}
                           </div>
                         </div>
                       )}
 
-                      <Link href={`/candidate/${id}`} className="btn btn-primary w-full justify-center">
+                      {/* Button aligned bottom across cards */}
+                      <Link href={`/candidate/${id}`} className="btn btn-primary w-full justify-center mt-auto">
                         <i className="ri-eye-line mr-2" />
                         View Profile
                       </Link>

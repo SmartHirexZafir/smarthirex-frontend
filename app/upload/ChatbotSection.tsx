@@ -125,6 +125,17 @@ export default function ChatbotSection({
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // 🔔 lightweight in-component toast (auto hides in 3s)
+  const [toast, setToast] = useState<{ show: boolean; msg: string; tone: 'info' | 'warning' | 'success' | 'error' }>(
+    { show: false, msg: '', tone: 'info' }
+  );
+
+  useEffect(() => {
+    if (!toast.show) return;
+    const t = window.setTimeout(() => setToast({ show: false, msg: '', tone: 'info' }), 3000);
+    return () => window.clearTimeout(t);
+  }, [toast.show]);
+
   const suggestedPrompts = [
     'Show me candidates with React + Django experience',
     'Find frontend developer with 3+ years experience',
@@ -230,7 +241,7 @@ export default function ChatbotSection({
     setIsTyping(true);
 
     // ✅ Immediately clear old candidates & show loader in parent
-    onPromptSubmit(prompt, []);
+    onPromptSubmit(prompt, []); // START — loader ON
 
     try {
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -246,7 +257,7 @@ export default function ChatbotSection({
             timestamp: formatTime(),
           },
         ]);
-        // parent already in "loading" state; keep it empty
+        onPromptSubmit(prompt, []); // FINISH — loader OFF
         return;
       }
 
@@ -264,13 +275,14 @@ export default function ChatbotSection({
             timestamp: formatTime(),
           },
         ]);
-        // keep cleared state
+        setToast({ show: true, msg: 'Server error while processing your request.', tone: 'error' });
+        onPromptSubmit(prompt, []); // FINISH — loader OFF
         return;
       }
 
       const data = result.data || {};
 
-      // ✅ Handle special case: no CV uploaded
+      // ✅ Handle special case: no CV uploaded — also finish loader
       if (data?.no_cvs_uploaded === true || data?.message === 'no_cvs_uploaded') {
         setMessages((prev) => [
           ...prev,
@@ -281,20 +293,44 @@ export default function ChatbotSection({
             timestamp: formatTime(),
           },
         ]);
-        // keep cleared state
+        try {
+          window.dispatchEvent(new CustomEvent('shx:no-cvs', { detail: { prompt } }));
+        } catch {}
+        setToast({ show: true, msg: 'No CVs found. Please upload resumes first.', tone: 'warning' });
+        onPromptSubmit(prompt, []); // FINISH — loader OFF
         return;
       }
+
+      // --- Build standardized reply ---
+      const list = Array.isArray(data.resumes_preview) ? data.resumes_preview : [];
+      const total = typeof data?.matchMeta?.total === 'number' ? data.matchMeta.total : list.length;
+      const q = (data?.normalized_prompt || prompt || '').toString().trim();
+
+      const standardizedReply =
+        `Showing ${total} result${total === 1 ? '' : 's'} for your query.` +
+        (q ? `\nQuery: "${q}"` : '');
 
       const botMessage: ChatMsg = {
         id: Date.now() + 4,
         type: 'bot',
-        content: data.reply || 'Got it! Let me find some candidates for you.',
+        content: standardizedReply,
         timestamp: formatTime(),
       };
 
       setMessages((prev) => [...prev, botMessage]);
-      // ✅ Deliver fresh results to parent (this turns loader off in your UploadPage)
-      onPromptSubmit(prompt, Array.isArray(data.resumes_preview) ? data.resumes_preview : []);
+
+      // 🔕 Inform on zero results as well, but DO finish the loader
+      if (data?.no_results === true || total === 0) {
+        setToast({ show: true, msg: 'No matching candidates found for your query.', tone: 'info' });
+        try {
+          window.dispatchEvent(new CustomEvent('shx:no-results', { detail: { prompt } }));
+        } catch {}
+        onPromptSubmit(prompt, []); // FINISH — loader OFF (empty results)
+        return;
+      }
+
+      // ✅ Deliver fresh results to parent (FINISH — loader OFF via parent)
+      onPromptSubmit(prompt, list);
     } catch (error: any) {
       console.error('Error:', error);
       setMessages((prev) => [
@@ -307,7 +343,8 @@ export default function ChatbotSection({
           timestamp: formatTime(),
         },
       ]);
-      // keep cleared state
+      setToast({ show: true, msg: 'Network error. Check API URL/CORS.', tone: 'error' });
+      onPromptSubmit(prompt, []); // FINISH — loader OFF
     } finally {
       setIsTyping(false);
     }
@@ -359,11 +396,13 @@ export default function ChatbotSection({
                 className={[
                   'max-w-xs lg:max-w-md px-4 py-3 rounded-2xl transition-all duration-300',
                   message.type === 'user'
-                    ? 'text-white shadow-glow bg-gradient-to-r from-[hsl(var(--g1))] to-[hsl(var(--g3))]'
+                    ? 'text-white shadow-glow bg-gradient-to-r from-[hsl(var(--g1))] to-[hsl(var(--g3)))]'
                     : 'surface glass border border-border text-foreground',
                 ].join(' ')}
               >
-                <p className="text-sm leading-relaxed">{message.content}</p>
+                <p className="text-sm leading-relaxed" style={{ whiteSpace: 'pre-line' }}>
+                  {message.content}
+                </p>
                 <time
                   className={`text-[10px] mt-2 ${
                     message.type === 'user' ? 'text-white/80' : 'text-[hsl(var(--muted-foreground))]'
@@ -447,6 +486,39 @@ export default function ChatbotSection({
           </div>
         </div>
       </div>
+
+      {/* Toast (auto-hide in 3s) */}
+      {toast.show && (
+        <div
+          className={[
+            'fixed bottom-6 right-6 z-50 rounded-xl px-5 py-4 shadow-xl border text-base font-medium',
+            toast.tone === 'success'
+              ? 'bg-[hsl(var(--success))] text-white border-transparent'
+              : toast.tone === 'warning'
+              ? 'bg-[hsl(var(--warning))] text-black border-black/10'
+              : toast.tone === 'error'
+              ? 'bg-[hsl(var(--destructive))] text-white border-transparent'
+              : 'bg-[hsl(var(--muted))] text-foreground border-border',
+          ].join(' ')}
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-3">
+            <i
+              className={
+                toast.tone === 'success'
+                  ? 'ri-check-line text-xl'
+                  : toast.tone === 'warning'
+                  ? 'ri-alert-line text-xl'
+                  : toast.tone === 'error'
+                  ? 'ri-close-circle-line text-xl'
+                  : 'ri-information-line text-xl'
+              }
+            />
+            <span>{toast.msg}</span>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -315,7 +315,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
           'surface glass gradient-border rounded-3xl p-12 md:p-14 text-center transition-all ease-lux cursor-pointer',
           'border-2 border-dashed',
           isDragOver
-            ? 'ring-2 ring-[hsl(var(--primary)/.45)] bg-[hsl(var(--muted)/.7)] shadow-glow scale-[1.01)]'
+            ? 'ring-2 ring-[hsl(var(--primary)/.45)] bg-[hsl(var(--muted)/.7)] shadow-glow scale-[1.01]'
             : 'hover:bg-[hsl(var(--muted)/.55)] hover:ring-1 hover:ring-[hsl(var(--primary)/.25)]',
         ].join(' ')}
         onDragOver={handleDragOver}

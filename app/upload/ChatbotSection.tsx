@@ -7,6 +7,13 @@ const API_BASE =
 
 type ChatMsg = { id: number; type: 'bot' | 'user'; content: string; timestamp: string };
 
+type ChatResultOk = { kind: 'ok'; data: any };
+type ChatResultUnauth = { kind: 'unauth' };
+type ChatResultError = { kind: 'error'; status?: number; message: string; data?: any };
+type ChatResultNetwork = { kind: 'network'; message: string };
+
+type ChatResult = ChatResultOk | ChatResultUnauth | ChatResultError | ChatResultNetwork;
+
 /* ---------------------------
    Normalization (frontend)
 ---------------------------- */
@@ -153,9 +160,7 @@ export default function ChatbotSection({
 
   // 🔒 After mount, inject timestamp for any empty ones (prevents SSR/CSR mismatch)
   useEffect(() => {
-    setMessages((prev) =>
-      prev.map((m) => (m.timestamp ? m : { ...m, timestamp: formatTime() }))
-    );
+    setMessages((prev) => prev.map((m) => (m.timestamp ? m : { ...m, timestamp: formatTime() })));
   }, []);
 
   useEffect(() => {
@@ -178,7 +183,7 @@ export default function ChatbotSection({
     return resp;
   }
 
-  async function callChatbot(prompt: string, token: string | null) {
+  async function callChatbot(prompt: string, token: string | null): Promise<ChatResult> {
     // client-side normalization (aligned with backend)
     const norm = normalizePrompt(prompt);
     const payload = {
@@ -187,41 +192,48 @@ export default function ChatbotSection({
       keywords: norm.keywords,
     };
 
-    // try with /chatbot/query first, then fallback to /query (some apps mount without prefix)
+    // try these in order; continue on 404/network
     const paths = ['/chatbot/query', '/query'];
-    let lastErr: any = null;
-
     for (const p of paths) {
       try {
         const url = `${API_BASE}${p}`;
         const resp = await postJSON(url, payload, token);
+        const status = resp.status;
 
-        if (resp.status === 401) {
-          return { kind: 'unauth' as const, data: null };
+        if (status === 401) {
+          return { kind: 'unauth' };
+        }
+
+        // Read text first so we can safely JSON-parse (even if empty)
+        const text = await resp.text();
+        let data: any = null;
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch {
+          data = null; // invalid JSON → treat as plain text
         }
 
         if (!resp.ok) {
-          let errPayload: any = {};
-          try {
-            errPayload = await resp.json();
-          } catch {
-            errPayload = { detail: await resp.text() };
-          }
-          if (resp.status === 404) {
-            lastErr = { status: 404, payload: errPayload };
-            continue;
-          }
-          return { kind: 'error' as const, data: errPayload, status: resp.status };
+          // On 404, try next path silently
+          if (status === 404) continue;
+
+          const message =
+            (data && (data.detail || data.message)) ||
+            (text && text.trim()) ||
+            `Request failed (${status})`;
+          return { kind: 'error', status, message, data };
         }
 
-        const data = await resp.json();
-        return { kind: 'ok' as const, data };
-      } catch (e) {
-        lastErr = e;
+        // OK
+        return { kind: 'ok', data: data ?? {} };
+      } catch (_e) {
+        // network error → try next path
+        continue;
       }
     }
 
-    throw lastErr ?? new Error('Network error');
+    // If we reach here, all attempts failed due to 404s or network
+    return { kind: 'network', message: 'Network error or endpoint not reachable' };
   }
 
   // --------------------------------------------------------------------------
@@ -243,111 +255,114 @@ export default function ChatbotSection({
     // ✅ Immediately clear old candidates & show loader in parent
     onPromptSubmit(prompt, []); // START — loader ON
 
-    try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const result = await callChatbot(prompt, token);
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const result = await callChatbot(prompt, token);
 
-      if (result.kind === 'unauth') {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now() + 1,
-            type: 'bot',
-            content: 'You are not logged in or your session expired. Please log in again.',
-            timestamp: formatTime(),
-          },
-        ]);
-        onPromptSubmit(prompt, []); // FINISH — loader OFF
-        return;
-      }
-
-      if (result.kind === 'error') {
-        const msg =
-          result.data?.detail ||
-          result.data?.message ||
-          `Server error (${result.status || 'unknown'})`;
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now() + 2,
-            type: 'bot',
-            content: `Sorry, I couldn't process your request: ${msg}`,
-            timestamp: formatTime(),
-          },
-        ]);
-        setToast({ show: true, msg: 'Server error while processing your request.', tone: 'error' });
-        onPromptSubmit(prompt, []); // FINISH — loader OFF
-        return;
-      }
-
-      const data = result.data || {};
-
-      // ✅ Handle special case: no CV uploaded — also finish loader
-      if (data?.no_cvs_uploaded === true || data?.message === 'no_cvs_uploaded') {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: Date.now() + 3,
-            type: 'bot',
-            content: 'There is no CV uploaded from your side.',
-            timestamp: formatTime(),
-          },
-        ]);
-        try {
-          window.dispatchEvent(new CustomEvent('shx:no-cvs', { detail: { prompt } }));
-        } catch {}
-        setToast({ show: true, msg: 'No CVs found. Please upload resumes first.', tone: 'warning' });
-        onPromptSubmit(prompt, []); // FINISH — loader OFF
-        return;
-      }
-
-      // --- Build standardized reply ---
-      const list = Array.isArray(data.resumes_preview) ? data.resumes_preview : [];
-      const total = typeof data?.matchMeta?.total === 'number' ? data.matchMeta.total : list.length;
-      const q = (data?.normalized_prompt || prompt || '').toString().trim();
-
-      const standardizedReply =
-        `Showing ${total} result${total === 1 ? '' : 's'} for your query.` +
-        (q ? `\nQuery: "${q}"` : '');
-
-      const botMessage: ChatMsg = {
-        id: Date.now() + 4,
-        type: 'bot',
-        content: standardizedReply,
-        timestamp: formatTime(),
-      };
-
-      setMessages((prev) => [...prev, botMessage]);
-
-      // 🔕 Inform on zero results as well, but DO finish the loader
-      if (data?.no_results === true || total === 0) {
-        setToast({ show: true, msg: 'No matching candidates found for your query.', tone: 'info' });
-        try {
-          window.dispatchEvent(new CustomEvent('shx:no-results', { detail: { prompt } }));
-        } catch {}
-        onPromptSubmit(prompt, []); // FINISH — loader OFF (empty results)
-        return;
-      }
-
-      // ✅ Deliver fresh results to parent (FINISH — loader OFF via parent)
-      onPromptSubmit(prompt, list);
-    } catch (error: any) {
-      console.error('Error:', error);
+    // handle result types (no throwing → no blank "{}" console errors)
+    if (result.kind === 'unauth') {
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now() + 5,
+          id: Date.now() + 1,
+          type: 'bot',
+          content: 'You are not logged in or your session expired. Please log in again.',
+          timestamp: formatTime(),
+        },
+      ]);
+      onPromptSubmit(prompt, []); // FINISH — loader OFF
+      setIsTyping(false);
+      return;
+    }
+
+    if (result.kind === 'network') {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 2,
           type: 'bot',
           content:
             "Sorry, I couldn't reach the server. Please check your API URL or CORS settings.",
           timestamp: formatTime(),
         },
       ]);
-      setToast({ show: true, msg: 'Network error. Check API URL/CORS.', tone: 'error' });
+      setToast({ show: true, msg: result.message, tone: 'error' });
       onPromptSubmit(prompt, []); // FINISH — loader OFF
-    } finally {
       setIsTyping(false);
+      return;
     }
+
+    if (result.kind === 'error') {
+      const msg = result.message || `Server error (${result.status || 'unknown'})`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 3,
+          type: 'bot',
+          content: `Sorry, I couldn't process your request: ${msg}`,
+          timestamp: formatTime(),
+        },
+      ]);
+      setToast({ show: true, msg: 'Server error while processing your request.', tone: 'error' });
+      onPromptSubmit(prompt, []); // FINISH — loader OFF
+      setIsTyping(false);
+      return;
+    }
+
+    // kind === 'ok'
+    const data = result.data || {};
+
+    // ✅ Handle special case: no CV uploaded — also finish loader
+    if (data?.no_cvs_uploaded === true || data?.message === 'no_cvs_uploaded') {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 4,
+          type: 'bot',
+          content: 'There is no CV uploaded from your side.',
+          timestamp: formatTime(),
+        },
+      ]);
+      try {
+        window.dispatchEvent(new CustomEvent('shx:no-cvs', { detail: { prompt } }));
+      } catch {}
+      setToast({ show: true, msg: 'No CVs found. Please upload resumes first.', tone: 'warning' });
+      onPromptSubmit(prompt, []); // FINISH — loader OFF
+      setIsTyping(false);
+      return;
+    }
+
+    // --- Build standardized reply ---
+    const list = Array.isArray(data.resumes_preview) ? data.resumes_preview : [];
+    const total = typeof data?.matchMeta?.total === 'number' ? data.matchMeta.total : list.length;
+    const q = (data?.normalized_prompt || prompt || '').toString().trim();
+
+    const standardizedReply =
+      `Showing ${total} result${total === 1 ? '' : 's'} for your query.` +
+      (q ? `\nQuery: "${q}"` : '');
+
+    const botMessage: ChatMsg = {
+      id: Date.now() + 5,
+      type: 'bot',
+      content: standardizedReply,
+      timestamp: formatTime(),
+    };
+
+    setMessages((prev) => [...prev, botMessage]);
+
+    // 🔕 Inform on zero results as well, but DO finish the loader
+    if (data?.no_results === true || total === 0) {
+      setToast({ show: true, msg: 'No matching candidates found for your query.', tone: 'info' });
+      try {
+        window.dispatchEvent(new CustomEvent('shx:no-results', { detail: { prompt } }));
+      } catch {}
+      onPromptSubmit(prompt, []); // FINISH — loader OFF (empty results)
+      setIsTyping(false);
+      return;
+    }
+
+    // ✅ Deliver fresh results to parent (FINISH — loader OFF via parent)
+    onPromptSubmit(prompt, list);
+    setIsTyping(false);
   };
 
   return (
@@ -396,7 +411,7 @@ export default function ChatbotSection({
                 className={[
                   'max-w-xs lg:max-w-md px-4 py-3 rounded-2xl transition-all duration-300',
                   message.type === 'user'
-                    ? 'text-white shadow-glow bg-gradient-to-r from-[hsl(var(--g1))] to-[hsl(var(--g3)))]'
+                    ? 'text-white shadow-glow bg-gradient-to-r from-[hsl(var(--g1))] to-[hsl(var(--g3))]'
                     : 'surface glass border border-border text-foreground',
                 ].join(' ')}
               >

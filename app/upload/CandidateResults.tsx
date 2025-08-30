@@ -10,18 +10,32 @@ type Candidate = {
   predicted_role?: string;
   category?: string;
   currentRole?: string;
+
+  // Experience fields (multiple aliases)
   experience?: number | string;
   total_experience_years?: number;
   years_of_experience?: number;
   experience_years?: number;
   yoe?: number;
+
+  // ✅ New additive fields (if backend provides)
+  experience_display?: string;   // e.g. "2 years", "0.5 years"
+  experience_rounded?: number;   // e.g. 2.0, 0.5
+
   location?: string;
   confidence?: number;
   semantic_score?: number;
   final_score?: number;
   score_type?: string;
   skills?: string[];
+
+  // ✅ Additive from ml_interface
+  skillsTruncated?: string[];
+  skillsOverflowCount?: number;
+
   related_roles?: { role: string; match?: number }[];
+  relatedRoles?: { role: string; score?: number }[]; // alt shape
+
   is_strict_match?: boolean;
   match_type?: 'exact' | 'close';
 };
@@ -51,7 +65,7 @@ export default function CandidateResults({
   const clamp2 = (n?: number | null) =>
     typeof n === 'number' && Number.isFinite(n) ? n.toFixed(2) : undefined;
 
-  // ✅ experience formatter per requirement
+  // ✅ experience formatter (fallback if display fields not provided)
   const formatYears = (v: any): string => {
     const n = Number(v);
     if (!Number.isFinite(n)) return 'Not specified';
@@ -112,6 +126,12 @@ export default function CandidateResults({
 
   const Pill = ({ children }: { children: React.ReactNode }) => (
     <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground">
+      {children}
+    </span>
+  );
+
+  const Badge = ({ children }: { children: React.ReactNode }) => (
+    <span className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)] px-2 py-1 text-[10px] font-semibold text-[hsl(var(--primary))]">
       {children}
     </span>
   );
@@ -232,15 +252,22 @@ export default function CandidateResults({
                   const jobRole =
                     candidate.predicted_role || candidate.category || candidate.currentRole || 'Unknown Role';
 
-                  // Experience (various aliases)
-                  const experienceRaw =
-                    candidate.total_experience_years ??
-                    candidate.years_of_experience ??
-                    candidate.experience_years ??
-                    candidate.yoe ??
-                    candidate.experience;
+                  // Prefer clean experience display from backend if present
+                  const expDisplayFromBackend =
+                    (typeof candidate.experience_display === 'string' && candidate.experience_display.trim()) ||
+                    null;
 
-                  const expText = formatYears(experienceRaw);
+                  // Use experience_rounded numeric if present; else fall back through aliases
+                  const experienceNumeric =
+                    typeof candidate.experience_rounded === 'number'
+                      ? candidate.experience_rounded
+                      : (candidate.total_experience_years ??
+                        candidate.years_of_experience ??
+                        candidate.experience_years ??
+                        candidate.yoe ??
+                        Number(candidate.experience));
+
+                  const expText = expDisplayFromBackend || formatYears(experienceNumeric);
 
                   const confNum = safeNum(candidate.confidence);
                   const confText = Number.isFinite(confNum) ? `${confNum.toFixed(2)}%` : 'N/A';
@@ -248,17 +275,43 @@ export default function CandidateResults({
                   const semScoreNum = safeNum(candidate.semantic_score);
                   const semScoreText = Number.isFinite(semScoreNum) ? `${semScoreNum.toFixed(2)}%` : null;
 
-                  // Skills overflow handling (single line)
-                  const allSkills = Array.isArray(candidate.skills)
-                    ? candidate.skills.filter((s) => String(s || '').trim() !== '')
+                  // Skills: use server-provided truncated list if available
+                  const skillsFromServer = Array.isArray(candidate.skillsTruncated)
+                    ? candidate.skillsTruncated
+                    : Array.isArray(candidate.skills)
+                    ? candidate.skills
                     : [];
-                  const maxSkills = 6; // show up to 6 chips on one line; rest becomes +N
-                  const shownSkills = allSkills.slice(0, maxSkills);
-                  const restCount = Math.max(0, allSkills.length - shownSkills.length);
+
+                  const shownSkills = (skillsFromServer || [])
+                    .filter((s) => String(s || '').trim() !== '')
+                    .slice(0, 6);
+
+                  // Overflow: prefer server count if provided, otherwise compute diff
+                  const overflow =
+                    typeof candidate.skillsOverflowCount === 'number'
+                      ? Math.max(0, candidate.skillsOverflowCount)
+                      : Math.max(0, (candidate.skills || []).length - shownSkills.length);
 
                   const location = (candidate.location && String(candidate.location).trim()) || 'N/A';
 
-                  const relatedRoles = Array.isArray(candidate.related_roles) ? candidate.related_roles : [];
+                  // Related roles: accept both shapes
+                  const relatedRoles =
+                    (Array.isArray(candidate.related_roles) && candidate.related_roles.length > 0
+                      ? candidate.related_roles.map((r) => ({ role: r.role, match: r.match }))
+                      : Array.isArray(candidate.relatedRoles)
+                      ? candidate.relatedRoles.map((r) => ({
+                          role: r.role,
+                          match: typeof r.score === 'number' ? r.score * 100 : undefined,
+                        }))
+                      : []) || [];
+
+                  // Optional match badge
+                  const matchBadge =
+                    candidate.match_type === 'exact' || candidate.is_strict_match
+                      ? 'Exact match'
+                      : candidate.match_type === 'close'
+                      ? 'Close match'
+                      : null;
 
                   return (
                     <article
@@ -273,6 +326,13 @@ export default function CandidateResults({
                               {/* ✅ Full name & role (no truncate) */}
                               <h4 className="mb-0.5 break-words text-lg font-bold text-foreground">{name}</h4>
                               <p className="break-words text-sm font-semibold text-[hsl(var(--g3))]">{jobRole}</p>
+                              {matchBadge && (
+                                <div className="mt-2">
+                                  <Badge>
+                                    <i className="ri-equalizer-line" /> {matchBadge}
+                                  </Badge>
+                                </div>
+                              )}
                             </div>
 
                             <div className="text-right">
@@ -317,12 +377,12 @@ export default function CandidateResults({
                                 {String(s)}
                               </span>
                             ))}
-                            {restCount > 0 && (
+                            {overflow > 0 && (
                               <span
                                 className="ml-1 whitespace-nowrap rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground"
-                                title={`${restCount} more skill${restCount === 1 ? '' : 's'}`}
+                                title={`${overflow} more skill${overflow === 1 ? '' : 's'}`}
                               >
-                                +{restCount}
+                                +{overflow}
                               </span>
                             )}
                           </div>

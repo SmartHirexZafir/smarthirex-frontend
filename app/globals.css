@@ -202,16 +202,22 @@
   .textarea { @apply input min-h-[120px]; }
   .select   { @apply input pr-9; }
 
+  /* NEW: Pills used on Candidate page */
+  .chip  { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs
+                   bg-[hsl(var(--muted)/.5)] text-[hsl(var(--muted-foreground))] ring-1 ring-border; }
+  .badge { @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs
+                   bg-[hsl(var(--secondary)/.18)] text-[hsl(var(--secondary))] ring-1 ring-[hsl(var(--secondary)/.35)]; }
+
   /* Cards / Panels */
   .card { @apply rounded-3xl bg-card text-card-foreground ring-1 ring-border overflow-hidden gradient-border transition-transform duration-300 ease-lux shadow-soft; }
   .card:hover { transform: translateY(-2px); }
   .panel { @apply rounded-3xl ring-1 ring-border bg-gradient-to-br from-[hsl(var(--card))] to-[hsl(var(--card)/.85)]; }
 
-  /* Modal */
-  .modal-backdrop { @apply fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in; }
+  /* Modal (raised above sticky navbar) */
+  .modal-backdrop { @apply fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in z-[60]; }
   .modal {
     @apply fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-           card p-6 shadow-lux max-w-lg w-[92vw] animate-rise-in;
+           card p-6 shadow-lux max-w-lg w-[92vw] animate-rise-in z-[70];
   }
 
   /* Nav */
@@ -246,6 +252,21 @@
   .animate-toast-progress { animation: toast-progress 3.2s linear forwards; }
 }
 
+/* ======= Reduced motion: tone down perpetual animations ======= */
+@media (prefers-reduced-motion: reduce) {
+  .animate-subtle-float,
+  .animate-pulse-float,
+  .animate-pulse-float-slow,
+  .animate-pulse-float-fast,
+  .animate-loading-bar,
+  .animate-spin-slow,
+  .animate-shimmer,
+  .skeleton {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
 /* ======= Plain CSS fallback (guaranteed visible aurora) ======= */
 /* Agar kisi wajah se Tailwind ki bg-image util apply na ho, yeh fallback phir bhi background dikha dega */
 body.page-aurora {
@@ -257,4 +278,12 @@ body.page-aurora {
   background-repeat: no-repeat;
   background-size: cover;
   background-attachment: fixed;
+}
+
+/* ======= Mobile/iOS tweak: avoid fixed-attachment jank ======= */
+@media (pointer: coarse) {
+  .page-aurora { background-attachment: scroll; }
+}
+@supports (-webkit-touch-callout: none) {
+  .page-aurora { background-attachment: scroll; }
 }

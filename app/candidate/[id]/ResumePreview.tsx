@@ -1,7 +1,14 @@
 // app/candidate/[id]/ResumePreview.tsx
 "use client";
 
-import React from "react";
+import React, { useMemo, useState } from "react";
+
+/* ===================== Config ===================== */
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_BASE ||
+  "http://localhost:10000"
+).replace(/\/$/, "");
 
 /* ===================== Types ===================== */
 type Education = {
@@ -36,15 +43,28 @@ type Resume = {
 
 type Candidate = {
   resume?: Resume;
-  skills?: string[];
-  matchedSkills?: string[];
 };
+
+/* ===================== Helpers ===================== */
+const isLong = (txt?: string, limit = 260) => !!txt && txt.length > limit;
+
+/** Normalize resume URL to absolute (backend may return relative path) */
+function toAbsoluteUrl(url?: string): string {
+  if (!url) return "";
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `${API_BASE}${trimmed.startsWith("/") ? trimmed : `/${trimmed}`}`;
+}
 
 /* ===================== Component ===================== */
 export default function ResumePreview({ candidate }: { candidate: Candidate }) {
   if (!candidate?.resume) return null;
 
   const { resume } = candidate;
+  const fileName = resume.filename || "Resume.pdf";
+
+  const openUrl = useMemo(() => toAbsoluteUrl(resume.url), [resume.url]);
 
   return (
     <div className="p-4">
@@ -53,44 +73,59 @@ export default function ResumePreview({ candidate }: { candidate: Candidate }) {
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-card-foreground">Resume Preview</h3>
 
-          {resume.url ? (
+          {/* Per requirement: open in browser (no refresh/download). */}
+          {openUrl ? (
             <a
-              href={resume.url}
+              href={openUrl}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="Download resume"
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-primary-foreground shadow-soft transition-all hover:shadow-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              aria-label="Open resume in browser"
+              title="Open resume in browser"
+              className="btn btn-primary"
             >
-              <i className="ri-download-line text-sm" aria-hidden />
-              <span className="text-sm">Download</span>
+              <i className="ri-external-link-line text-sm" aria-hidden />
+              <span className="text-sm">Open</span>
             </a>
           ) : null}
         </div>
 
-        <div className="rounded-xl border border-border bg-card/80 backdrop-blur-md p-3 shadow-soft">
+        {/* Clickable file tile also opens the resume */}
+        <a
+          href={openUrl || undefined}
+          target={openUrl ? "_blank" : undefined}
+          rel={openUrl ? "noopener noreferrer" : undefined}
+          className={`block rounded-xl border border-border bg-card/80 backdrop-blur-md p-3 shadow-soft transition ${
+            openUrl
+              ? "hover:shadow-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              : ""
+          }`}
+          aria-disabled={!openUrl}
+        >
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/15">
               <i className="ri-file-pdf-line text-lg text-destructive" aria-hidden />
             </div>
             <div>
-              <p className="text-sm font-medium text-card-foreground">
-                {resume.filename || "Resume.pdf"}
+              <p className="text-sm font-medium text-card-foreground">{fileName}</p>
+              <p className="text-xs text-muted-foreground">
+                {openUrl ? "Opens in a new tab" : "No file URL available"}
               </p>
-              <p className="text-xs text-muted-foreground">Uploaded via system</p>
             </div>
           </div>
-        </div>
+        </a>
       </div>
 
-      {/* Summary */}
+      {/* Professional Summary (show full text; no truncation) */}
       {resume.summary ? (
         <section className="mb-4">
           <h4 className="mb-2 text-base font-semibold text-card-foreground">
             Professional Summary
           </h4>
-          <p className="whitespace-pre-line rounded-xl bg-muted/40 p-3 text-sm leading-relaxed text-foreground/90 ring-1 ring-inset ring-border">
-            {resume.summary}
-          </p>
+          <div className="rounded-xl bg-muted/40 p-3 ring-1 ring-inset ring-border">
+            <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/90">
+              {resume.summary}
+            </p>
+          </div>
         </section>
       ) : null}
 
@@ -100,10 +135,7 @@ export default function ResumePreview({ candidate }: { candidate: Candidate }) {
           <h4 className="mb-2 text-base font-semibold text-card-foreground">Education</h4>
           <div className="space-y-2">
             {resume.education.map((edu: Education, index: number) => (
-              <div
-                key={index}
-                className="rounded-xl border border-border bg-card/70 p-3 backdrop-blur-md shadow-soft"
-              >
+              <div key={index} className="panel p-3 ring-1 ring-border/60">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h5 className="text-sm font-medium text-card-foreground">{edu.degree}</h5>
@@ -127,34 +159,13 @@ export default function ResumePreview({ candidate }: { candidate: Candidate }) {
         </section>
       ) : null}
 
-      {/* Work Experience */}
+      {/* Work Experience — small heading + details in a box + Read More if long */}
       {Array.isArray(resume.workHistory) && resume.workHistory.length > 0 ? (
         <section className="mb-4">
           <h4 className="mb-2 text-base font-semibold text-card-foreground">Work Experience</h4>
           <div className="space-y-3">
             {resume.workHistory.map((work: WorkItem, index: number) => (
-              <div
-                key={index}
-                className="rounded-r-xl border-l-4 border-primary bg-card/60 pl-3 py-2 backdrop-blur-md shadow-soft ring-1 ring-border"
-              >
-                <div className="mb-1 flex items-start justify-between">
-                  <div>
-                    <h5 className="text-sm font-medium text-card-foreground">{work.title}</h5>
-                    <p className="text-sm font-medium text-primary">{work.company}</p>
-                  </div>
-                  {work.duration ? (
-                    <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium text-foreground/90 ring-1 ring-inset ring-border">
-                      {work.duration}
-                    </span>
-                  ) : null}
-                </div>
-
-                {work.description ? (
-                  <p className="whitespace-pre-line text-xs text-foreground/80">
-                    {work.description}
-                  </p>
-                ) : null}
-              </div>
+              <WorkItemCard key={index} work={work} />
             ))}
           </div>
         </section>
@@ -162,46 +173,32 @@ export default function ResumePreview({ candidate }: { candidate: Candidate }) {
 
       {/* Projects */}
       {Array.isArray(resume.projects) && resume.projects.length > 0 ? (
-        <section className="mb-4">
+        <section className="mb-2">
           <h4 className="mb-2 text-base font-semibold text-card-foreground">Key Projects</h4>
           <div className="space-y-3">
             {resume.projects.map((project: string | ProjectObj, index: number) => {
               const isString = typeof project === "string";
-              const rawName = isString
-                ? (project as string)
-                : (project as ProjectObj)?.name || "Project";
+              const rawName = isString ? (project as string) : (project as ProjectObj)?.name || "Project";
 
               const displayName =
-                typeof rawName === "string" && rawName.length > 40
-                  ? `${rawName.slice(0, 40)}…`
-                  : rawName;
+                typeof rawName === "string" && rawName.length > 60 ? `${rawName.slice(0, 60)}…` : rawName;
 
-              const desc = isString
-                ? (project as string)
-                : (project as ProjectObj)?.description || "";
+              const desc = isString ? (project as string) : (project as ProjectObj)?.description || "";
 
               const tech = Array.isArray((project as ProjectObj)?.tech)
                 ? ((project as ProjectObj).tech as string[])
                 : [];
 
               return (
-                <div
-                  key={index}
-                  className="rounded-xl border border-border bg-card/70 p-3 backdrop-blur-md shadow-soft"
-                >
+                <div key={index} className="panel p-3 ring-1 ring-border/60">
                   <h5 className="mb-1 text-sm font-medium text-card-foreground">{displayName}</h5>
 
-                  {desc ? (
-                    <p className="mb-2 whitespace-pre-line text-xs text-foreground/80">{desc}</p>
-                  ) : null}
+                  {desc ? <p className="mb-2 whitespace-pre-line text-xs text-foreground/80">{desc}</p> : null}
 
                   {tech.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
                       {tech.map((t: string, i: number) => (
-                        <span
-                          key={`${t}-${i}`}
-                          className="rounded-full bg-secondary/15 px-2 py-1 text-xs font-medium text-secondary ring-1 ring-inset ring-secondary/25"
-                        >
+                        <span key={`${t}-${i}`} className="badge">
                           {t}
                         </span>
                       ))}
@@ -214,32 +211,72 @@ export default function ResumePreview({ candidate }: { candidate: Candidate }) {
         </section>
       ) : null}
 
-      {/* Skills */}
-      {Array.isArray(candidate.skills) && candidate.skills.length > 0 ? (
-        <section>
-          <h4 className="mb-2 text-base font-semibold text-card-foreground">Technical Skills</h4>
-          <div className="flex flex-wrap gap-2">
-            {candidate.skills.map((skill: string, index: number) => {
-              const matched =
-                Array.isArray(candidate.matchedSkills) &&
-                candidate.matchedSkills.includes(skill);
+      {/* NOTE: Per requirements, remove Technical Skills from this page.
+               Extracted skills should appear only in the Score & Analysis → Skills Overview section. */}
+    </div>
+  );
+}
 
-              return (
-                <span
-                  key={`${skill}-${index}`}
-                  className={`rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${
-                    matched
-                      ? "bg-success/15 text-success ring-success/30"
-                      : "bg-muted text-foreground/80 ring-border"
-                  }`}
-                >
-                  {skill}
-                  {matched && <i className="ri-check-line ml-1" aria-hidden />}
-                </span>
-              );
-            })}
+/* ===================== Subcomponents ===================== */
+
+function WorkItemCard({ work }: { work: WorkItem }) {
+  const [expanded, setExpanded] = useState(false);
+  const long = isLong(work.description);
+
+  return (
+    <div className="panel p-3 ring-1 ring-border/60">
+      {/* Small heading/title */}
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div>
+          <h5 className="text-sm font-medium text-card-foreground">{work.title}</h5>
+          <p className="text-sm font-medium text-primary">{work.company}</p>
+        </div>
+        {work.duration ? (
+          <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium text-foreground/90 ring-1 ring-inset ring-border">
+            {work.duration}
+          </span>
+        ) : null}
+      </div>
+
+      {/* Box with details + Read More toggle if content is long */}
+      {work.description ? (
+        <div className="relative">
+          <div
+            className={[
+              "whitespace-pre-line text-xs text-foreground/80 transition-all",
+              expanded ? "" : "max-h-24 overflow-hidden",
+            ].join(" ")}
+          >
+            {work.description}
           </div>
-        </section>
+
+          {!expanded && long ? (
+            <div className="pointer-events-none absolute inset-x-0 bottom-7 h-10 bg-gradient-to-t from-[hsl(var(--card)/.95)] to-transparent" />
+          ) : null}
+
+          {long ? (
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => setExpanded((s) => !s)}
+                className="btn btn-outline text-xs px-3 py-1.5"
+                aria-expanded={expanded}
+              >
+                {expanded ? (
+                  <>
+                    <i className="ri-arrow-up-s-line mr-1" aria-hidden />
+                    Show less
+                  </>
+                ) : (
+                  <>
+                    <i className="ri-arrow-down-s-line mr-1" aria-hidden />
+                    Read more
+                  </>
+                )}
+              </button>
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

@@ -1,7 +1,7 @@
 // app/candidate/[id]/CandidateDetail.tsx
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import CandidateProfile from "./CandidateProfile";
 import ResumePreview from "./ResumePreview";
@@ -17,7 +17,6 @@ const API_BASE = (
 
 /* ---------- helpers ---------- */
 async function safeJson(res: Response) {
-  // handle non-JSON / empty bodies gracefully
   const text = await res.text();
   try {
     return JSON.parse(text);
@@ -28,7 +27,12 @@ async function safeJson(res: Response) {
 
 function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("token");
+  return (
+    localStorage.getItem("token") ||
+    localStorage.getItem("authToken") ||
+    localStorage.getItem("access_token") ||
+    null
+  );
 }
 
 /* ---------- types ---------- */
@@ -38,6 +42,13 @@ type TabDef = {
   id: TabId;
   label: string;
   icon: string;
+};
+
+type Attempt = {
+  id: string;
+  submittedAt?: string;
+  score?: number;
+  pdfUrl?: string;
 };
 
 const TABS: TabDef[] = [
@@ -52,21 +63,22 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("profile");
 
-  const mountedAtRef = useRef<number>(Date.now()); // for short-lived polling
-  const pollingIdRef = useRef<number | null>(null);
+  // History state (from backend)
+  const [attempts, setAttempts] = useState<Attempt[] | null>(null);
+  const [attemptsLoading, setAttemptsLoading] = useState(false);
+  const [attemptsError, setAttemptsError] = useState<string | null>(null);
 
   const fetchCandidate = useCallback(async () => {
     try {
       setLoading(true);
 
-      // ✅ Build headers without union types
       const headers: Record<string, string> = { "Cache-Control": "no-cache" };
       const token = getAuthToken();
       if (token) headers.Authorization = `Bearer ${token}`;
 
       const res = await fetch(`${API_BASE}/candidate/${candidateId}`, {
         method: "GET",
-        headers, // typed as Record<string,string> => compatible with HeadersInit
+        headers,
       });
 
       if (res.status === 401) {
@@ -88,67 +100,81 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
     }
   }, [candidateId]);
 
+  // Fetch tests history for the History tab
+  const fetchAttempts = useCallback(async () => {
+    try {
+      setAttemptsLoading(true);
+      setAttemptsError(null);
+
+      const headers: Record<string, string> = { "Cache-Control": "no-cache" };
+      const token = getAuthToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const res = await fetch(`${API_BASE}/tests/history/${candidateId}`, {
+        method: "GET",
+        headers,
+      });
+
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error((data as any)?.detail || "Failed to fetch attempts");
+
+      const source = Array.isArray((data as any)?.attempts) ? (data as any).attempts : Array.isArray(data) ? data : [];
+      const norm: Attempt[] = source.map((a: any) => {
+        const rawScore = a.score ?? a.result_score ?? a.test_score;
+        const parsedScore =
+          typeof rawScore === "number"
+            ? Math.round(rawScore)
+            : typeof rawScore === "string" && !isNaN(parseFloat(rawScore))
+            ? Math.round(parseFloat(rawScore))
+            : undefined;
+
+        return {
+          id: String(a.id ?? a._id ?? a.attemptId ?? a.attempt_id ?? ""),
+          submittedAt: a.submittedAt ?? a.createdAt ?? a.created_at ?? a.timestamp,
+          score: parsedScore,
+          pdfUrl: a.pdfUrl ?? a.pdf_url ?? a.reportUrl ?? a.report_url,
+        };
+      });
+
+      setAttempts(norm);
+    } catch (err: any) {
+      setAttemptsError(err?.message || "Failed to load history");
+      setAttempts(null);
+    } finally {
+      setAttemptsLoading(false);
+    }
+  }, [candidateId]);
+
   // initial load
   useEffect(() => {
-    fetchCandidate();
+    void fetchCandidate();
   }, [fetchCandidate]);
 
-  // live auto-refresh (short window) to catch score updates soon after a test submission
+  // 🔕 No interval polling (prevents blink). Refresh on focus/visibility only.
   useEffect(() => {
-    // poll every 15s for up to 3 minutes after mount
-    const POLL_MS = 15000;
-    const MAX_MS = 3 * 60 * 1000;
-
-    function shouldPollNow() {
-      return Date.now() - mountedAtRef.current < MAX_MS;
-    }
-
-    if (pollingIdRef.current) {
-      window.clearInterval(pollingIdRef.current);
-      pollingIdRef.current = null;
-    }
-
-    if (shouldPollNow()) {
-      pollingIdRef.current = window.setInterval(() => {
-        if (!shouldPollNow()) {
-          if (pollingIdRef.current) {
-            window.clearInterval(pollingIdRef.current);
-            pollingIdRef.current = null;
-          }
-          return;
-        }
-        const score = Number(candidate?.test_score ?? 0);
-        if (!candidate || !Number.isFinite(score) || score === 0 || activeTab === "analysis") {
-          fetchCandidate();
-        }
-      }, POLL_MS) as any;
-    }
-
-    return () => {
-      if (pollingIdRef.current) {
-        window.clearInterval(pollingIdRef.current);
-        pollingIdRef.current = null;
+    const onFocusOrVisible = () => {
+      if (document.visibilityState === "visible") {
+        void fetchCandidate();
+        if (activeTab === "history") void fetchAttempts();
       }
     };
-  }, [candidate?.test_score, activeTab, fetchCandidate, candidate]);
-
-  // refresh when the tab becomes visible / regains focus (common after test completion)
-  useEffect(() => {
-    const onFocusOrVisible = () => fetchCandidate();
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") onFocusOrVisible();
-    };
     window.addEventListener("focus", onFocusOrVisible);
-    document.addEventListener("visibilitychange", onVisibility);
+    document.addEventListener("visibilitychange", onFocusOrVisible);
     return () => {
       window.removeEventListener("focus", onFocusOrVisible);
-      document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener("visibilitychange", onFocusOrVisible);
     };
-  }, [fetchCandidate]);
+  }, [fetchCandidate, fetchAttempts, activeTab]);
+
+  // Load history when switching to History tab
+  useEffect(() => {
+    if (activeTab === "history") {
+      void fetchAttempts();
+    }
+  }, [activeTab, fetchAttempts]);
 
   const handleStatusChange = async (newStatus: string) => {
     try {
-      // ✅ Build headers without union types
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
@@ -210,16 +236,26 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
   }
 
   const category = candidate.category || candidate.predicted_role || "Unknown";
-  const confidence =
-    candidate.confidence !== undefined ? `${Number(candidate.confidence).toFixed(2)}%` : "N/A";
   const matchReason =
     candidate.match_reason === "Prompt filtered" ? "Filtered by prompt" : "ML classified";
 
-  // fresh test score from backend (tests/submit updates parsed_resumes.test_score)
-  const testScore =
-    typeof candidate.test_score === "number" && Number.isFinite(candidate.test_score)
-      ? Math.round(candidate.test_score)
-      : null;
+  // helpers
+  const fmtDate = (iso?: string) => {
+    if (!iso) return "—";
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString();
+    } catch {
+      return iso;
+    }
+  };
+
+  const fullPdfUrl = (pdfUrl?: string) => {
+    if (!pdfUrl) return undefined;
+    return pdfUrl.startsWith("http")
+      ? pdfUrl
+      : `${API_BASE}${pdfUrl.startsWith("/") ? pdfUrl : `/${pdfUrl}`}`;
+  };
 
   return (
     <div className="min-h-screen">
@@ -245,35 +281,16 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                 </div>
               </div>
 
+              {/* RIGHT SIDE: Only keep Category + ML classified */}
               <div className="flex items-center gap-2 flex-wrap justify-end">
-                {Number(candidate?.rank) > 0 && (
-                  <div className="badge badge-primary">
-                    <i className="ri-medal-line mr-2" />
-                    Rank #{candidate.rank}
-                  </div>
-                )}
                 <div className="badge badge-info">
                   <i className="ri-briefcase-line mr-1" />
                   {category}
-                </div>
-                <div className="badge badge-warning">
-                  <i className="ri-flashlight-line mr-1" />
-                  {confidence}
                 </div>
                 <div className="badge badge-accent">
                   <i className="ri-compass-3-line mr-1" />
                   {matchReason}
                 </div>
-
-                {testScore !== null && (
-                  <div
-                    className="badge badge-success"
-                    title="Latest assessment score (MCQ percent)"
-                  >
-                    <i className="ri-checkbox-circle-line mr-1" />
-                    Score: {testScore}%
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -292,15 +309,15 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
 
           {/* Right Column */}
           <div className="lg:col-span-3 space-y-0">
-            {/* Tabs Header */}
+            {/* Tabs Header (themed) */}
             <div className="surface glass rounded-t-2xl border border-border/60 p-3">
               <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-xl">
+                <div className="tabs">
                   {TABS.map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
-                      className={`tab ${activeTab === tab.id ? "tab-active" : ""}`}
+                      className={`tab ${activeTab === tab.id ? "active" : ""}`}
                       aria-pressed={activeTab === tab.id}
                       aria-label={tab.label}
                       type="button"
@@ -310,57 +327,99 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                     </button>
                   ))}
                 </div>
-
-                {/* Quick manual refresh */}
-                <button
-                  onClick={fetchCandidate}
-                  className="btn btn-ghost"
-                  title="Refresh candidate"
-                  type="button"
-                >
-                  <i className="ri-refresh-line mr-1" />
-                  Refresh
-                </button>
+                {/* No manual refresh button (prevents blink) */}
               </div>
             </div>
 
             {/* Tab Panels */}
             <div className="surface glass rounded-b-2xl border-x border-b border-border/60">
               {activeTab === "profile" && <ResumePreview candidate={candidate} />}
+
               {activeTab === "analysis" && <ScoreAnalysis candidate={candidate} detailed />}
 
               {activeTab === "history" && (
                 <div className="p-4">
                   <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">Interaction History</h3>
-                    <button
-                      onClick={fetchCandidate}
-                      className="btn btn-ghost"
-                      title="Refresh history"
-                      type="button"
-                    >
-                      <i className="ri-refresh-line mr-1" />
-                      Refresh
-                    </button>
+                    <h3 className="text-lg font-semibold">Test History</h3>
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 rounded-xl bg-info/10 border border-info/20">
-                      <i className="ri-eye-line text-info" />
-                      <div>
-                        <p className="text-sm font-medium">Profile viewed</p>
-                        <p className="text-xs text-muted-foreground">Just now</p>
+                  {/* Loading state */}
+                  {attemptsLoading && (
+                    <div className="space-y-3">
+                      {[0, 1, 2].map((i) => (
+                        <div key={i} className="animate-loading-bar rounded-xl border border-border p-3">
+                          <div className="h-5 w-40 skeleton mb-2" />
+                          <div className="h-4 w-24 skeleton" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Error state */}
+                  {attemptsError && !attemptsLoading && (
+                    <div className="rounded-xl bg-[hsl(var(--destructive)/0.1)] border border-[hsl(var(--destructive)/0.25)] p-3">
+                      <div className="flex items-center gap-2 text-[hsl(var(--destructive))]">
+                        <i className="ri-error-warning-line" />
+                        <span className="text-sm">{attemptsError}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 p-3 rounded-xl bg-success/10 border border-success/20">
-                      <i className="ri-upload-line text-success" />
-                      <div>
-                        <p className="text-sm font-medium">Resume uploaded</p>
-                        <p className="text-xs text-muted-foreground">From database</p>
-                      </div>
+                  )}
+
+                  {/* Empty state */}
+                  {!attemptsLoading && !attemptsError && Array.isArray(attempts) && attempts.length === 0 && (
+                    <div className="rounded-xl bg-muted/30 border border-border p-4">
+                      <p className="text-sm text-muted-foreground">
+                        No test attempts found for this candidate yet.
+                      </p>
                     </div>
-                    {/* TODO: append dynamic items from history API here later */}
-                  </div>
+                  )}
+
+                  {/* Attempts list */}
+                  {!attemptsLoading && !attemptsError && Array.isArray(attempts) && attempts.length > 0 && (
+                    <div className="space-y-3">
+                      {attempts.map((a) => {
+                        const pdf = fullPdfUrl(a.pdfUrl);
+                        return (
+                          <div
+                            key={a.id}
+                            className="flex items-center justify-between gap-3 p-3 rounded-xl bg-card/70 border border-border backdrop-blur-md"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-info/10">
+                                <i className="ri-clipboard-line text-[hsl(var(--info))]" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium">
+                                  Attempt <span className="text-muted-foreground">#{a.id.slice(-6)}</span>
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Submitted: {fmtDate(a.submittedAt)}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="badge">
+                                Score: {typeof a.score === "number" ? `${a.score}%` : "N/A"}
+                              </span>
+                              {pdf ? (
+                                <a
+                                  href={pdf}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="btn btn-outline text-xs px-3 py-1.5"
+                                  title="Open PDF report"
+                                >
+                                  <i className="ri-file-pdf-line mr-1" />
+                                  Report
+                                </a>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

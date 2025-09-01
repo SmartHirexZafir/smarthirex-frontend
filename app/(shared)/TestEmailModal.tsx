@@ -1,4 +1,6 @@
 // app/(shared)/TestEmailModal.tsx
+// Uses modal + button + input utilities defined in globals.css.
+
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -46,7 +48,7 @@ function defaultBodyHTML(name?: string, role?: string) {
   <a href="{TEST_LINK}">{TEST_LINK}</a>
 </p>
 <p>Good luck!<br/>SmartHirex Team</p>
-`.trim();
+  `.trim();
 }
 
 // clamp helper for question count
@@ -64,7 +66,8 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
 
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sentInfo, setSentInfo] = useState<null | { test_link: string; email: string }>(null);
+  const [sentInfo, setSentInfo] =
+    useState<null | { test_link: string; email: string }>(null);
 
   const role = useMemo(() => candidate?.job_role || "Role", [candidate]);
 
@@ -150,7 +153,11 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
       setSentInfo({ test_link: data.test_link, email: data.email });
     } catch (err: any) {
       const aborted = err?.name === "AbortError";
-      setError(aborted ? "Request timed out. Please try again." : err?.message || "Failed to send email.");
+      setError(
+        aborted
+          ? "Request timed out. Please try again."
+          : err?.message || "Failed to send email."
+      );
     } finally {
       window.clearTimeout(timeout);
       setSending(false);
@@ -158,46 +165,54 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
   }
 
   const canSend =
-    !sending && !!to && !!subject.trim() && !!bodyHtml.trim() && questionCount >= 1 && questionCount <= 50;
+    !sending &&
+    !!to &&
+    !!subject.trim() &&
+    !!bodyHtml.trim() &&
+    questionCount >= 1 &&
+    questionCount <= 50;
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+      className="modal-backdrop"
       onClick={handleBackdropClick}
       aria-modal="true"
       role="dialog"
     >
-      {/* Card */}
-      <div className="w-full max-w-2xl rounded-2xl overflow-hidden shadow-glow ring-1 ring-border surface glass">
+      {/* Modal Card (uses .modal from globals.css) */}
+      <div className="modal !max-w-2xl">
         {/* Header */}
-        <div className="relative border-b border-border px-6 py-4">
+        <div className="relative border-b border-border pb-4">
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-white flex items-center justify-center shadow-glow">
               <i className="ri-mail-send-line text-base" aria-hidden />
             </div>
-            <h3 className="text-lg font-semibold">Send Test</h3>
+            <div>
+              <h3 className="text-lg font-semibold leading-tight">Send Test</h3>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                Email an assessment link to the candidate.
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="absolute right-2 top-2 icon-btn"
+            className="absolute right-0 top-0 icon-btn"
             aria-label="Close"
             disabled={sending}
+            title="Close"
           >
             <i className="ri-close-line" />
           </button>
         </div>
 
         {/* Body */}
-        <form onSubmit={handleSend} className="space-y-5 p-6">
+        <form onSubmit={handleSend} className="space-y-5 pt-5">
           {/* To (read-only, derived from candidate) */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-muted-foreground">To</label>
-            <input
-              type="email"
-              value={to}
-              readOnly
-              className="w-full rounded-xl bg-muted/50 text-foreground px-3 py-2 text-sm ring-1 ring-inset ring-border focus:outline-none"
-            />
+            <label className="mb-1 block text-sm font-medium text-muted-foreground">
+              To
+            </label>
+            <input type="email" value={to} readOnly className="input bg-muted/40" />
             {!to && (
               <p className="mt-1 text-xs text-destructive">
                 No email found on candidate profile. Add email to continue.
@@ -207,13 +222,15 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
 
           {/* Subject */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-muted-foreground">Subject</label>
+            <label className="mb-1 block text-sm font-medium text-muted-foreground">
+              Subject
+            </label>
             <input
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               placeholder="Your assessment invitation"
-              className="w-full rounded-xl bg-background px-3 py-2 text-sm ring-1 ring-inset ring-border focus:outline-none focus:ring-2 focus:ring-primary"
+              className="input"
             />
           </div>
 
@@ -223,7 +240,9 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
               <label className="mb-1 block text-sm font-medium text-muted-foreground">
                 Number of questions
               </label>
-              <span className="text-xs text-muted-foreground/80">1–50 (default 4)</span>
+              <span className="text-xs text-muted-foreground/80">
+                1–50 (default 4)
+              </span>
             </div>
             <input
               type="number"
@@ -231,27 +250,34 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
               max={50}
               step={1}
               value={questionCount}
-              onChange={(e) => setQuestionCount(clampQuestionCount(Number(e.target.value)))}
-              className="w-36 rounded-xl bg-background px-3 py-2 text-sm ring-1 ring-inset ring-border focus:outline-none focus:ring-2 focus:ring-primary"
+              onChange={(e) =>
+                setQuestionCount(clampQuestionCount(Number(e.target.value)))
+              }
+              className="input w-40"
             />
             {questionCount < 1 || questionCount > 50 ? (
-              <p className="mt-1 text-xs text-destructive">Please choose between 1 and 50.</p>
+              <p className="mt-1 text-xs text-destructive">
+                Please choose between 1 and 50.
+              </p>
             ) : null}
           </div>
 
           {/* Body (HTML) */}
           <div>
             <div className="mb-1 flex items-center justify-between">
-              <label className="block text-sm font-medium text-muted-foreground">Message (HTML)</label>
+              <label className="block text-sm font-medium text-muted-foreground">
+                Message (HTML)
+              </label>
               <span className="text-xs text-muted-foreground">
-                Use <code className="rounded bg-muted/60 px-1">{`{TEST_LINK}`}</code> where the link should appear
+                Use <code className="rounded bg-muted/60 px-1">{"{TEST_LINK}"}</code>{" "}
+                where the link should appear
               </span>
             </div>
             <textarea
               value={bodyHtml}
               onChange={(e) => setBodyHtml(e.target.value)}
               placeholder={`Hi ${candidate.name || "there"},\n\nClick {TEST_LINK} to begin…`}
-              className="h-44 w-full rounded-xl bg-background px-3 py-2 text-sm font-mono ring-1 ring-inset ring-border focus:outline-none focus:ring-2 focus:ring-primary"
+              className="textarea h-44 font-mono"
             />
           </div>
 
@@ -270,16 +296,17 @@ export default function TestEmailModal({ open, onClose, candidate }: Props) {
               </div>
               <div className="mt-1 break-all">
                 Test link:{" "}
-                <a className="underline text-primary" href={sentInfo.test_link} target="_blank" rel="noreferrer">
+                <a
+                  className="underline text-primary"
+                  href={sentInfo.test_link}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   {sentInfo.test_link}
                 </a>
               </div>
               <div className="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="btn btn-ghost"
-                >
+                <button type="button" onClick={onClose} className="btn btn-ghost">
                   Close
                 </button>
               </div>

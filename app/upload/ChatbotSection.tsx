@@ -11,14 +11,12 @@ type ChatResultOk = { kind: 'ok'; data: any };
 type ChatResultUnauth = { kind: 'unauth' };
 type ChatResultError = { kind: 'error'; status?: number; message: string; data?: any };
 type ChatResultNetwork = { kind: 'network'; message: string };
-
 type ChatResult = ChatResultOk | ChatResultUnauth | ChatResultError | ChatResultNetwork;
 
 /* ---------------------------
    Normalization (frontend)
 ---------------------------- */
 const SYNONYMS: Record<string, string> = {
-  // tech
   js: 'javascript',
   ts: 'typescript',
   reactjs: 'react',
@@ -30,7 +28,6 @@ const SYNONYMS: Record<string, string> = {
   sklearn: 'scikit',
   'sk-learn': 'scikit',
   k8s: 'kubernetes',
-  // roles/areas
   ml: 'machine learning',
   ai: 'artificial intelligence',
   cv: 'computer vision',
@@ -39,7 +36,6 @@ const SYNONYMS: Record<string, string> = {
   be: 'backend',
   fullstack: 'full-stack',
 };
-
 const PLURAL_SINGULAR: Record<string, string> = {
   developers: 'developer',
   engineers: 'engineer',
@@ -50,64 +46,39 @@ const PLURAL_SINGULAR: Record<string, string> = {
   architects: 'architect',
   candidates: 'candidate',
 };
-
 const STOPWORDS = new Set([
-  'show',
-  'find',
-  'me',
-  'with',
-  'and',
-  'in',
-  'of',
-  'for',
-  'to',
-  'a',
-  'an',
-  'the',
-  'please',
-  'pls',
-  'candidate',
-  'candidates',
-  'experience',
-  'years',
-  'based',
-  'developer',
-  'developers',
-  'engineer',
-  'engineers',
-  'scientist',
-  'scientists',
-  'designer',
-  'designers',
-  'manager',
-  'managers',
+  'show','find','me','with','and','in','of','for','to','a','an','the','please','pls',
+  'candidate','candidates','experience','years','based',
+  'developer','developers','engineer','engineers','scientist','scientists','designer','designers','manager','managers'
 ]);
 
 function normalizePrompt(raw: string) {
   let s = (raw || '').toLowerCase().trim().replace(/\s+/g, ' ');
-
-  // plural -> singular
-  for (const [pl, sg] of Object.entries(PLURAL_SINGULAR)) {
-    s = s.replace(new RegExp(`\\b${pl}\\b`, 'g'), sg);
-  }
-  // synonyms
-  for (const [k, v] of Object.entries(SYNONYMS)) {
-    s = s.replace(new RegExp(`\\b${k}\\b`, 'g'), v);
-  }
-
+  for (const [pl, sg] of Object.entries(PLURAL_SINGULAR)) s = s.replace(new RegExp(`\\b${pl}\\b`, 'g'), sg);
+  for (const [k, v] of Object.entries(SYNONYMS)) s = s.replace(new RegExp(`\\b${k}\\b`, 'g'), v);
   const cleaned = s.replace(/[^a-z0-9+ ]/g, ' ').replace(/\s+/g, ' ').trim();
   const tokens = cleaned.split(' ').filter(Boolean);
   const keywords: string[] = [];
   const seen = new Set<string>();
   for (const t of tokens) {
-    if (!STOPWORDS.has(t) && !seen.has(t)) {
-      seen.add(t);
-      keywords.push(t);
-    }
+    if (!STOPWORDS.has(t) && !seen.has(t)) { seen.add(t); keywords.push(t); }
   }
   const isRoleLike = cleaned.split(' ').length <= 4;
   return { normalized_prompt: s, keywords, isRoleLike };
 }
+
+/* ---------------------------
+   Filter menu (checkboxes)
+---------------------------- */
+type FilterKey = 'role' | 'skills' | 'location' | 'projects' | 'experience' | 'cv';
+const FILTERS: { key: FilterKey; label: string; icon: string }[] = [
+  { key: 'role',       label: 'Job Role',             icon: 'ri-id-card-line' },
+  { key: 'skills',     label: 'Skills',               icon: 'ri-star-line' },
+  { key: 'location',   label: 'Location',             icon: 'ri-map-pin-2-line' },
+  { key: 'projects',   label: 'Projects',             icon: 'ri-folder-3-line' },
+  { key: 'experience', label: 'Experience',           icon: 'ri-briefcase-2-line' },
+  { key: 'cv',         label: 'CV Content Matching',  icon: 'ri-file-text-line' },
+];
 
 export default function ChatbotSection({
   onPromptSubmit,
@@ -118,56 +89,42 @@ export default function ChatbotSection({
   isProcessing: boolean;
   activePrompt: string;
 }) {
-  // 🚫 SSR timestamp avoided: start with empty timestamp, fill on client
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
       id: 1,
       type: 'bot',
-      content:
-        "Hi! I'm your AI recruiting assistant. Try asking me something like 'Show me candidates with React and Django experience'",
-      timestamp: '', // <-- no timestamp on the server
+      content: "Hi! I'm your AI recruiting assistant. Type your query and choose filters below to control what is matched (e.g., Job Role + Experience).",
+      timestamp: '',
     },
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [selected, setSelected] = useState<FilterKey[]>([]); // preserves order of selection
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 🔔 lightweight in-component toast (auto hides in 3s)
+  // lightweight toast
   const [toast, setToast] = useState<{ show: boolean; msg: string; tone: 'info' | 'warning' | 'success' | 'error' }>(
     { show: false, msg: '', tone: 'info' }
   );
-
   useEffect(() => {
     if (!toast.show) return;
     const t = window.setTimeout(() => setToast({ show: false, msg: '', tone: 'info' }), 3000);
     return () => window.clearTimeout(t);
   }, [toast.show]);
 
-  const suggestedPrompts = [
-    'Show me candidates with React + Django experience',
-    'Find frontend developer with 3+ years experience',
-    'Show Python developer in San Francisco',
-    'Find candidates with Machine Learning skills',
-    'Show full-stack developer with AWS experience',
-    'Find UI/UX designer with Figma skills',
-  ];
-
   const formatTime = () => new Date().toLocaleTimeString();
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  useEffect(() => setMessages((prev) => prev.map((m) => (m.timestamp ? m : { ...m, timestamp: formatTime() }))), []);
+  useEffect(() => { scrollToBottom(); }, [messages]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // checkbox change (preserve selection order; remove on uncheck)
+  const toggleFilter = (k: FilterKey) => {
+    setSelected((prev) => {
+      if (prev.includes(k)) return prev.filter((x) => x !== k);
+      return [...prev, k];
+    });
   };
-
-  // 🔒 After mount, inject timestamp for any empty ones (prevents SSR/CSR mismatch)
-  useEffect(() => {
-    setMessages((prev) => prev.map((m) => (m.timestamp ? m : { ...m, timestamp: formatTime() })));
-  }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // ---- helpers --------------------------------------------------------------
 
   async function postJSON(url: string, body: any, token: string | null) {
     const resp = await fetch(url, {
@@ -184,59 +141,38 @@ export default function ChatbotSection({
   }
 
   async function callChatbot(prompt: string, token: string | null): Promise<ChatResult> {
-    // client-side normalization (aligned with backend)
     const norm = normalizePrompt(prompt);
     const payload = {
       prompt,
       normalized_prompt: norm.normalized_prompt,
       keywords: norm.keywords,
+      selected_filters: selected, // 👈 send in order
     };
-
-    // try these in order; continue on 404/network
     const paths = ['/chatbot/query', '/query'];
     for (const p of paths) {
       try {
         const url = `${API_BASE}${p}`;
         const resp = await postJSON(url, payload, token);
         const status = resp.status;
-
-        if (status === 401) {
-          return { kind: 'unauth' };
-        }
-
-        // Read text first so we can safely JSON-parse (even if empty)
+        if (status === 401) return { kind: 'unauth' };
         const text = await resp.text();
         let data: any = null;
-        try {
-          data = text ? JSON.parse(text) : null;
-        } catch {
-          data = null; // invalid JSON → treat as plain text
-        }
-
+        try { data = text ? JSON.parse(text) : null; } catch { data = null; }
         if (!resp.ok) {
-          // On 404, try next path silently
           if (status === 404) continue;
-
           const message =
             (data && (data.detail || data.message)) ||
             (text && text.trim()) ||
             `Request failed (${status})`;
           return { kind: 'error', status, message, data };
         }
-
-        // OK
         return { kind: 'ok', data: data ?? {} };
-      } catch (_e) {
-        // network error → try next path
+      } catch {
         continue;
       }
     }
-
-    // If we reach here, all attempts failed due to 404s or network
     return { kind: 'network', message: 'Network error or endpoint not reachable' };
   }
-
-  // --------------------------------------------------------------------------
 
   const handleSubmit = async (prompt = inputValue.trim()) => {
     if (!prompt) return;
@@ -245,62 +181,42 @@ export default function ChatbotSection({
       id: Date.now(),
       type: 'user',
       content: prompt,
-      timestamp: formatTime(), // client-only
+      timestamp: formatTime(),
     };
-
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsTyping(true);
 
-    // ✅ Immediately clear old candidates & show loader in parent
+    // clear old candidates & show loader in parent
     onPromptSubmit(prompt, []); // START — loader ON
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     const result = await callChatbot(prompt, token);
 
-    // handle result types (no throwing → no blank "{}" console errors)
     if (result.kind === 'unauth') {
       setMessages((prev) => [
         ...prev,
-        {
-          id: Date.now() + 1,
-          type: 'bot',
-          content: 'You are not logged in or your session expired. Please log in again.',
-          timestamp: formatTime(),
-        },
+        { id: Date.now() + 1, type: 'bot', content: 'You are not logged in or your session expired. Please log in again.', timestamp: formatTime() },
       ]);
       onPromptSubmit(prompt, []); // FINISH — loader OFF
       setIsTyping(false);
       return;
     }
-
     if (result.kind === 'network') {
       setMessages((prev) => [
         ...prev,
-        {
-          id: Date.now() + 2,
-          type: 'bot',
-          content:
-            "Sorry, I couldn't reach the server. Please check your API URL or CORS settings.",
-          timestamp: formatTime(),
-        },
+        { id: Date.now() + 2, type: 'bot', content: "Sorry, I couldn't reach the server. Please check your API URL or CORS settings.", timestamp: formatTime() },
       ]);
       setToast({ show: true, msg: result.message, tone: 'error' });
       onPromptSubmit(prompt, []); // FINISH — loader OFF
       setIsTyping(false);
       return;
     }
-
     if (result.kind === 'error') {
       const msg = result.message || `Server error (${result.status || 'unknown'})`;
       setMessages((prev) => [
         ...prev,
-        {
-          id: Date.now() + 3,
-          type: 'bot',
-          content: `Sorry, I couldn't process your request: ${msg}`,
-          timestamp: formatTime(),
-        },
+        { id: Date.now() + 3, type: 'bot', content: `Sorry, I couldn't process your request: ${msg}`, timestamp: formatTime() },
       ]);
       setToast({ show: true, msg: 'Server error while processing your request.', tone: 'error' });
       onPromptSubmit(prompt, []); // FINISH — loader OFF
@@ -308,30 +224,19 @@ export default function ChatbotSection({
       return;
     }
 
-    // kind === 'ok'
     const data = result.data || {};
-
-    // ✅ Handle special case: no CV uploaded — also finish loader
     if (data?.no_cvs_uploaded === true || data?.message === 'no_cvs_uploaded') {
       setMessages((prev) => [
         ...prev,
-        {
-          id: Date.now() + 4,
-          type: 'bot',
-          content: 'There is no CV uploaded from your side.',
-          timestamp: formatTime(),
-        },
+        { id: Date.now() + 4, type: 'bot', content: 'There is no CV uploaded from your side.', timestamp: formatTime() },
       ]);
-      try {
-        window.dispatchEvent(new CustomEvent('shx:no-cvs', { detail: { prompt } }));
-      } catch {}
+      try { window.dispatchEvent(new CustomEvent('shx:no-cvs', { detail: { prompt } })); } catch {}
       setToast({ show: true, msg: 'No CVs found. Please upload resumes first.', tone: 'warning' });
       onPromptSubmit(prompt, []); // FINISH — loader OFF
       setIsTyping(false);
       return;
     }
 
-    // --- Build standardized reply ---
     const list = Array.isArray(data.resumes_preview) ? data.resumes_preview : [];
     const total = typeof data?.matchMeta?.total === 'number' ? data.matchMeta.total : list.length;
     const q = (data?.normalized_prompt || prompt || '').toString().trim();
@@ -340,36 +245,25 @@ export default function ChatbotSection({
       `Showing ${total} result${total === 1 ? '' : 's'} for your query.` +
       (q ? `\nQuery: "${q}"` : '');
 
-    const botMessage: ChatMsg = {
-      id: Date.now() + 5,
-      type: 'bot',
-      content: standardizedReply,
-      timestamp: formatTime(),
-    };
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now() + 5, type: 'bot', content: standardizedReply, timestamp: formatTime() },
+    ]);
 
-    setMessages((prev) => [...prev, botMessage]);
-
-    // 🔕 Inform on zero results as well, but DO finish the loader
     if (data?.no_results === true || total === 0) {
       setToast({ show: true, msg: 'No matching candidates found for your query.', tone: 'info' });
-      try {
-        window.dispatchEvent(new CustomEvent('shx:no-results', { detail: { prompt } }));
-      } catch {}
+      try { window.dispatchEvent(new CustomEvent('shx:no-results', { detail: { prompt } })); } catch {}
       onPromptSubmit(prompt, []); // FINISH — loader OFF (empty results)
       setIsTyping(false);
       return;
     }
 
-    // ✅ Deliver fresh results to parent (FINISH — loader OFF via parent)
-    onPromptSubmit(prompt, list);
+    onPromptSubmit(prompt, list); // FINISH — loader OFF via parent
     setIsTyping(false);
   };
 
   return (
-    <section
-      className="card-glass relative overflow-hidden animate-rise-in"
-      aria-labelledby="ai-assistant-title"
-    >
+    <section className="card-glass relative overflow-hidden animate-rise-in" aria-labelledby="ai-assistant-title">
       {/* Ambient overlays */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute inset-0 opacity-[0.06] gradient-ink" />
@@ -379,34 +273,100 @@ export default function ChatbotSection({
       <div className="relative z-10">
         {/* Header */}
         <header className="border-b border-border bg-gradient-to-r from-[hsl(var(--muted)/.5)] to-[hsl(var(--muted)/.35)] px-6 py-6">
-          <div className="flex items-center justify-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] flex items-center justify-center text-white shadow-glow">
-              <i className="ri-robot-line text-2xl" />
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] flex items-center justify-center text-white shadow-glow">
+                <i className="ri-robot-line text-2xl" />
+              </div>
+              <div>
+                <h3 id="ai-assistant-title" className="text-2xl md:text-3xl font-extrabold gradient-text glow">
+                  AI Assistant
+                </h3>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  Ask me to find specific candidates for your needs
+                </p>
+              </div>
             </div>
-            <div className="text-center">
-              <h3 id="ai-assistant-title" className="text-2xl md:text-3xl font-extrabold gradient-text glow">
-                AI Assistant
-              </h3>
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                Ask me to find specific candidates for your needs
-              </p>
+
+            {/* Filter dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                className="surface glass border border-border rounded-xl px-4 py-2 text-sm flex items-center gap-2 hover:shadow-glow"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+              >
+                <i className="ri-filter-3-line" />
+                Filters
+                {selected.length > 0 && (
+                  <span className="ml-1 inline-flex items-center justify-center rounded-full bg-[hsl(var(--primary))] text-white text-[10px] px-2 py-0.5">
+                    {selected.length}
+                  </span>
+                )}
+              </button>
+
+              {menuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 mt-2 w-64 rounded-2xl border border-border surface glass shadow-xl p-2 z-50"
+                >
+                  <div className="p-2 text-xs text-[hsl(var(--muted-foreground))]">Select one or more categories</div>
+                  <div className="divide-y divide-border/60">
+                    {FILTERS.map((f) => {
+                      const checked = selected.includes(f.key);
+                      return (
+                        <label
+                          key={f.key}
+                          className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-[hsl(var(--muted)/.35)] rounded-xl"
+                        >
+                          {/* custom checkbox */}
+                          <input
+                            type="checkbox"
+                            className="sr-only"
+                            checked={checked}
+                            onChange={() => toggleFilter(f.key)}
+                          />
+                          <span
+                            className={[
+                              "h-5 w-5 rounded-md border flex items-center justify-center transition",
+                              checked
+                                ? "bg-[hsl(var(--primary))] border-[hsl(var(--primary))] text-white shadow-glow"
+                                : "bg-transparent border-border text-transparent",
+                            ].join(' ')}
+                            aria-hidden="true"
+                          >
+                            <i className="ri-check-line text-[14px]" />
+                          </span>
+                          <i className={`${f.icon} text-[hsl(var(--muted-foreground))]`} />
+                          <span className="text-sm text-foreground">{f.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center justify-between px-3 pt-2">
+                    <button
+                      onClick={() => setSelected([])}
+                      className="text-xs text-[hsl(var(--muted-foreground))] hover:text-foreground"
+                    >
+                      Clear all
+                    </button>
+                    <button
+                      onClick={() => setMenuOpen(false)}
+                      className="btn btn-primary btn-sm"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="w-3 h-3 rounded-full bg-[hsl(var(--success))] animate-pulse" />
           </div>
         </header>
 
         {/* Messages */}
-        <div
-          className="px-6 py-6 space-y-4 max-h-96 overflow-y-auto"
-          role="log"
-          aria-live="polite"
-          aria-relevant="additions"
-        >
+        <div className="px-6 py-6 space-y-4 max-h-96 overflow-y-auto" role="log" aria-live="polite" aria-relevant="additions">
           {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
+            <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
                 className={[
                   'max-w-xs lg:max-w-md px-4 py-3 rounded-2xl transition-all duration-300',
@@ -437,14 +397,8 @@ export default function ChatbotSection({
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1">
                     <span className="w-2 h-2 rounded-full bg-[hsl(var(--muted-foreground))] animate-bounce" />
-                    <span
-                      className="w-2 h-2 rounded-full bg-[hsl(var(--muted-foreground))] animate-bounce"
-                      style={{ animationDelay: '0.1s' }}
-                    />
-                    <span
-                      className="w-2 h-2 rounded-full bg-[hsl(var(--muted-foreground))] animate-bounce"
-                      style={{ animationDelay: '0.2s' }}
-                    />
+                    <span className="w-2 h-2 rounded-full bg-[hsl(var(--muted-foreground))] animate-bounce" style={{ animationDelay: '0.1s' }} />
+                    <span className="w-2 h-2 rounded-full bg-[hsl(var(--muted-foreground))] animate-bounce" style={{ animationDelay: '0.2s' }} />
                   </div>
                   <span className="text-xs text-[hsl(var(--muted-foreground))]">AI is thinking...</span>
                 </div>
@@ -454,25 +408,7 @@ export default function ChatbotSection({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Suggested Prompts */}
-        <div className="px-6 pb-5">
-          <p className="mb-3 text-center text-sm text-[hsl(var(--muted-foreground))]">
-            💡 Try these suggestions:
-          </p>
-          <div className="flex flex-wrap justify-center gap-2">
-            {suggestedPrompts.slice(0, 4).map((prompt, index) => (
-              <button
-                key={index}
-                onClick={() => handleSubmit(prompt)}
-                className="surface glass border border-border rounded-full px-4 py-2 text-sm text-foreground hover:shadow-glow transition-all duration-200"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Input */}
+        {/* Input (no hardcoded suggestions) */}
         <div className="border-t border-border bg-gradient-to-r from-[hsl(var(--muted)/.4)] to-[hsl(var(--muted)/.25)] px-6 py-6">
           <div className="flex gap-4">
             <input
@@ -499,6 +435,19 @@ export default function ChatbotSection({
               )}
             </button>
           </div>
+          {/* selected filter tags preview */}
+          {selected.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {selected.map((k) => {
+                const f = FILTERS.find((x) => x.key === k)!;
+                return (
+                  <span key={k} className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground">
+                    <i className={`${f.icon}`} /> {f.label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

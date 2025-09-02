@@ -10,6 +10,7 @@ type Candidate = {
   predicted_role?: string;
   category?: string;
   currentRole?: string;
+  ml_predicted_role?: string; // ✅ use ML role as fallback under the name
 
   // Experience fields (multiple aliases)
   experience?: number | string;
@@ -23,13 +24,18 @@ type Candidate = {
   experience_rounded?: number;   // e.g. 2.0, 0.5
 
   location?: string;
+
+  // Prefer new ml_confidence if present (added)
+  ml_confidence?: number;
   confidence?: number;
+
+  // ✅ Additive from ml_interface
+  role_prediction_score?: number;  // prefer when available
   semantic_score?: number;
   final_score?: number;
   score_type?: string;
   skills?: string[];
 
-  // ✅ Additive from ml_interface
   skillsTruncated?: string[];
   skillsOverflowCount?: number;
 
@@ -64,6 +70,18 @@ export default function CandidateResults({
   };
   const clamp2 = (n?: number | null) =>
     typeof n === 'number' && Number.isFinite(n) ? n.toFixed(2) : undefined;
+
+  // Treat these strings as "empty"/not usable for display
+  const isBadText = (s?: string | null) => {
+    const t = String(s ?? '').trim().toLowerCase();
+    return !t || t === 'n/a' || t === 'na' || t === 'none' || t === '-' || t === 'unknown' || t === 'not specified';
+  };
+  const pickFirstGood = (...vals: (string | undefined | null)[]) => {
+    for (const v of vals) {
+      if (!isBadText(v)) return String(v).trim();
+    }
+    return '';
+  };
 
   // ✅ experience formatter (fallback if display fields not provided)
   const formatYears = (v: any): string => {
@@ -248,9 +266,27 @@ export default function CandidateResults({
                   const id = String(candidate._id ?? candidate.id);
                   const name = safeName(candidate.name);
 
-                  // Role line: show complete, no truncation
-                  const jobRole =
-                    candidate.predicted_role || candidate.category || candidate.currentRole || 'Unknown Role';
+                  // Related roles: accept both shapes (computed early so we can use as fallback)
+                  const relatedRoles =
+                    (Array.isArray(candidate.related_roles) && candidate.related_roles.length > 0
+                      ? candidate.related_roles.map((r) => ({ role: r.role, match: r.match }))
+                      : Array.isArray(candidate.relatedRoles)
+                      ? candidate.relatedRoles.map((r) => ({
+                          role: r.role,
+                          match: typeof r.score === 'number' ? r.score * 100 : undefined,
+                        }))
+                      : []) || [];
+
+                  // ✅ Role line: prefer predicted role (model/parser), then other mapped fields, then ML fallback.
+                  const roleCore =
+                    pickFirstGood(
+                      candidate.predicted_role,
+                      candidate.category,
+                      candidate.currentRole,
+                      (candidate as any).ml_predicted_role,
+                      relatedRoles[0]?.role
+                    ) || '';
+                  const roleLine = roleCore ? `(${roleCore})` : ''; // show in parentheses under the name
 
                   // Prefer clean experience display from backend if present
                   const expDisplayFromBackend =
@@ -262,48 +298,31 @@ export default function CandidateResults({
                     typeof candidate.experience_rounded === 'number'
                       ? candidate.experience_rounded
                       : (candidate.total_experience_years ??
-                        candidate.years_of_experience ??
-                        candidate.experience_years ??
-                        candidate.yoe ??
-                        Number(candidate.experience));
+                         candidate.years_of_experience ??
+                         candidate.experience_years ??
+                         candidate.yoe ??
+                         Number(candidate.experience));
 
                   const expText = expDisplayFromBackend || formatYears(experienceNumeric);
 
-                  const confNum = safeNum(candidate.confidence);
+                  // ✅ Role Prediction Confidence: prefer role_prediction_score, then ml_confidence, then confidence
+                  const confNum = safeNum(
+                    (candidate as any).role_prediction_score ?? (candidate as any).ml_confidence ?? candidate.confidence
+                  );
                   const confText = Number.isFinite(confNum) ? `${confNum.toFixed(2)}%` : 'N/A';
 
-                  const semScoreNum = safeNum(candidate.semantic_score);
-                  const semScoreText = Number.isFinite(semScoreNum) ? `${semScoreNum.toFixed(2)}%` : null;
-
-                  // Skills: use server-provided truncated list if available
-                  const skillsFromServer = Array.isArray(candidate.skillsTruncated)
-                    ? candidate.skillsTruncated
-                    : Array.isArray(candidate.skills)
-                    ? candidate.skills
-                    : [];
-
-                  const shownSkills = (skillsFromServer || [])
-                    .filter((s) => String(s || '').trim() !== '')
-                    .slice(0, 6);
-
-                  // Overflow: prefer server count if provided, otherwise compute diff
-                  const overflow =
-                    typeof candidate.skillsOverflowCount === 'number'
-                      ? Math.max(0, candidate.skillsOverflowCount)
-                      : Math.max(0, (candidate.skills || []).length - shownSkills.length);
+                  // ✅ Prompt Matching Score: prefer semantic_score; fallback to final_score; then legacy score
+                  const promptScoreText = (() => {
+                    const sem = Number(candidate.semantic_score);
+                    if (Number.isFinite(sem) && sem > 0) return `${sem.toFixed(2)}%`;
+                    const fin = Number(candidate.final_score);
+                    if (Number.isFinite(fin) && fin > 0) return `${fin.toFixed(2)}%`;
+                    const legacy = Number((candidate as any).score);
+                    if (Number.isFinite(legacy) && legacy > 0) return `${legacy.toFixed(2)}%`;
+                    return null; // hide if nothing meaningful
+                  })();
 
                   const location = (candidate.location && String(candidate.location).trim()) || 'N/A';
-
-                  // Related roles: accept both shapes
-                  const relatedRoles =
-                    (Array.isArray(candidate.related_roles) && candidate.related_roles.length > 0
-                      ? candidate.related_roles.map((r) => ({ role: r.role, match: r.match }))
-                      : Array.isArray(candidate.relatedRoles)
-                      ? candidate.relatedRoles.map((r) => ({
-                          role: r.role,
-                          match: typeof r.score === 'number' ? r.score * 100 : undefined,
-                        }))
-                      : []) || [];
 
                   // Optional match badge
                   const matchBadge =
@@ -323,9 +342,13 @@ export default function CandidateResults({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              {/* ✅ Full name & role (no truncate) */}
+                              {/* ✅ Full name & role (role in parentheses on the line under the name) */}
                               <h4 className="mb-0.5 break-words text-lg font-bold text-foreground">{name}</h4>
-                              <p className="break-words text-sm font-semibold text-[hsl(var(--g3))]">{jobRole}</p>
+                              {!!roleLine && (
+                                <p className="break-words text-sm font-semibold text-[hsl(var(--g3))]">
+                                  {roleLine}
+                                </p>
+                              )}
                               {matchBadge && (
                                 <div className="mt-2">
                                   <Badge>
@@ -335,21 +358,19 @@ export default function CandidateResults({
                               )}
                             </div>
 
-                            <div className="text-right">
-                              {/* smaller badge */}
-                              {semScoreText && (
-                                <div className="px-2 py-1 rounded-full text-xs font-semibold text-[hsl(var(--primary))] border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)]">
-                                  {semScoreText}
-                                </div>
-                              )}
-                              {/* fixed subtitle */}
-                              <div className="mt-1 text-[10px] text-[hsl(var(--muted-foreground))]">
-                                Prompt Matching score
-                              </div>
-                            </div>
+                            {/* ⛔️ Removed top-right prompt score block to keep the card simple */}
                           </div>
 
-                          {/* meta pills */}
+                          {/* ✅ Prompt Matching Score badge */}
+                          {promptScoreText && (
+                            <div className="mt-3">
+                              <Pill>
+                                <i className="ri-sparkling-line" /> Prompt Matching Score: {promptScoreText}
+                              </Pill>
+                            </div>
+                          )}
+
+                          {/* ✅ Meta pills: Experience, Location, Role Prediction Confidence */}
                           <div className="mt-3 flex flex-wrap gap-2">
                             <Pill>
                               <i className="ri-briefcase-2-line" /> {expText}
@@ -358,40 +379,15 @@ export default function CandidateResults({
                               <i className="ri-map-pin-line" /> {location}
                             </Pill>
                             <Pill>
-                              <i className="ri-shield-check-line" /> Model Confidence {confText}
+                              <i className="ri-shield-check-line" /> Role Prediction Confidence {confText}
                             </Pill>
                           </div>
                         </div>
                       </div>
 
-                      {/* Skills — single line with +N overflow */}
-                      <div className="mb-5">
-                        <div className="mb-2 text-xs font-semibold text-[hsl(var(--muted-foreground))]">Core skills</div>
-                        {shownSkills.length > 0 ? (
-                          <div className="flex flex-nowrap items-center gap-2 overflow-hidden">
-                            {shownSkills.map((s: any, idx: number) => (
-                              <span
-                                key={idx}
-                                className="whitespace-nowrap rounded-full border border-[hsl(var(--primary)/.25)] bg-[hsl(var(--primary)/.06)] px-2.5 py-1 text-xs text-[hsl(var(--primary))]"
-                              >
-                                {String(s)}
-                              </span>
-                            ))}
-                            {overflow > 0 && (
-                              <span
-                                className="ml-1 whitespace-nowrap rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground"
-                                title={`${overflow} more skill${overflow === 1 ? '' : 's'}`}
-                              >
-                                +{overflow}
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-[hsl(var(--muted-foreground))]">No skills mentioned</p>
-                        )}
-                      </div>
+                      {/* ⛔️ Skills section removed to keep the card simple */}
 
-                      {/* Related Roles with visible score */}
+                      {/* ✅ Related Roles with visible score */}
                       {relatedRoles.length > 0 && (
                         <div className="mb-5">
                           <div className="mb-2 text-xs font-semibold text-[hsl(var(--muted-foreground))]">

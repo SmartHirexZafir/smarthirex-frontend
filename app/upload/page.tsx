@@ -1,9 +1,12 @@
-"use client";
+'use client';
 
-import { useState, useEffect, useCallback } from "react";
-import UploadSection from "./UploadSection";
-import ChatbotSection from "./ChatbotSection";
-import CandidateResults from "./CandidateResults";
+import { useState, useEffect, useCallback, useRef } from 'react';
+import UploadSection from './UploadSection';
+import ChatbotSection from './ChatbotSection';
+import CandidateResults from './CandidateResults';
+
+type RelatedRoleOld = { role: string; match?: number };
+type RelatedRoleNew = { role: string; score?: number };
 
 interface Candidate {
   id?: string;
@@ -12,6 +15,8 @@ interface Candidate {
   email?: string;
   score?: number;
   skills?: string[];
+  skillsTruncated?: string[];
+  skillsOverflowCount?: number;
   experience?: number | string;
   matchedSkills?: string[];
   location?: string;
@@ -22,59 +27,94 @@ interface Candidate {
   category?: string;
   filter_skills?: string[];
   semantic_score?: number;
-  confidence?: number;
+  final_score?: number;
+  confidence?: number; // <-- unified (no string)
   resume_url?: string;
+
+  // Experience aliases
   total_experience_years?: number;
   years_of_experience?: number;
   experience_years?: number;
   yoe?: number;
-  related_roles?: { role: string; match?: number }[];
+
+  // Additive fields aligned with backend
+  experience_display?: string;
+  experience_rounded?: number;
+  related_roles?: RelatedRoleOld[];
+  relatedRoles?: RelatedRoleNew[];
   is_strict_match?: boolean;
-  match_type?: "exact" | "close";
+  match_type?: 'exact' | 'close';
 }
 
 export default function UploadPage() {
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [activePrompt, setActivePrompt] = useState<string>("Show all available candidates");
+  const [activePrompt, setActivePrompt] = useState<string>('Show all available candidates');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
+  // Track the prompt currently being fulfilled to avoid race conditions
+  const pendingPromptRef = useRef<string>('');
+
   useEffect(() => {
-    // any user init you had before can stay here if needed
+    // reserved for future init
   }, []);
 
   const handleFileUpload = useCallback((files: any[]) => {
     setUploadedFiles(files);
   }, []);
 
-  // ✅ Robust start/finish detection
+  /**
+   * Contract with ChatbotSection:
+   * - onPromptSubmit(prompt, []) is called twice:
+   *     1) at START to clear & show loader
+   *     2) at FINISH when there are zero results (no-results/no-CV/error)
+   * - onPromptSubmit(prompt, list) is called at FINISH when there are results
+   */
   const handlePromptSubmit = useCallback(
     (prompt: string, results: any[] = []) => {
-      setActivePrompt(prompt);
+      const incomingPrompt = String(prompt || '').trim();
+      setActivePrompt(incomingPrompt);
 
-      // results is an array in both cases; decide by current isProcessing:
-      if (Array.isArray(results) && results.length === 0) {
-        if (isProcessing) {
-          // finish (empty)
-          setCandidates([]);
-          setIsProcessing(false);
-        } else {
-          // start
+      if (!Array.isArray(results) || results.length === 0) {
+        if (!isProcessing) {
           setCandidates([]);
           setIsProcessing(true);
+          pendingPromptRef.current = incomingPrompt;
+          return;
+        }
+        if (pendingPromptRef.current === incomingPrompt) {
+          setCandidates([]);
+          setIsProcessing(false);
+          pendingPromptRef.current = '';
         }
         return;
       }
 
-      // finish with some candidates
+      if (pendingPromptRef.current && pendingPromptRef.current !== incomingPrompt) {
+        // stale payload; ignore
+        return;
+      }
+
       const normalized: Candidate[] = (results || []).map((r: any) => {
         const rawId = r?._id ?? r?.id;
-        const idStr = typeof rawId === "number" ? String(rawId) : rawId ?? undefined;
-        return { ...r, id: idStr };
+        const idStr =
+          typeof rawId === 'number' ? String(rawId) : typeof rawId === 'string' ? rawId : undefined;
+
+        // coerce confidence to number
+        const c = r?.confidence;
+        const confidence =
+          typeof c === 'number'
+            ? c
+            : typeof c === 'string'
+            ? (parseFloat(c) || 0)
+            : undefined;
+
+        return { ...r, id: idStr, confidence };
       });
 
       setCandidates(normalized);
       setIsProcessing(false);
+      pendingPromptRef.current = '';
     },
     [isProcessing]
   );

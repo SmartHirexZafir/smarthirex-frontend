@@ -28,7 +28,7 @@ interface Candidate {
   filter_skills?: string[];
   semantic_score?: number;
   final_score?: number;
-  confidence?: number; // <-- unified (no string)
+  confidence?: number; // unified to number when normalizing below
   resume_url?: string;
 
   // Experience aliases
@@ -52,7 +52,7 @@ export default function UploadPage() {
   const [activePrompt, setActivePrompt] = useState<string>('Show all available candidates');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  // Track the prompt currently being fulfilled to avoid race conditions
+  // Tracks the prompt currently being fulfilled (prevents stale updates)
   const pendingPromptRef = useRef<string>('');
 
   useEffect(() => {
@@ -65,42 +65,49 @@ export default function UploadPage() {
 
   /**
    * Contract with ChatbotSection:
-   * - onPromptSubmit(prompt, []) is called twice:
-   *     1) at START to clear & show loader
-   *     2) at FINISH when there are zero results (no-results/no-CV/error)
+   * - onPromptSubmit(prompt, []) is called at START (clear UI & show loader)
    * - onPromptSubmit(prompt, list) is called at FINISH when there are results
+   * - onPromptSubmit(prompt, []) is also called at FINISH when there are zero results
+   *
+   * We distinguish START vs FINISH using (isProcessing, pendingPromptRef).
+   * - START if !isProcessing OR the incoming prompt differs from pendingPromptRef
+   * - FINISH (empty) if isProcessing AND incoming prompt equals pendingPromptRef
    */
   const handlePromptSubmit = useCallback(
     (prompt: string, results: any[] = []) => {
       const incomingPrompt = String(prompt || '').trim();
-      setActivePrompt(incomingPrompt);
 
+      // START or FINISH(0 results)
       if (!Array.isArray(results) || results.length === 0) {
-        if (!isProcessing) {
-          setCandidates([]);
-          setIsProcessing(true);
+        const isStart = !isProcessing || pendingPromptRef.current !== incomingPrompt;
+
+        if (isStart) {
+          // START: update active prompt only here to avoid flicker on stale FINISH calls
+          setActivePrompt(incomingPrompt);
+          setCandidates([]);            // clear immediately
+          setIsProcessing(true);        // show loader
           pendingPromptRef.current = incomingPrompt;
-          return;
-        }
-        if (pendingPromptRef.current === incomingPrompt) {
-          setCandidates([]);
-          setIsProcessing(false);
-          pendingPromptRef.current = '';
+        } else {
+          // FINISH with zero results for the current prompt
+          setCandidates([]);            // ensure empty
+          setIsProcessing(false);       // hide loader
+          pendingPromptRef.current = ''; // clear token
         }
         return;
       }
 
+      // FINISH with results
+      // Ignore stale payloads (results for an older prompt)
       if (pendingPromptRef.current && pendingPromptRef.current !== incomingPrompt) {
-        // stale payload; ignore
         return;
       }
 
+      // Normalize result items minimally (id & confidence coercion)
       const normalized: Candidate[] = (results || []).map((r: any) => {
         const rawId = r?._id ?? r?.id;
         const idStr =
           typeof rawId === 'number' ? String(rawId) : typeof rawId === 'string' ? rawId : undefined;
 
-        // coerce confidence to number
         const c = r?.confidence;
         const confidence =
           typeof c === 'number'
@@ -112,12 +119,17 @@ export default function UploadPage() {
         return { ...r, id: idStr, confidence };
       });
 
+      // Accept results
+      // (activePrompt was set on START; do not change it here to avoid race-induced flicker)
       setCandidates(normalized);
       setIsProcessing(false);
       pendingPromptRef.current = '';
     },
     [isProcessing]
   );
+
+  // ✅ Only show results section when we’re loading OR we actually have results
+  const showResults = isProcessing || (Array.isArray(candidates) && candidates.length > 0);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -136,13 +148,15 @@ export default function UploadPage() {
               />
             </div>
 
-            <div className="mx-auto w-full max-w-7xl animate-rise-in rounded-3xl ring-1 ring-[hsl(var(--primary)/.45)] gradient-border shadow-glow bg-card/60 backdrop-blur-sm p-5 sm:p-7">
-              <CandidateResults
-                candidates={candidates}
-                isProcessing={isProcessing}
-                activePrompt={activePrompt}
-              />
-            </div>
+            {showResults && (
+              <div className="mx-auto w-full max-w-7xl animate-rise-in rounded-3xl ring-1 ring-[hsl(var(--primary)/.45)] gradient-border shadow-glow bg-card/60 backdrop-blur-sm p-5 sm:p-7">
+                <CandidateResults
+                  candidates={candidates}
+                  isProcessing={isProcessing}
+                  activePrompt={activePrompt}
+                />
+              </div>
+            )}
           </div>
         </section>
       </main>

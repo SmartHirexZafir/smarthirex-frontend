@@ -20,7 +20,7 @@ type Candidate = {
   yoe?: number;
 
   // ✅ New additive fields (if backend provides)
-  experience_display?: string;   // e.g. "2 years", "0.5 years"
+  experience_display?: string;   // e.g. "2 years", "< 1 year"
   experience_rounded?: number;   // e.g. 2.0, 0.5
 
   location?: string;
@@ -30,9 +30,11 @@ type Candidate = {
   confidence?: number;
 
   // ✅ Additive from ml_interface
-  role_prediction_score?: number;  // prefer when available
+  role_prediction_score?: number;          // legacy alias
+  role_prediction_confidence?: number;     // new preferred field
   semantic_score?: number;
   final_score?: number;
+  prompt_matching_score?: number;          // new preferred field
   score_type?: string;
   skills?: string[];
 
@@ -44,6 +46,7 @@ type Candidate = {
 
   is_strict_match?: boolean;
   match_type?: 'exact' | 'close';
+  rank?: number;
 };
 
 export default function CandidateResults({
@@ -75,7 +78,7 @@ export default function CandidateResults({
   const isBadText = (s?: string | null) => {
     const t = String(s ?? '').trim().toLowerCase();
     return !t || t === 'n/a' || t === 'na' || t === 'none' || t === '-' || t === 'unknown' || t === 'not specified';
-  };
+    };
   const pickFirstGood = (...vals: (string | undefined | null)[]) => {
     for (const v of vals) {
       if (!isBadText(v)) return String(v).trim();
@@ -90,6 +93,16 @@ export default function CandidateResults({
     if (n > 0 && n < 1) return '< 1 year';
     if (n >= 1) return `${Math.round(n)} year${Math.round(n) === 1 ? '' : 's'}`;
     return 'Not specified';
+  };
+
+  // ✅ Percent formatter that auto-normalizes 0–1 ratios to 0–100%
+  const toPercentText = (val: any): string | null => {
+    const n = Number(val);
+    if (!Number.isFinite(n)) return null;
+    // Heuristic: if value looks like ratio, scale to percent
+    const pct = n <= 1 ? n * 100 : n;
+    const bounded = Math.max(0, Math.min(100, pct));
+    return `${bounded.toFixed(2)}%`;
   };
 
   // Clear immediately when a new prompt is set
@@ -305,21 +318,26 @@ export default function CandidateResults({
 
                   const expText = expDisplayFromBackend || formatYears(experienceNumeric);
 
-                  // ✅ Role Prediction Confidence: prefer role_prediction_score, then ml_confidence, then confidence
-                  const confNum = safeNum(
-                    (candidate as any).role_prediction_score ?? (candidate as any).ml_confidence ?? candidate.confidence
-                  );
-                  const confText = Number.isFinite(confNum) ? `${confNum.toFixed(2)}%` : 'N/A';
+                  // ✅ Role Prediction Confidence: prefer new role_prediction_confidence, then role_prediction_score, then ml_confidence/confidence
+                  const confRaw =
+                    (candidate as any).role_prediction_confidence ??
+                    (candidate as any).role_prediction_score ??
+                    (candidate as any).ml_confidence ??
+                    candidate.confidence;
+                  const confText = toPercentText(confRaw) ?? 'N/A';
 
-                  // ✅ Prompt Matching Score: prefer semantic_score; fallback to final_score; then legacy score
+                  // ✅ Prompt Matching Score: prefer new prompt_matching_score; then semantic_score; then final_score; then legacy score
                   const promptScoreText = (() => {
-                    const sem = Number(candidate.semantic_score);
-                    if (Number.isFinite(sem) && sem > 0) return `${sem.toFixed(2)}%`;
-                    const fin = Number(candidate.final_score);
-                    if (Number.isFinite(fin) && fin > 0) return `${fin.toFixed(2)}%`;
-                    const legacy = Number((candidate as any).score);
-                    if (Number.isFinite(legacy) && legacy > 0) return `${legacy.toFixed(2)}%`;
-                    return null; // hide if nothing meaningful
+                    const pms = (candidate as any).prompt_matching_score;
+                    const sem = candidate.semantic_score;
+                    const fin = candidate.final_score;
+                    const legacy = (candidate as any).score;
+                    return (
+                      toPercentText(pms) ??
+                      toPercentText(sem) ??
+                      toPercentText(fin) ??
+                      toPercentText(legacy)
+                    );
                   })();
 
                   const location = (candidate.location && String(candidate.location).trim()) || 'N/A';

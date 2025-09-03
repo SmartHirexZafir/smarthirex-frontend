@@ -16,13 +16,15 @@ type ChatResult = ChatResultOk | ChatResultUnauth | ChatResultError | ChatResult
 /* ---------------------------
    Normalization (frontend)
 ---------------------------- */
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const edgeWord = (raw: string) =>
+  new RegExp(`(?<![a-z0-9])${escapeRegExp(raw)}(?![a-z0-9])`, 'g'); // handles dots/hyphens too
+
+// ✅ Synonym map (expanded; additive, preserves old logic)
 const SYNONYMS: Record<string, string> = {
+  // short-hands / common
   js: 'javascript',
   ts: 'typescript',
-  reactjs: 'react',
-  nodejs: 'node',
-  'next.js': 'next',
-  nextjs: 'next',
   py: 'python',
   tf: 'tensorflow',
   sklearn: 'scikit',
@@ -33,9 +35,182 @@ const SYNONYMS: Record<string, string> = {
   cv: 'computer vision',
   nlp: 'natural language processing',
   fe: 'frontend',
+  'front end': 'frontend',
+  'front-end': 'frontend',
   be: 'backend',
+  'back end': 'backend',
+  'back-end': 'backend',
   fullstack: 'full-stack',
+
+  // frameworks / libs
+  reactjs: 'react',
+  'react.js': 'react',
+  nodejs: 'node',
+  'node.js': 'node',
+  nextjs: 'next',
+  'next.js': 'next',
+  nuxtjs: 'nuxt',
+  'nuxt.js': 'nuxt',
+  'vue.js': 'vue',
+  tensorflowjs: 'tensorflow',
+  'tensorflow.js': 'tensorflow',
+  pytorch: 'torch',
+  'ci/cd': 'cicd',
+  'ci-cd': 'cicd',
+  'ci cd': 'cicd',
+  sass: 'scss',
+  tailwindcss: 'tailwind',
+  'power bi': 'powerbi',
+  'power-bi': 'powerbi',
+  'ms-excel': 'excel',
+  msexcel: 'excel',
+  msword: 'word',
+  ppt: 'powerpoint',
+  xd: 'adobe xd',
+  ps: 'photoshop',
+  mlops: 'ml ops',
+  gcloud: 'gcp',
+  'google cloud': 'gcp',
+  'google cloud platform': 'gcp',
+  'amazon web services': 'aws',
+  'ms azure': 'azure',
+  'microsoft azure': 'azure',
+  'git hub': 'github',
+  win: 'windows',
+  'mac os': 'macos',
+  'os x': 'macos',
+  usa: 'united states',
+  'u.s.': 'united states',
+  'u.s.a.': 'united states',
+  uk: 'united kingdom',
+  uae: 'united arab emirates',
+
+  // roles & titles
+  'data science': 'data scientist',
+  'data engineering': 'data engineer',
+  'software dev': 'software engineer',
+  'software developer': 'software engineer',
+  'ui/ux': 'ui ux',
+  uix: 'ui ux',
+  'front end developer': 'frontend developer',
+  'back end developer': 'backend developer',
+  'full stack developer': 'full stack developer',
+  'site reliability engineer': 'sre',
+  'quality assurance': 'qa',
+  'quality assurance engineer': 'qa engineer',
+  'user interface': 'ui',
+  'user experience': 'ux',
+  'frontend dev': 'frontend developer',
+  'front end dev': 'frontend developer',
+  'react developer': 'frontend developer',
+  'javascript developer': 'frontend developer',
+  'backend dev': 'backend developer',
+  'back end dev': 'backend developer',
+  'node developer': 'backend developer',
+  'python developer': 'backend developer',
+  'fullstack dev': 'full stack developer',
+  'full stack dev': 'full stack developer',
+  devops: 'devops/sre',
+  sre: 'devops/sre',
+  'site reliability': 'devops/sre',
+  qa: 'qa engineer',
+  'test engineer': 'qa engineer',
+  'ml engineer': 'ml engineer',
+  'ai engineer': 'ml engineer',
+  'etl developer': 'etl developer',
+  'ui designer': 'ui/ux designer',
+  'ux designer': 'ui/ux designer',
+  'product designer': 'product designer',
+  'graphic designer': 'web designer',
+  'visual designer': 'web designer',
+  'android engineer': 'mobile developer',
+  'ios engineer': 'mobile developer',
+  'mobile app developer': 'mobile developer',
+  attorney: 'advocate',
+  lawyer: 'advocate',
+  barrister: 'advocate',
+
+  // degrees
+  'll.b': 'llb',
+  'll.b.': 'llb',
+  'll.m': 'llm',
+  'll.m.': 'llm',
+  'b.sc': 'bsc',
+  'b.sc.': 'bsc',
+  'm.sc': 'msc',
+  'm.sc.': 'msc',
+  'ph.d': 'phd',
+  'ph.d.': 'phd',
+  'b tech': 'btech',
+  'm tech': 'mtech',
+  bachelors: 'bachelor',
+  masters: 'master',
+  'juris doctor': 'jd',
+  'bar-at-law': 'bar at law',
+
+  // databases & tools aliases
+  postgresql: 'postgres',
+  postgre: 'postgres',
+  postgress: 'postgres',
+  'mongo db': 'mongodb',
+  mongo: 'mongodb',
+  'ms sql': 'mssql',
+  'microsoft sql server': 'mssql',
+  tfserving: 'tensorflow serving',
+  'gpt-3': 'gpt3',
+  'gpt-4': 'gpt4',
+  jira: 'atlassian jira',
+  bitbucket: 'atlassian bitbucket',
+  'react native': 'react native', // keep
+  'natural language processing': 'natural language processing',
+  'computer vision': 'computer vision',
+  'machine learning': 'machine learning',
+  'deep learning': 'deep learning',
+  'ml ops': 'ml ops',
+  'google ads': 'google ads',
+  'project management': 'project management',
+  'supply chain': 'supply chain',
+  'human resources': 'human resources',
+  'financial modeling': 'financial modeling',
+  'micro services': 'microservices',
+  'micro-services': 'microservices',
+
+  // ✅ comparator & equality synonyms (help keyword extraction, even if backend parses too)
+  'less than equal to': '<=',
+  'less than or equal to': '<=',
+  lte: '<=',
+  'greater than equal to': '>=',
+  'greater than or equal to': '>=',
+  gte: '>=',
+  'equal to': '=',
+  equals: '=',
+  exactly: '=',
+
+  // ✅ number words → digits (helps prompts like “four”)
+  zero: '0',
+  one: '1',
+  two: '2',
+  three: '3',
+  four: '4',
+  five: '5',
+  six: '6',
+  seven: '7',
+  eight: '8',
+  nine: '9',
+  ten: '10',
+  eleven: '11',
+  twelve: '12',
+  thirteen: '13',
+  fourteen: '14',
+  fifteen: '15',
+  sixteen: '16',
+  seventeen: '17',
+  eighteen: '18',
+  nineteen: '19',
+  twenty: '20',
 };
+
+// Singularization for common role nouns
 const PLURAL_SINGULAR: Record<string, string> = {
   developers: 'developer',
   engineers: 'engineer',
@@ -46,38 +221,94 @@ const PLURAL_SINGULAR: Record<string, string> = {
   architects: 'architect',
   candidates: 'candidate',
 };
+
+// Light stopword list (kept small; additive)
 const STOPWORDS = new Set([
-  'show','find','me','with','and','in','of','for','to','a','an','the','please','pls',
-  'candidate','candidates','experience','years','based',
-  'developer','developers','engineer','engineers','scientist','scientists','designer','designers','manager','managers'
+  'show',
+  'find',
+  'me',
+  'with',
+  'and',
+  'in',
+  'of',
+  'for',
+  'to',
+  'a',
+  'an',
+  'the',
+  'please',
+  'pls',
+  'candidate',
+  'candidates',
+  'experience',
+  'year',
+  'years',
+  'yr',
+  'yrs',
+  'based',
+  'developer',
+  'developers',
+  'engineer',
+  'engineers',
+  'scientist',
+  'scientists',
+  'designer',
+  'designers',
+  'manager',
+  'managers',
 ]);
 
 function normalizePrompt(raw: string) {
   let s = (raw || '').toLowerCase().trim().replace(/\s+/g, ' ');
-  for (const [pl, sg] of Object.entries(PLURAL_SINGULAR)) s = s.replace(new RegExp(`\\b${pl}\\b`, 'g'), sg);
-  for (const [k, v] of Object.entries(SYNONYMS)) s = s.replace(new RegExp(`\\b${k}\\b`, 'g'), v);
+
+  // singularize plurals
+  for (const [pl, sg] of Object.entries(PLURAL_SINGULAR)) {
+    s = s.replace(edgeWord(pl), sg);
+  }
+
+  // apply synonyms (handles dots/hyphens)
+  for (const [k, v] of Object.entries(SYNONYMS)) {
+    s = s.replace(edgeWord(k), v);
+  }
+
   const cleaned = s.replace(/[^a-z0-9+ ]/g, ' ').replace(/\s+/g, ' ').trim();
   const tokens = cleaned.split(' ').filter(Boolean);
   const keywords: string[] = [];
   const seen = new Set<string>();
   for (const t of tokens) {
-    if (!STOPWORDS.has(t) && !seen.has(t)) { seen.add(t); keywords.push(t); }
+    if (!STOPWORDS.has(t) && !seen.has(t)) {
+      seen.add(t);
+      keywords.push(t);
+    }
   }
   const isRoleLike = cleaned.split(' ').length <= 4;
   return { normalized_prompt: s, keywords, isRoleLike };
 }
 
+// Pull out quoted phrases for exact matching mode
+const extractQuotedPhrases = (text: string): string[] => {
+  const out: string[] = [];
+  const re = /["']([^"']{2,200})["']/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const p = m[1].trim();
+    if (p) out.push(p);
+  }
+  return Array.from(new Set(out));
+};
+
 /* ---------------------------
    Filter menu (checkboxes)
 ---------------------------- */
-type FilterKey = 'role' | 'skills' | 'location' | 'projects' | 'experience' | 'cv';
+type FilterKey = 'role' | 'skills' | 'location' | 'projects' | 'experience' | 'education' | 'cv';
 const FILTERS: { key: FilterKey; label: string; icon: string }[] = [
   { key: 'role',       label: 'Job Role',             icon: 'ri-id-card-line' },
   { key: 'skills',     label: 'Skills',               icon: 'ri-star-line' },
   { key: 'location',   label: 'Location',             icon: 'ri-map-pin-2-line' },
   { key: 'projects',   label: 'Projects',             icon: 'ri-folder-3-line' },
   { key: 'experience', label: 'Experience',           icon: 'ri-briefcase-2-line' },
-  { key: 'cv',         label: 'CV Content Matching',  icon: 'ri-file-text-line' },
+  { key: 'education',  label: 'Education',            icon: 'ri-graduation-cap-line' },
+  { key: 'cv',         label: 'Exact Phrase Match',   icon: 'ri-double-quotes-l' },
 ];
 
 export default function ChatbotSection({
@@ -93,7 +324,8 @@ export default function ChatbotSection({
     {
       id: 1,
       type: 'bot',
-      content: "Hi! I'm your AI recruiting assistant. Type your query and choose filters below to control what is matched (e.g., Job Role + Experience).",
+      content:
+        "Hi! I'm your AI recruiting assistant. Type your query and choose filters below to control what is matched (e.g., Job Role + Experience).",
       timestamp: '',
     },
   ]);
@@ -104,19 +336,26 @@ export default function ChatbotSection({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // lightweight toast
-  const [toast, setToast] = useState<{ show: boolean; msg: string; tone: 'info' | 'warning' | 'success' | 'error' }>(
-    { show: false, msg: '', tone: 'info' }
-  );
+  const [toast, setToast] = useState<{
+    show: boolean;
+    msg: string;
+    tone: 'info' | 'warning' | 'success' | 'error';
+  }>({ show: false, msg: '', tone: 'info' });
   useEffect(() => {
     if (!toast.show) return;
-    const t = window.setTimeout(() => setToast({ show: false, msg: '', tone: 'info' }), 3000);
+    const t = window.setTimeout(() => setToast({ show: false, msg: '', tone: 'info' }), 3200);
     return () => window.clearTimeout(t);
   }, [toast.show]);
 
   const formatTime = () => new Date().toLocaleTimeString();
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  useEffect(() => setMessages((prev) => prev.map((m) => (m.timestamp ? m : { ...m, timestamp: formatTime() }))), []);
-  useEffect(() => { scrollToBottom(); }, [messages]);
+  useEffect(
+    () => setMessages((prev) => prev.map((m) => (m.timestamp ? m : { ...m, timestamp: formatTime() }))),
+    []
+  );
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   // checkbox change (preserve selection order; remove on uncheck)
   const toggleFilter = (k: FilterKey) => {
@@ -142,12 +381,27 @@ export default function ChatbotSection({
 
   async function callChatbot(prompt: string, token: string | null): Promise<ChatResult> {
     const norm = normalizePrompt(prompt);
+
+    // Map selected -> backend expected fields; 'cv' becomes 'phrases' and toggles exact mode
+    const selectedMapped = selected.map((k) => (k === 'cv' ? ('phrases' as const) : k));
+    const quoted = extractQuotedPhrases(prompt);
+
+    const options = {
+      selected: selectedMapped, // ✅ backend expects these keys (education now included)
+      exact_match_only: selected.includes('cv') || quoted.length > 0,
+      exact_terms: quoted.length > 0 ? quoted : undefined,
+      // keep role prefilter enabled by default to save DB work
+      prefilter_role_regex: true,
+    };
+
     const payload = {
       prompt,
       normalized_prompt: norm.normalized_prompt,
       keywords: norm.keywords,
-      selected_filters: selected, // 👈 send in order
+      selected_filters: selected, // 👈 backward-compat field
+      options, // 👈 new structured filters (backend will use if supported)
     };
+
     const paths = ['/chatbot/query', '/query'];
     for (const p of paths) {
       try {
@@ -157,13 +411,15 @@ export default function ChatbotSection({
         if (status === 401) return { kind: 'unauth' };
         const text = await resp.text();
         let data: any = null;
-        try { data = text ? JSON.parse(text) : null; } catch { data = null; }
+        try {
+          data = text ? JSON.parse(text) : null;
+        } catch {
+          data = null;
+        }
         if (!resp.ok) {
           if (status === 404) continue;
           const message =
-            (data && (data.detail || data.message)) ||
-            (text && text.trim()) ||
-            `Request failed (${status})`;
+            (data && (data.detail || data.message)) || (text && text.trim()) || `Request failed (${status})`;
           return { kind: 'error', status, message, data };
         }
         return { kind: 'ok', data: data ?? {} };
@@ -196,7 +452,12 @@ export default function ChatbotSection({
     if (result.kind === 'unauth') {
       setMessages((prev) => [
         ...prev,
-        { id: Date.now() + 1, type: 'bot', content: 'You are not logged in or your session expired. Please log in again.', timestamp: formatTime() },
+        {
+          id: Date.now() + 1,
+          type: 'bot',
+          content: 'You are not logged in or your session expired. Please log in again.',
+          timestamp: formatTime(),
+        },
       ]);
       onPromptSubmit(prompt, []); // FINISH — loader OFF
       setIsTyping(false);
@@ -205,7 +466,12 @@ export default function ChatbotSection({
     if (result.kind === 'network') {
       setMessages((prev) => [
         ...prev,
-        { id: Date.now() + 2, type: 'bot', content: "Sorry, I couldn't reach the server. Please check your API URL or CORS settings.", timestamp: formatTime() },
+        {
+          id: Date.now() + 2,
+          type: 'bot',
+          content: "Sorry, I couldn't reach the server. Please check your API URL or CORS settings.",
+          timestamp: formatTime(),
+        },
       ]);
       setToast({ show: true, msg: result.message, tone: 'error' });
       onPromptSubmit(prompt, []); // FINISH — loader OFF
@@ -216,7 +482,12 @@ export default function ChatbotSection({
       const msg = result.message || `Server error (${result.status || 'unknown'})`;
       setMessages((prev) => [
         ...prev,
-        { id: Date.now() + 3, type: 'bot', content: `Sorry, I couldn't process your request: ${msg}`, timestamp: formatTime() },
+        {
+          id: Date.now() + 3,
+          type: 'bot',
+          content: `Sorry, I couldn't process your request: ${msg}`,
+          timestamp: formatTime(),
+        },
       ]);
       setToast({ show: true, msg: 'Server error while processing your request.', tone: 'error' });
       onPromptSubmit(prompt, []); // FINISH — loader OFF
@@ -228,9 +499,16 @@ export default function ChatbotSection({
     if (data?.no_cvs_uploaded === true || data?.message === 'no_cvs_uploaded') {
       setMessages((prev) => [
         ...prev,
-        { id: Date.now() + 4, type: 'bot', content: 'There is no CV uploaded from your side.', timestamp: formatTime() },
+        {
+          id: Date.now() + 4,
+          type: 'bot',
+          content: 'There is no CV uploaded from your side.',
+          timestamp: formatTime(),
+        },
       ]);
-      try { window.dispatchEvent(new CustomEvent('shx:no-cvs', { detail: { prompt } })); } catch {}
+      try {
+        window.dispatchEvent(new CustomEvent('shx:no-cvs', { detail: { prompt } }));
+      } catch {}
       setToast({ show: true, msg: 'No CVs found. Please upload resumes first.', tone: 'warning' });
       onPromptSubmit(prompt, []); // FINISH — loader OFF
       setIsTyping(false);
@@ -242,8 +520,7 @@ export default function ChatbotSection({
     const q = (data?.normalized_prompt || prompt || '').toString().trim();
 
     const standardizedReply =
-      `Showing ${total} result${total === 1 ? '' : 's'} for your query.` +
-      (q ? `\nQuery: "${q}"` : '');
+      `Showing ${total} result${total === 1 ? '' : 's'} for your query.` + (q ? `\nQuery: "${q}"` : '');
 
     setMessages((prev) => [
       ...prev,
@@ -252,7 +529,9 @@ export default function ChatbotSection({
 
     if (data?.no_results === true || total === 0) {
       setToast({ show: true, msg: 'No matching candidates found for your query.', tone: 'info' });
-      try { window.dispatchEvent(new CustomEvent('shx:no-results', { detail: { prompt } })); } catch {}
+      try {
+        window.dispatchEvent(new CustomEvent('shx:no-results', { detail: { prompt } }));
+      } catch {}
       onPromptSubmit(prompt, []); // FINISH — loader OFF (empty results)
       setIsTyping(false);
       return;
@@ -282,9 +561,7 @@ export default function ChatbotSection({
                 <h3 id="ai-assistant-title" className="text-2xl md:text-3xl font-extrabold gradient-text glow">
                   AI Assistant
                 </h3>
-                <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                  Ask me to find specific candidates for your needs
-                </p>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">Ask me to find specific candidates for your needs</p>
               </div>
             </div>
 
@@ -308,10 +585,15 @@ export default function ChatbotSection({
               {menuOpen && (
                 <div
                   role="menu"
-                  className="absolute right-0 mt-2 w-64 rounded-2xl border border-border surface glass shadow-xl p-2 z-50"
+                  className="absolute right-0 mt-2 w-64 rounded-2xl border border-border surface glass shadow-xl p-2 z-50 max-h-[70vh] flex flex-col"
                 >
                   <div className="p-2 text-xs text-[hsl(var(--muted-foreground))]">Select one or more categories</div>
-                  <div className="divide-y divide-border/60">
+
+                  {/* Scrollable list area */}
+                  <div
+                    className="divide-y divide-border/60 overflow-y-scroll flex-1 pr-1 scrollable-menu"
+                    style={{ scrollbarGutter: 'stable' }}
+                  >
                     {FILTERS.map((f) => {
                       const checked = selected.includes(f.key);
                       return (
@@ -320,18 +602,13 @@ export default function ChatbotSection({
                           className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-[hsl(var(--muted)/.35)] rounded-xl"
                         >
                           {/* custom checkbox */}
-                          <input
-                            type="checkbox"
-                            className="sr-only"
-                            checked={checked}
-                            onChange={() => toggleFilter(f.key)}
-                          />
+                          <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleFilter(f.key)} />
                           <span
                             className={[
-                              "h-5 w-5 rounded-md border flex items-center justify-center transition",
+                              'h-5 w-5 rounded-md border flex items-center justify-center transition',
                               checked
-                                ? "bg-[hsl(var(--primary))] border-[hsl(var(--primary))] text-white shadow-glow"
-                                : "bg-transparent border-border text-transparent",
+                                ? 'bg-[hsl(var(--primary))] border-[hsl(var(--primary))] text-white shadow-glow'
+                                : 'bg-transparent border-border text-transparent',
                             ].join(' ')}
                             aria-hidden="true"
                           >
@@ -343,17 +620,12 @@ export default function ChatbotSection({
                       );
                     })}
                   </div>
+
                   <div className="flex items-center justify-between px-3 pt-2">
-                    <button
-                      onClick={() => setSelected([])}
-                      className="text-xs text-[hsl(var(--muted-foreground))] hover:text-foreground"
-                    >
+                    <button onClick={() => setSelected([])} className="text-xs text-[hsl(var(--muted-foreground))] hover:text-foreground">
                       Clear all
                     </button>
-                    <button
-                      onClick={() => setMenuOpen(false)}
-                      className="btn btn-primary btn-sm"
-                    >
+                    <button onClick={() => setMenuOpen(false)} className="btn btn-primary btn-sm">
                       Done
                     </button>
                   </div>
@@ -397,8 +669,14 @@ export default function ChatbotSection({
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1">
                     <span className="w-2 h-2 rounded-full bg-[hsl(var(--muted-foreground))] animate-bounce" />
-                    <span className="w-2 h-2 rounded-full bg-[hsl(var(--muted-foreground))] animate-bounce" style={{ animationDelay: '0.1s' }} />
-                    <span className="w-2 h-2 rounded-full bg-[hsl(var(--muted-foreground))] animate-bounce" style={{ animationDelay: '0.2s' }} />
+                    <span
+                      className="w-2 h-2 rounded-full bg-[hsl(var(--muted-foreground))] animate-bounce"
+                      style={{ animationDelay: '0.1s' }}
+                    />
+                    <span
+                      className="w-2 h-2 rounded-full bg-[hsl(var(--muted-foreground))] animate-bounce"
+                      style={{ animationDelay: '0.2s' }}
+                    />
                   </div>
                   <span className="text-xs text-[hsl(var(--muted-foreground))]">AI is thinking...</span>
                 </div>
@@ -416,7 +694,7 @@ export default function ChatbotSection({
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              placeholder="Ask me to find candidates..."
+              placeholder='Ask me to find candidates… (use quotes for exact match, e.g. "microservices")'
               className="input glass flex-1"
               disabled={isProcessing}
               aria-label="Type a prompt to filter candidates"
@@ -441,7 +719,10 @@ export default function ChatbotSection({
               {selected.map((k) => {
                 const f = FILTERS.find((x) => x.key === k)!;
                 return (
-                  <span key={k} className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground">
+                  <span
+                    key={k}
+                    className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground"
+                  >
                     <i className={`${f.icon}`} /> {f.label}
                   </span>
                 );
@@ -451,7 +732,7 @@ export default function ChatbotSection({
         </div>
       </div>
 
-      {/* Toast (auto-hide in 3s) */}
+      {/* Toast (auto-hide in ~3.2s) */}
       {toast.show && (
         <div
           className={[
@@ -483,6 +764,27 @@ export default function ChatbotSection({
           </div>
         </div>
       )}
+
+      {/* Local scrollbar styles (menu only) */}
+      <style jsx>{`
+        .scrollable-menu {
+          scrollbar-width: thin; /* Firefox */
+          scrollbar-color: hsl(var(--muted-foreground) / 0.6) transparent; /* Firefox */
+        }
+        .scrollable-menu::-webkit-scrollbar {
+          width: 8px; /* WebKit */
+        }
+        .scrollable-menu::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .scrollable-menu::-webkit-scrollbar-thumb {
+          background: hsl(var(--muted-foreground) / 0.4);
+          border-radius: 9999px;
+        }
+        .scrollable-menu:hover::-webkit-scrollbar-thumb {
+          background: hsl(var(--muted-foreground) / 0.6);
+        }
+      `}</style>
     </section>
   );
 }

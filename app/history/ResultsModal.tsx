@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 /* ---- Types (safe for strict TS, no backend changes) ---- */
 type Candidate = {
@@ -12,8 +13,12 @@ type Candidate = {
   avatar?: string;
   score?: number;
   match_score?: number;
+  final_score?: number;                // ✅ dynamic match %
+  prompt_matching_score?: number;      // ✅ dynamic match %
   matchReasons?: string[];
   skills?: string[];
+  title?: string;
+  role?: string;
 };
 
 type ResultsPayload = {
@@ -34,11 +39,45 @@ type Props = {
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/+$/, '');
 
+/* ---------- Helpers for score fallback (prevents 0% when backend lacks scores) ---------- */
+const tokenize = (s: string) =>
+  (s || '')
+    .toLowerCase()
+    .match(/[a-zA-Z]+|\d+\+?/g)?.filter(t => !['and','or','the','a','an','in','with','of'].includes(t)) || [];
+
+const candidateBlob = (c: Candidate) => {
+  const parts: string[] = [];
+  if (c.name) parts.push(c.name);
+  if (c.email) parts.push(c.email);
+  if (c.title) parts.push(c.title);
+  if (c.role) parts.push(c.role);
+  if (Array.isArray(c.skills)) parts.push(c.skills.join(' '));
+  if (Array.isArray(c.matchReasons)) parts.push(c.matchReasons.join(' '));
+  return parts.join(' ').toLowerCase();
+};
+
+const heuristicMatchScore = (prompt: string, c: Candidate): number => {
+  const toks = tokenize(prompt);
+  if (!toks.length) return 0;
+  const blob = candidateBlob(c);
+  let hits = 0;
+  for (const t of toks) {
+    if (t.endsWith('+') && /^\d+\+$/.test(t)) {
+      const base = parseInt(t.slice(0, -1), 10);
+      const nums = (blob.match(/\b\d+\b/g) || []).map(n => parseInt(n, 10));
+      if (nums.some(n => n >= base)) hits += 1;
+    } else if (blob.includes(t)) {
+      hits += 1;
+    }
+  }
+  // mirror backend fallback: base 40 + 15 per hit, capped 100
+  return Math.max(0, Math.min(100, 40 + hits * 15));
+};
+
 export default function ResultsModal({ history, onClose }: Props) {
+  const router = useRouter();
+
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
-  const [showTestModal, setShowTestModal] = useState(false);
-  const [showInterviewModal, setShowInterviewModal] = useState(false);
-  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [results, setResults] = useState<ResultsPayload | null>(null);
 
   useEffect(() => {
@@ -61,7 +100,6 @@ export default function ResultsModal({ history, onClose }: Props) {
         });
 
         if (!res.ok) {
-          // Keep UI stable but log the specific HTTP error for debugging
           console.error('Failed to fetch results:', res.status, res.statusText);
           setResults(null);
           return;
@@ -70,7 +108,6 @@ export default function ResultsModal({ history, onClose }: Props) {
         const data = (await res.json()) as ResultsPayload;
         setResults(data);
       } catch (err: any) {
-        // Ignore fetch cancellations; surface real errors only
         if (err?.name === 'AbortError' || err?.code === 20) return;
         console.error('Failed to fetch results:', err);
         setResults(null);
@@ -88,14 +125,18 @@ export default function ResultsModal({ history, onClose }: Props) {
     });
   };
 
-  const handleSendTest = (candidate: Candidate) => {
-    setSelectedCandidate(candidate);
-    setShowTestModal(true);
+  // ✅ Buttons open the *exact same* flows as the Candidate Profile by deep-linking with an action.
+  // This guarantees identical functionality without duplicating logic.
+  const goSendTest = (candidate: Candidate) => {
+    const cid = candidate._id || candidate.id || '';
+    if (!cid) return;
+    router.push(`/candidate/${cid}?action=sendTest`);
   };
 
-  const handleScheduleInterview = (candidate: Candidate) => {
-    setSelectedCandidate(candidate);
-    setShowInterviewModal(true);
+  const goScheduleInterview = (candidate: Candidate) => {
+    const cid = candidate._id || candidate.id || '';
+    if (!cid) return;
+    router.push(`/candidate/${cid}?action=scheduleInterview`);
   };
 
   // theme-aware score badge colors (kept same thresholds)
@@ -109,7 +150,8 @@ export default function ResultsModal({ history, onClose }: Props) {
   if (!results) return null;
 
   return (
-    <div className="fixed inset-0 z-50 p-4 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    /* ✅ Removed black, semi-transparent overlay & blur per requirement #6 */
+    <div className="fixed inset-0 z-50 p-4 flex items-center justify-center">
       <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border">
         {/* Header */}
         <div className="relative p-6">
@@ -139,22 +181,33 @@ export default function ResultsModal({ history, onClose }: Props) {
             <h3 className="text-lg font-semibold">
               {results.totalMatches} Candidates Found
             </h3>
-            <div className="flex items-center gap-2">
-              <button className="btn-secondary text-sm">
-                <i className="ri-download-line mr-1" />
-                Export Results
-              </button>
-              <button className="btn-outline text-sm">
-                <i className="ri-mail-line mr-1" />
-                Bulk Email
-              </button>
-            </div>
+
+            {/* ❌ Removed Export Results & Bulk Email per requirement #1 */}
           </div>
 
           <div className="space-y-4">
             {results.candidates.map((candidate) => {
               const cid = candidate._id || candidate.id || '';
-              const score = candidate.score ?? candidate.match_score ?? 0;
+
+              // ✅ Dynamic match % (final_score / prompt_matching_score / score / match_score)
+              let displayScore =
+                Math.round(
+                  Number(
+                    candidate.final_score ??
+                    candidate.prompt_matching_score ??
+                    candidate.score ??
+                    candidate.match_score ??
+                    0
+                  ) || 0
+                );
+
+              // If backend provided no score (common for older saved blocks), compute a heuristic fallback
+              if ((!displayScore || displayScore === 0) && results.prompt) {
+                displayScore = Math.round(heuristicMatchScore(results.prompt, candidate));
+              }
+
+              if (displayScore < 0) displayScore = 0;
+              if (displayScore > 100) displayScore = 100;
 
               return (
                 <div
@@ -188,28 +241,15 @@ export default function ResultsModal({ history, onClose }: Props) {
                         </div>
                         <div
                           className={`px-3 py-1 rounded-full text-sm font-medium border whitespace-nowrap ${getScoreColor(
-                            score
+                            displayScore
                           )}`}
-                          aria-label={`Match score ${score}%`}
+                          aria-label={`Match score ${displayScore}%`}
                         >
-                          {score}% Match
+                          {displayScore}% Match
                         </div>
                       </div>
 
-                      {/* Match Reasons */}
-                      <div className="mb-3">
-                        <p className="mb-1 text-sm text-muted-foreground">Match reasons:</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {(candidate.matchReasons || candidate.skills || []).slice(0, 5).map((reason, idx) => (
-                            <span
-                              key={idx}
-                              className="px-2 py-1 rounded-full text-xs font-medium border bg-[hsl(var(--info)/.12)] text-[hsl(var(--info))] border-[hsl(var(--info)/.35)]"
-                            >
-                              {reason}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
+                      {/* ❌ Removed "Match reasons" block per requirement #2 */}
 
                       {/* Actions */}
                       <div className="flex items-center gap-2">
@@ -221,16 +261,20 @@ export default function ResultsModal({ history, onClose }: Props) {
                           <i className="ri-eye-line mr-1" />
                           View Candidate
                         </Link>
+
+                        {/* ✅ Exactly same behavior as profile flow by deep-linking with action */}
                         <button
-                          onClick={() => handleSendTest(candidate)}
-                          className="btn-success text-sm whitespace-nowrap"
+                          onClick={() => goSendTest(candidate)}
+                          className="btn-primary text-sm whitespace-nowrap"
+                          aria-label={`Send Test to ${candidate.name}`}
                         >
                           <i className="ri-file-list-line mr-1" />
                           Send Test
                         </button>
                         <button
-                          onClick={() => handleScheduleInterview(candidate)}
-                          className="btn-warning text-sm whitespace-nowrap"
+                          onClick={() => goScheduleInterview(candidate)}
+                          className="btn-primary text-sm whitespace-nowrap"
+                          aria-label={`Schedule Interview with ${candidate.name}`}
                         >
                           <i className="ri-calendar-event-line mr-1" />
                           Schedule Interview
@@ -264,8 +308,6 @@ export default function ResultsModal({ history, onClose }: Props) {
           </div>
         </div>
       </div>
-
-      {/* Modals remain unchanged — reuse your existing Test & Interview modals */}
     </div>
   );
 }

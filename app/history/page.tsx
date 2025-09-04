@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import HistoryFilter from './HistoryFilter';
 import HistoryBlocks from './HistoryBlocks';
 import ResultsModal from './ResultsModal';
+import RerunPromptModal from './RerunPromptModal';
 
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
@@ -13,6 +14,7 @@ export default function HistoryPage() {
   const [filteredData, setFilteredData] = useState<any[]>([]);
   const [selectedHistory, setSelectedHistory] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
+  const [rerunFor, setRerunFor] = useState<any | null>(null); // ✅ new: controls Re-run Prompt popup
 
   // fetch history (ignores AbortError cleanly)
   const fetchHistory = async () => {
@@ -86,6 +88,10 @@ export default function HistoryPage() {
     setShowModal(true);
   };
 
+  /**
+   * Legacy global rerun (kept for backward compat if some child still calls it).
+   * New behavior uses a scoped popup (RerunPromptModal) via onOpenRerunModal below.
+   */
   const handleRerunPrompt = async (prompt: string) => {
     try {
       const res = await fetch(`${API_BASE}/chatbot/query`, {
@@ -106,6 +112,11 @@ export default function HistoryPage() {
       if (err?.name === 'AbortError') return;
       console.error('Failed to rerun prompt:', err);
     }
+  };
+
+  // ✅ New: open the popup-style rerun modal scoped to a specific history block
+  const openRerunModal = (history: any) => {
+    setRerunFor(history);
   };
 
   return (
@@ -172,7 +183,8 @@ export default function HistoryPage() {
           <HistoryBlocks
             historyData={filteredData}
             onViewResults={handleViewResults}
-            onRerunPrompt={handleRerunPrompt}
+            onOpenRerunModal={openRerunModal}   // ✅ new scoped rerun flow
+            onRerunPrompt={handleRerunPrompt}   // legacy fallback (kept)
           />
         </div>
       </section>
@@ -180,6 +192,17 @@ export default function HistoryPage() {
       {/* Results Modal */}
       {showModal && (
         <ResultsModal history={selectedHistory} onClose={() => setShowModal(false)} />
+      )}
+
+      {/* ✅ Re-run Prompt Modal (scoped to the selected history block) */}
+      {rerunFor && (
+        <RerunPromptModal
+          history={rerunFor}
+          onClose={async () => {
+            setRerunFor(null);
+            await fetchHistory(); // refresh list after saving narrowed results
+          }}
+        />
       )}
     </div>
   );

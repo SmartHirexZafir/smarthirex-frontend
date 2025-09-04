@@ -13,19 +13,34 @@ type HistoryItem = {
 type Props = {
   historyData: HistoryItem[];
   onViewResults: (history: HistoryItem) => void;
-  onRerunPrompt: (prompt: string) => void;
+
+  // ✅ Backwards-compatible props: support new modal-based rerun flow,
+  // but still fall back to the legacy string-based callback if needed.
+  onOpenRerunModal?: (history: HistoryItem) => void; // new (preferred)
+  onRerunPrompt?: (prompt: string) => void;           // legacy
 };
 
-export default function HistoryBlocks({ historyData, onViewResults, onRerunPrompt }: Props) {
+export default function HistoryBlocks({
+  historyData,
+  onViewResults,
+  onOpenRerunModal,
+  onRerunPrompt,
+}: Props) {
   const [rerunningId, setRerunningId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 5;
 
-  const handleRerun = async (id: string, prompt: string) => {
-    setRerunningId(id);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    onRerunPrompt(prompt);
-    setRerunningId(null);
+  // ✅ Updated: open popup-style rerun modal scoped to this history block if provided,
+  // otherwise gracefully fall back to the legacy onRerunPrompt(prompt).
+  const handleRerun = (history: HistoryItem) => {
+    setRerunningId(history.id);
+    if (onOpenRerunModal) {
+      onOpenRerunModal(history);
+    } else if (onRerunPrompt) {
+      onRerunPrompt(history.prompt);
+    }
+    // brief visual feedback without delaying the action
+    setTimeout(() => setRerunningId(null), 300);
   };
 
   const getMatchBadgeClasses = (count: number) => {
@@ -80,10 +95,11 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
                 <div className="flex items-start justify-between mb-6 gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-4 mb-3">
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center shadow-glow gradient-border"
+                      <div
+                        className="w-12 h-12 rounded-full flex items-center justify-center shadow-glow gradient-border"
                         style={{
                           backgroundImage:
-                            'linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)), linear-gradient(135deg, hsl(var(--g1)) 0%, hsl(var(--g2)) 45%, hsl(var(--g3)) 100%)'
+                            'linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)), linear-gradient(135deg, hsl(var(--g1)) 0%, hsl(var(--g2)) 45%, hsl(var(--g3)) 100%)',
                         }}
                       >
                         <i className="ri-brain-line text-white text-xl"></i>
@@ -120,14 +136,15 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
                   </button>
 
                   <button
-                    onClick={() => handleRerun(history.id, history.prompt)}
+                    onClick={() => handleRerun(history)}
                     disabled={rerunningId === history.id}
                     className="btn-outline whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed shadow-soft"
+                    aria-label={`Re-run prompt for "${history.prompt}"`}
                   >
                     {rerunningId === history.id ? (
                       <div className="flex items-center">
                         <div className="w-4 h-4 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin mr-2" />
-                        Running...
+                        Opening…
                       </div>
                     ) : (
                       <>
@@ -160,9 +177,7 @@ export default function HistoryBlocks({ historyData, onViewResults, onRerunPromp
                 key={page}
                 onClick={() => setCurrentPage(page)}
                 className={`h-12 min-w-12 px-3 rounded-xl text-sm font-semibold transition-transform duration-200 ${
-                  currentPage === page
-                    ? 'btn-primary'
-                    : 'btn-outline'
+                  currentPage === page ? 'btn-primary' : 'btn-outline'
                 }`}
               >
                 {page}

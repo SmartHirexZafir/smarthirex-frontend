@@ -2,12 +2,24 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import InterviewScheduler from './InterviewScheduler';
 
 type HubTab = 'schedule';
 
 export default function MeetingsHub() {
   const [activeTab, setActiveTab] = useState<HubTab>('schedule');
+
+  // Read candidateId from the query string so we can render the prefilled flow
+  const params = useSearchParams();
+  const candidateId = params.get('candidateId') || '';
+
+  // Page-level toast (used when InterviewScheduler sends emails/schedules)
+  const [toast, setToast] = useState<string | null>(null);
+  const handleToast = (msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast(null), 2200);
+  };
 
   return (
     <div className="min-h-screen bg-background page-aurora">
@@ -79,9 +91,38 @@ export default function MeetingsHub() {
 
         {/* Tab Content */}
         <div className="space-y-6">
-          {activeTab === 'schedule' && <InterviewScheduler />}
+          {activeTab === 'schedule' && (
+            <InterviewScheduler
+              prefilled={candidateId ? { candidateId } : undefined}
+              onToast={handleToast}
+            />
+          )}
         </div>
       </div>
+
+      {/* Toast from child actions (email sent / scheduled, etc.) */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-[60]">
+          <div role="status" aria-live="polite" className="panel glass shadow-lux px-4 py-3 min-w-[260px]">
+            <div className="flex items-start gap-3">
+              <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[hsl(var(--success))]" />
+              <div className="flex-1 text-sm">
+                <div className="font-medium">Success</div>
+                <div className="mt-0.5 text-[hsl(var(--muted-foreground))]">{toast}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setToast(null)}
+                className="icon-btn h-8 w-8"
+                aria-label="Close"
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

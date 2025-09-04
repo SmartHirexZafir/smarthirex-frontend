@@ -1,128 +1,115 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-type TabId = 'pending' | 'completed' | 'noshow';
+type TabId = 'accepted' | 'rejected';
 
-type ItemStatus = 'Scheduled' | 'In Progress' | 'Completed' | 'No Show';
-type ItemType = 'Interview' | 'Test';
-
-interface Item {
-  id: string;
-  candidate: string;
-  type: ItemType;
-  date: string;
-  time: string;
-  status: ItemStatus;
-  testScore: number | null;
-  meetUrl: string | null;
-  avatar: string;
-}
-
-const mockData: Record<TabId, Item[]> = {
-  pending: [
-    {
-      id: '1',
-      candidate: 'Sarah Johnson',
-      type: 'Interview',
-      date: '2024-01-20',
-      time: '10:00 AM',
-      status: 'Scheduled',
-      testScore: null,
-      meetUrl: 'https://meet.google.com/abc-def-ghi',
-      avatar:
-        'https://readdy.ai/api/search-image?query=professional%20female%20software%20developer%20headshot%2C%20confident%20tech%20professional%2C%20modern%20corporate%20portrait%2C%20clean%20background%2C%20business%20casual%20attire%2C%20friendly%20smile%2C%20professional%20photography&width=100&height=100&seq=candidate-status-001&orientation=squarish',
-    },
-    {
-      id: '2',
-      candidate: 'Michael Chen',
-      type: 'Test',
-      date: '2024-01-19',
-      time: '2:00 PM',
-      status: 'In Progress',
-      testScore: null,
-      meetUrl: null,
-      avatar:
-        'https://readdy.ai/api/search-image?query=professional%20male%20software%20developer%20headshot%2C%20confident%20tech%20professional%2C%20modern%20corporate%20portrait%2C%20clean%20background%2C%20business%20casual%20attire%2C%20friendly%20smile%2C%20professional%20photography&width=100&height=100&seq=candidate-status-002&orientation=squarish',
-    },
-  ],
-  completed: [
-    {
-      id: '3',
-      candidate: 'Emily Rodriguez',
-      type: 'Test',
-      date: '2024-01-18',
-      time: '11:00 AM',
-      status: 'Completed',
-      testScore: 85,
-      meetUrl: null,
-      avatar:
-        'https://readdy.ai/api/search-image?query=professional%20female%20software%20developer%20headshot%2C%20confident%20tech%20professional%2C%20modern%20corporate%20portrait%2C%20clean%20background%2C%20business%20casual%20attire%2C%20friendly%20smile%2C%20professional%20photography&width=100&height=100&seq=candidate-status-003&orientation=squarish',
-    },
-    {
-      id: '4',
-      candidate: 'David Kim',
-      type: 'Interview',
-      date: '2024-01-17',
-      time: '3:30 PM',
-      status: 'Completed',
-      testScore: 92,
-      meetUrl: 'https://meet.google.com/xyz-abc-def',
-      avatar:
-        'https://readdy.ai/api/search-image?query=professional%20male%20software%20developer%20headshot%2C%20confident%20tech%20professional%2C%20modern%20corporate%20portrait%2C%20clean%20background%2C%20business%20casual%20attire%2C%20friendly%20smile%2C%20professional%20photography&width=100&height=100&seq=candidate-status-004&orientation=squarish',
-    },
-  ],
-  noshow: [
-    {
-      id: '5',
-      candidate: 'Jessica Brown',
-      type: 'Interview',
-      date: '2024-01-16',
-      time: '9:00 AM',
-      status: 'No Show',
-      testScore: null,
-      meetUrl: 'https://meet.google.com/no-show-123',
-      avatar:
-        'https://readdy.ai/api/search-image?query=professional%20female%20software%20developer%20headshot%2C%20confident%20tech%20professional%2C%20modern%20corporate%20portrait%2C%20clean%20background%2C%20business%20casual%20attire%2C%20friendly%20smile%2C%20professional%20photography&width=100&height=100&seq=candidate-status-005&orientation=squarish',
-    },
-  ],
+type CandidateDoc = {
+  _id: string;
+  name?: string;
+  email?: string;
+  resume?: { email?: string };
+  job_role?: string;
+  status?: string; // 'accepted' | 'rejected' | ...
+  score?: number | null; // match score
+  test_score?: number | null;
+  total_score?: number | null; // may be provided by backend
+  avatar?: string; // optional; fallback UI if missing
 };
 
-function getStatusColor(status: ItemStatus): string {
-  // Keeping semantic colors for statuses; neutrals elsewhere use theme tokens.
-  switch (status) {
-    case 'Scheduled':
-      return 'bg-blue-100 text-blue-800';
-    case 'In Progress':
-      return 'bg-yellow-100 text-yellow-800';
-    case 'Completed':
+/* =========================
+ * API helpers (aligned with app)
+ * ========================= */
+const API_BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_BASE ||
+  'http://localhost:10000'
+).replace(/\/$/, '');
+
+const getAuthToken = (): string | null =>
+  (typeof window !== 'undefined' &&
+    (localStorage.getItem('token') ||
+      localStorage.getItem('authToken') ||
+      localStorage.getItem('access_token') ||
+      localStorage.getItem('AUTH_TOKEN'))) ||
+  null;
+
+const authHeaders = () => {
+  const h: Record<string, string> = { 'Content-Type': 'application/json' };
+  const t = getAuthToken();
+  if (t) h.Authorization = `Bearer ${t}`;
+  return h;
+};
+
+function emailOf(c: CandidateDoc): string {
+  return c.email || c.resume?.email || '';
+}
+
+function safeTotal(c: CandidateDoc): number | null {
+  if (typeof c.total_score === 'number') return c.total_score;
+  const m = Number(c.score ?? 0);
+  const t = Number(c.test_score ?? 0);
+  if (Number.isNaN(m) && Number.isNaN(t)) return null;
+  // Reasonable initial: average of match & test
+  const total = ((Number.isNaN(m) ? 0 : m) + (Number.isNaN(t) ? 0 : t)) / 2;
+  return Math.round(total * 10) / 10;
+}
+
+function statusPill(status?: string): string {
+  switch ((status || '').toLowerCase()) {
+    case 'accepted':
       return 'bg-green-100 text-green-800';
-    case 'No Show':
+    case 'rejected':
       return 'bg-red-100 text-red-800';
     default:
       return 'bg-muted text-foreground';
   }
 }
 
-function getTypeIcon(type: ItemType): string {
-  return type === 'Interview' ? 'ri-video-line' : 'ri-test-tube-line';
-}
-
 export default function StatusDashboard() {
-  const [activeTab, setActiveTab] = useState<TabId>('pending');
+  const [activeTab, setActiveTab] = useState<TabId>('accepted');
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
 
-  const currentData = mockData[activeTab] ?? [];
+  const [accepted, setAccepted] = useState<CandidateDoc[]>([]);
+  const [rejected, setRejected] = useState<CandidateDoc[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Fetch dashboard lists from backend
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`${API_BASE}/dashboard/overview`, { headers: authHeaders() });
+        const data = await res.json().catch(() => ({}));
+        if (!mounted) return;
+        setAccepted(Array.isArray(data?.accepted) ? data.accepted : []);
+        setRejected(Array.isArray(data?.rejected) ? data.rejected : []);
+      } catch (e) {
+        setErr('Failed to load dashboard. Showing empty state.');
+      } finally {
+        setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const currentData = useMemo<CandidateDoc[]>(() => {
+    return activeTab === 'accepted' ? accepted : rejected;
+  }, [activeTab, accepted, rejected]);
 
   const handleSelectItem = (id: string) => {
     setSelectedItems((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedItems(currentData.map((item) => item.id));
+      setSelectedItems(currentData.map((c) => c._id));
     } else {
       setSelectedItems([]);
     }
@@ -133,7 +120,7 @@ export default function StatusDashboard() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center">
           <i className="ri-dashboard-line text-2xl text-foreground/80 mr-3" />
-          <h2 className="text-xl font-bold">Meeting &amp; Test Status Dashboard</h2>
+          <h2 className="text-xl font-bold">Candidates Dashboard</h2>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -154,22 +141,11 @@ export default function StatusDashboard() {
         </div>
       </div>
 
-      {/* Tab Navigation */}
+      {/* Tab Navigation: Accepted / Rejected */}
       <div className="flex space-x-1 bg-muted p-1 rounded-lg mb-6 border border-border">
         {([
-          { id: 'pending', label: 'Pending', icon: 'ri-time-line', count: mockData.pending.length },
-          {
-            id: 'completed',
-            label: 'Completed',
-            icon: 'ri-check-line',
-            count: mockData.completed.length,
-          },
-          {
-            id: 'noshow',
-            label: 'No-Show / Rejected',
-            icon: 'ri-close-line',
-            count: mockData.noshow.length,
-          },
+          { id: 'accepted', label: 'Accepted', icon: 'ri-check-line', count: accepted.length },
+          { id: 'rejected', label: 'Rejected', icon: 'ri-close-line', count: rejected.length },
         ] as Array<{ id: TabId; label: string; icon: string; count: number }>).map((tab) => (
           <button
             key={tab.id}
@@ -193,6 +169,16 @@ export default function StatusDashboard() {
         ))}
       </div>
 
+      {/* Error / Loading Notice */}
+      {err && (
+        <div className="mb-4 text-sm text-[hsl(var(--destructive))]">
+          {err}
+        </div>
+      )}
+      {loading && (
+        <div className="mb-4 text-sm text-muted-foreground">Loading…</div>
+      )}
+
       {/* Data Table */}
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -208,112 +194,114 @@ export default function StatusDashboard() {
                 />
               </th>
               <th className="text-left py-3 px-4 font-medium text-foreground">Candidate</th>
-              <th className="text-left py-3 px-4 font-medium text-foreground">Type</th>
-              <th className="text-left py-3 px-4 font-medium text-foreground">Date &amp; Time</th>
+              <th className="text-left py-3 px-4 font-medium text-foreground">Role</th>
+              <th className="text-left py-3 px-4 font-medium text-foreground">Match</th>
+              <th className="text-left py-3 px-4 font-medium text-foreground">Test</th>
+              <th className="text-left py-3 px-4 font-medium text-foreground">Total</th>
               <th className="text-left py-3 px-4 font-medium text-foreground">Status</th>
-              <th className="text-left py-3 px-4 font-medium text-foreground">Score</th>
               <th className="text-left py-3 px-4 font-medium text-foreground">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {currentData.map((item) => {
-              const isSelected = selectedItems.includes(item.id);
-              const hasScore = item.testScore !== null && item.testScore !== undefined;
+            {currentData.map((c) => {
+              const isSelected = selectedItems.includes(c._id);
+              const total = safeTotal(c);
               return (
-                <tr key={item.id} className="border-b border-border hover:bg-muted/40">
+                <tr key={c._id} className="border-b border-border hover:bg-muted/40">
                   <td className="py-4 px-4">
                     <input
                       type="checkbox"
                       className="rounded"
-                      aria-label={`Select ${item.candidate}`}
+                      aria-label={`Select ${c.name || emailOf(c) || c._id}`}
                       checked={isSelected}
-                      onChange={() => handleSelectItem(item.id)}
+                      onChange={() => handleSelectItem(c._id)}
                     />
                   </td>
                   <td className="py-4 px-4">
                     <div className="flex items-center space-x-3">
-                      <img
-                        src={item.avatar}
-                        alt={item.candidate}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
+                      {c.avatar ? (
+                        <img
+                          src={c.avatar}
+                          alt={c.name || emailOf(c) || 'Candidate'}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-background/60 border border-border flex items-center justify-center">
+                          <i className="ri-user-line text-muted-foreground" />
+                        </div>
+                      )}
                       <div>
-                        <p className="font-medium">{item.candidate}</p>
-                        <p className="text-sm text-muted-foreground">Frontend Developer</p>
+                        <p className="font-medium">{c.name || emailOf(c) || '—'}</p>
+                        <p className="text-sm text-muted-foreground">{emailOf(c) || '—'}</p>
                       </div>
                     </div>
                   </td>
+                  <td className="py-4 px-4">{c.job_role || '—'}</td>
                   <td className="py-4 px-4">
-                    <div className="flex items-center space-x-2">
-                      <i className={`${getTypeIcon(item.type)} text-foreground/80`} />
-                      <span>{item.type}</span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div>
-                      <p>{item.date}</p>
-                      <p className="text-sm text-muted-foreground">{item.time}</p>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>
-                      {item.status}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4">
-                    {hasScore ? (
+                    {typeof c.score === 'number' ? (
                       <div className="flex items-center space-x-2">
-                        <span className="text-lg font-bold text-emerald-600">{item.testScore}%</span>
-                        <i className="ri-star-fill text-amber-500" />
+                        <span className="text-lg font-semibold">{c.score}%</span>
+                        <i className="ri-star-line text-amber-500" />
                       </div>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
                   <td className="py-4 px-4">
+                    {typeof c.test_score === 'number' ? (
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg font-semibold text-emerald-600">{c.test_score}%</span>
+                        <i className="ri-star-fill text-emerald-500" />
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="py-4 px-4">
+                    {typeof total === 'number' ? (
+                      <div className="flex items-center space-x-2">
+                        <span className="text-lg font-bold">{total}%</span>
+                        <i className="ri-trophy-line text-primary" />
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="py-4 px-4">
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusPill(c.status)}`}>
+                      {c.status ? c.status[0].toUpperCase() + c.status.slice(1) : '—'}
+                    </span>
+                  </td>
+                  <td className="py-4 px-4">
                     <div className="flex items-center space-x-2">
-                      {hasScore && (
-                        <button
-                          type="button"
-                          className="p-2 text-foreground hover:bg-muted/60 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          aria-label="View score details"
-                        >
-                          <i className="ri-eye-line" />
-                        </button>
-                      )}
-                      {item.meetUrl && (
-                        <a
-                          href={item.meetUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 text-foreground hover:bg-muted/60 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          aria-label="Open meeting link"
-                          title="Open meeting link"
-                        >
-                          <i className="ri-video-line" />
-                        </a>
-                      )}
-                      <button
-                        type="button"
+                      <a
+                        href={`/candidate/${c._id}`}
+                        className="p-2 text-foreground hover:bg-muted/60 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label="Open candidate profile"
+                        title="Open candidate profile"
+                      >
+                        <i className="ri-user-search-line" />
+                      </a>
+                      <a
+                        href={`mailto:${emailOf(c)}`}
                         className="p-2 text-foreground hover:bg-muted/60 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         aria-label="Send email"
+                        title="Send email"
                       >
                         <i className="ri-mail-line" />
-                      </button>
-                      {item.status === 'No Show' && (
-                        <button
-                          type="button"
-                          className="p-2 text-foreground hover:bg-muted/60 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          aria-label="Mark as rejected"
-                        >
-                          <i className="ri-close-line" />
-                        </button>
-                      )}
+                      </a>
                     </div>
                   </td>
                 </tr>
               );
             })}
+            {currentData.length === 0 && (
+              <tr>
+                <td colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
+                  No candidates in this list yet.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -334,22 +322,23 @@ export default function StatusDashboard() {
                 type="button"
                 className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:opacity-90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                Reschedule
+                Add Note
               </button>
               <button
                 type="button"
-                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:opacity-90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="px-4 py-2 rounded-lg bg-muted text-foreground border border-border hover:bg-muted/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => setSelectedItems([])}
               >
-                Cancel
+                Clear
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Extra Features */}
+      {/* Extra Features (kept, lightly adapted wording) */}
       <div className="mt-6 p-4 bg-gradient-to-r from-muted to-muted/60 rounded-xl border border-border">
-        <h3 className="text-lg font-semibold mb-3">HR Feedback &amp; Settings</h3>
+        <h3 className="text-lg font-semibold mb-3">HR Tools &amp; Settings</h3>
         <div className="grid md:grid-cols-3 gap-4">
           <div className="bg-card p-4 rounded-lg border border-border">
             <h4 className="font-medium mb-2">Auto-Schedule Next Round</h4>

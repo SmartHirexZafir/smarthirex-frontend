@@ -2,11 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import TestEmailModal from "@/app/(shared)/TestEmailModal";
-
-// Scheduler modal + service
-import ScheduleInterviewModal from "@/app/(shared)/ScheduleInterviewModal";
-import { scheduleInterview } from "@/app/meetings/services/scheduleInterview";
+import { useRouter } from "next/navigation";
 
 type Candidate = {
   _id: string;
@@ -17,6 +13,7 @@ type Candidate = {
   job_role?: string;
   predicted_role?: string;
   category?: string;
+  test_score?: number; // <-- used to gate Schedule flow
 };
 
 type ActionButtonsProps = {
@@ -31,15 +28,8 @@ const API_BASE = (
   "http://localhost:10000"
 ).replace(/\/$/, "");
 
-// Optional type for scheduleInterview response (non-breaking)
-type ScheduleResponse = {
-  ok?: boolean;
-  meetingUrl?: string;
-  [k: string]: unknown;
-};
-
 /** Pull a bearer token if present (keeps parity with CandidateDetail) */
-const getAuthToken =(): string | null =>
+const getAuthToken = (): string | null =>
   (typeof window !== "undefined" &&
     (localStorage.getItem("token") ||
       localStorage.getItem("authToken") ||
@@ -55,17 +45,13 @@ const authHeaders = () => {
 };
 
 export default function ActionButtons({ candidate, onStatusChange }: ActionButtonsProps) {
+  const router = useRouter();
+
   const [isShortlisted, setIsShortlisted] = useState(false);
   const [isRejected, setIsRejected] = useState(false);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [showTestModal, setShowTestModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Success toast (schedule)
-  const [showInviteToast, setShowInviteToast] = useState(false);
-  const [inviteUrl, setInviteUrl] = useState<string | undefined>(undefined);
-
-  // Error toast (non-blocking replacement for alert)
+  // Error toast (also used for the “please complete test” dialog)
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -124,6 +110,11 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
       // revert optimistic change on failure
       setIsShortlisted(prevShortlisted);
       setIsRejected(prevRejected);
+    } else {
+      // Per spec: when "Accept" (we treat shortlist as accept) send to Dashboard
+      if (newStatus === "shortlisted") {
+        router.push("/dashboard");
+      }
     }
   };
 
@@ -142,63 +133,54 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
       // revert optimistic change on failure
       setIsRejected(prevRejected);
       setIsShortlisted(prevShortlisted);
+    } else {
+      // If just rejected, send to Dashboard per spec
+      if (newStatus === "rejected") {
+        router.push("/dashboard");
+      }
     }
   };
 
-  // show toast helper
-  const showSuccessToast = (url?: string) => {
-    setInviteUrl(url);
-    setShowInviteToast(true);
-    // auto-hide after 4s
-    window.setTimeout(() => setShowInviteToast(false), 4000);
+  // --- Spec changes for Test & Meetings flows ---
+
+  // 1) Send Test → redirect to Test page with candidate context
+  const handleSendTest = () => {
+    if (!candidate?._id) {
+      setErrorMsg("Unable to open Test page — candidate ID is missing.");
+      return;
+    }
+    router.push(`/test?candidateId=${candidate._id}`);
   };
 
-  const scheduleDisabled = !candidateEmail; // guard if no email available
+  // 2) Schedule Interview gating:
+  //    - must have an email (hard block)
+  //    - must have a test score (soft guard that shows dialog until test completed)
+  const hasEmail = !!candidateEmail;
+  const hasTestScore =
+    candidate?.test_score !== undefined &&
+    candidate?.test_score !== null &&
+    !Number.isNaN(Number(candidate?.test_score));
 
-  // Unified schedule submit handler:
-  // 1) try service client (scheduleInterview)
-  // 2) if it throws/fails, fallback to direct backend endpoint: POST /candidate/{id}/schedule
-  const handleScheduleSubmit = async (payload: any) => {
-    try {
-      // Always attach candidate identity / email so backend has context
-      const enriched = {
-        ...payload,
-        candidateId: candidate._id,
-        candidateEmail: candidateEmail || payload?.email,
-        candidateName: candidate.name,
-      };
+  const scheduleHardDisabled = !hasEmail; // truly disable when we can't proceed at all
+  const scheduleSoftBlocked = !hasTestScore; // clickable but shows guidance dialog
 
-      let resp: ScheduleResponse | undefined;
+  const handleSchedule = () => {
+    if (!candidate?._id) {
+      setErrorMsg("Unable to schedule — candidate ID is missing.");
+      return;
+    }
+    if (scheduleHardDisabled) return; // native disabled prevents click; extra guard
 
-      try {
-        resp = (await scheduleInterview(enriched)) as ScheduleResponse | undefined;
-      } catch (serviceErr) {
-        console.warn("scheduleInterview service failed, attempting direct API:", serviceErr);
-      }
-
-      if (!resp || (resp && resp.ok === false && !resp.meetingUrl)) {
-        // direct API fallback
-        const res = await fetch(`${API_BASE}/candidate/${candidate._id}/schedule`, {
-          method: "POST",
-          headers: authHeaders(),
-          body: JSON.stringify(enriched),
-        });
-        const data = (await res.json().catch(() => ({}))) as ScheduleResponse;
-        if (!res.ok) throw new Error((data as any)?.detail || "Failed to schedule interview");
-        resp = data;
-      }
-
-      // success
-      setShowScheduleModal(false);
-      showSuccessToast(resp?.meetingUrl);
-    } catch (err: any) {
-      console.error("Scheduling failed:", err);
+    if (scheduleSoftBlocked) {
+      // Friendly dialog per requirement
       setErrorMsg(
-        typeof err?.message === "string"
-          ? err.message
-          : "Could not schedule interview. Please try again."
+        "Please have the candidate complete the test first. Once their test score is available, you can schedule the interview here."
       );
+      return;
     }
+
+    // All good → redirect to Meetings page with prefilled candidate
+    router.push(`/meetings?candidateId=${candidate._id}`);
   };
 
   // ---- Unified visual style for ALL four action buttons ----
@@ -222,7 +204,10 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
   const sendTestBtnCls = [baseBtn, "text-[hsl(var(--info))]"].join(" ");
   const scheduleBtnCls = [
     baseBtn,
-    scheduleDisabled ? "opacity-60 cursor-not-allowed" : "text-[hsl(var(--primary))]",
+    scheduleHardDisabled || scheduleSoftBlocked
+      ? "opacity-60" // visually disabled when missing email or awaiting test
+      : "text-[hsl(var(--primary))]",
+    scheduleHardDisabled ? "cursor-not-allowed" : "",
   ].join(" ");
 
   return (
@@ -260,22 +245,25 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
             <span className="text-sm">{isRejected ? "Rejected" : "Reject"}</span>
           </button>
 
-          {/* Send Test */}
-          <button
-            type="button"
-            onClick={() => setShowTestModal(true)}
-            className={sendTestBtnCls}
-          >
+          {/* Send Test → redirect to Test page */}
+          <button type="button" onClick={handleSendTest} className={sendTestBtnCls}>
             <i className="ri-file-list-line text-[1.05em]" />
             <span className="text-sm">Send Test</span>
           </button>
 
-          {/* Schedule */}
+          {/* Schedule → gated by email (hard) and test_score (soft dialog) */}
           <button
             type="button"
-            onClick={() => !scheduleDisabled && setShowScheduleModal(true)}
-            disabled={scheduleDisabled}
-            title={scheduleDisabled ? "Candidate email required to schedule" : undefined}
+            onClick={handleSchedule}
+            disabled={scheduleHardDisabled}
+            title={
+              scheduleHardDisabled
+                ? "Candidate email required to schedule"
+                : scheduleSoftBlocked
+                ? "Please complete the test first"
+                : undefined
+            }
+            aria-disabled={scheduleHardDisabled || scheduleSoftBlocked}
             className={scheduleBtnCls}
           >
             <i className="ri-calendar-event-line text-[1.05em]" />
@@ -303,73 +291,14 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
         </div>
       </div>
 
-      {/* Real Schedule Modal integration */}
-      {showScheduleModal && (
-        <ScheduleInterviewModal
-          open={showScheduleModal}
-          onClose={() => setShowScheduleModal(false)}
-          candidate={{
-            id: candidate._id,
-            name: candidate.name || undefined,
-            email: candidateEmail,
-          }}
-          onSubmit={handleScheduleSubmit}
-          onScheduled={(resp: ScheduleResponse | undefined) => {
-            // onSubmit already handles success toast; this remains for backward-compat
-            if (resp?.meetingUrl) showSuccessToast(resp.meetingUrl);
-            setShowScheduleModal(false);
-          }}
-        />
-      )}
-
-      {/* Send Test Modal */}
-      {showTestModal && (
-        <TestEmailModal open={showTestModal} onClose={() => setShowTestModal(false)} candidate={candidate} />
-      )}
-
-      {/* Tiny success toast */}
-      {showInviteToast && (
-        <div className="fixed bottom-6 right-6 z-[60]">
-          <div role="status" aria-live="polite" className="panel glass shadow-lux px-4 py-3 min-w-[260px]">
-            <div className="flex items-start gap-3">
-              <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[hsl(var(--success))]" />
-              <div className="flex-1 text-sm">
-                <div className="font-medium">Interview invite sent</div>
-                <div className="mt-0.5 text-[hsl(var(--muted-foreground))]">
-                  The candidate has received the invitation email.
-                  {inviteUrl ? (
-                    <>
-                      {" "}
-                      <a className="text-[hsl(var(--primary))] underline" href={inviteUrl} target="_blank" rel="noreferrer">
-                        View meeting page
-                      </a>
-                      .
-                    </>
-                  ) : null}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowInviteToast(false)}
-                className="icon-btn h-8 w-8"
-                aria-label="Close"
-                title="Close"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Error toast */}
+      {/* Error toast / guidance dialog */}
       {errorMsg && (
         <div className="fixed bottom-6 right-6 z-[60]">
           <div role="status" aria-live="assertive" className="panel glass shadow-lux px-4 py-3 min-w-[260px]">
             <div className="flex items-start gap-3">
               <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[hsl(var(--destructive))]" />
               <div className="flex-1 text-sm">
-                <div className="font-medium">Action failed</div>
+                <div className="font-medium">Action needed</div>
                 <div className="mt-0.5 text-[hsl(var(--muted-foreground))]">{errorMsg}</div>
               </div>
               <button

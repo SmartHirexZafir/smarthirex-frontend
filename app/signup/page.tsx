@@ -25,6 +25,14 @@ export default function SignupPage() {
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
+  // === Google login (only addition) ===
+  const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
+  const handleGoogleLogin = () => {
+    const redirectUrl = `${window.location.origin}/login`;
+    window.location.href = `${API_BASE}/auth/google?redirect_url=${encodeURIComponent(redirectUrl)}`;
+  };
+  // ====================================
+
   // Ensure success lock only when recent + optional reset flag
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -455,10 +463,26 @@ export default function SignupPage() {
 
           {/* When success screen is showing, do NOT show any login link */}
           {!successMessage && (
-            <div className="mt-6 text-center text-sm text-muted-foreground">
-              Already have an account?{' '}
-              <span className="opacity-80">Login is only possible via the verification email.</span>
-            </div>
+            <>
+              <div className="mt-6 text-center text-sm text-muted-foreground">
+                Already have an account?{' '}
+                <span className="opacity-80">Login is only possible via the verification email.</span>
+              </div>
+
+              {/* === Added Google at the END of signup page === */}
+              <div className="mt-8 text-center">
+                <div className="text-sm text-muted-foreground mb-2">Prefer single sign-on?</div>
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  className="btn-outline"
+                  aria-label="Login with Google"
+                >
+                  <i className="ri-google-fill" /> Login with Google
+                </button>
+              </div>
+              {/* ============================================== */}
+            </>
           )}
 
           <div className="mt-6 text-center text-xs text-muted-foreground">

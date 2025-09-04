@@ -2,14 +2,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import TestAssignment from './TestAssignment';
 import InterviewScheduler from './InterviewScheduler';
-import StatusDashboard from './StatusDashboard';
 
-type HubTab = 'tests' | 'schedule' | 'dashboard';
+type HubTab = 'schedule';
 
 export default function MeetingsHub() {
-  const [activeTab, setActiveTab] = useState<HubTab>('tests');
+  const [activeTab, setActiveTab] = useState<HubTab>('schedule');
 
   return (
     <div className="min-h-screen bg-background page-aurora">
@@ -56,9 +54,7 @@ export default function MeetingsHub() {
         <div className="bg-card/90 backdrop-blur-sm rounded-2xl shadow-lg border border-border p-4 md:p-6 mb-6">
           <div className="flex gap-1 bg-muted p-1 rounded-lg border border-border">
             {([
-              { id: 'tests', label: 'Assign Tests', icon: 'ri-test-tube-line' },
               { id: 'schedule', label: 'Schedule Interviews', icon: 'ri-calendar-event-line' },
-              { id: 'dashboard', label: 'Status Dashboard', icon: 'ri-dashboard-line' },
             ] as Array<{ id: HubTab; label: string; icon: string }>).map((tab) => {
               const isActive = activeTab === tab.id;
               return (
@@ -83,9 +79,7 @@ export default function MeetingsHub() {
 
         {/* Tab Content */}
         <div className="space-y-6">
-          {activeTab === 'tests' && <TestAssignment />}
           {activeTab === 'schedule' && <InterviewScheduler />}
-          {activeTab === 'dashboard' && <StatusDashboard />}
         </div>
       </div>
     </div>

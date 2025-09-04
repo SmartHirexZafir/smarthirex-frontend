@@ -221,7 +221,7 @@ export default function AppHeader({ user }: { user?: User }) {
           <nav aria-label="Primary" className="hidden md:flex items-center justify-center gap-6">
             <Link className="nav-item" href="/upload">Upload</Link>
             <Link className="nav-item" href="/history">History</Link>
-            <Link className="nav-item" href="/test">Tests</Link>
+            <Link className="nav-item" href="/test"> Test</Link>
             <Link className="nav-item" href="/meetings">Meetings</Link>
             <Link className="nav-item" href="/dashboard">Dashboard</Link>
           </nav>
@@ -343,7 +343,7 @@ export default function AppHeader({ user }: { user?: User }) {
             <div className="flex flex-col">
               <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/upload" onClick={() => setOpen(false)}>Upload</Link>
               <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/history" onClick={() => setOpen(false)}>History</Link>
-              <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/test" onClick={() => setOpen(false)}>Tests</Link>
+              <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/test" onClick={() => setOpen(false)}>Assign Test</Link>
               <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/meetings" onClick={() => setOpen(false)}>Meetings</Link>
               <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/dashboard" onClick={() => setOpen(false)}>Dashboard</Link>
 

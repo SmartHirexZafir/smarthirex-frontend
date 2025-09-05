@@ -183,7 +183,8 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
     if (prefilled?.candidateId) return; // list isn't needed if prefilled
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/candidates/with-tests`, { headers: authHeaders() });
+        // 🔧 FIX: point to backend-mounted path under /candidate
+        const res = await fetch(`${API_BASE}/candidate/candidates/with-tests`, { headers: authHeaders() });
         if (!res.ok) throw new Error('err');
         const data = await res.json().catch(() => ({}));
         const list: CandidateDoc[] = Array.isArray(data?.candidates) ? data.candidates : [];

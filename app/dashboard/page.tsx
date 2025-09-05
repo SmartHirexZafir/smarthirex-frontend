@@ -81,7 +81,8 @@ export default function StatusDashboard() {
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch(`${API_BASE}/dashboard/overview`, { headers: authHeaders() });
+        // 🔧 FIX: Use backend route that exists: /dashboard/lists (instead of /dashboard/overview)
+        const res = await fetch(`${API_BASE}/dashboard/lists`, { headers: authHeaders() });
         const data = await res.json().catch(() => ({}));
         if (!mounted) return;
         setAccepted(Array.isArray(data?.accepted) ? data.accepted : []);

@@ -81,12 +81,13 @@ export default function HistoryBlocks({
           <p className="text-[hsl(var(--muted-foreground))]">Try adjusting your filters or search terms</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4" role="list" aria-label="Search history">
           {currentItems.map((history: HistoryItem, index: number) => (
             <div
               key={history.id}
               className="card p-6 hover:shadow-glow transition-transform duration-300 ease-lux animate-rise-in relative overflow-hidden"
               style={{ animationDelay: `${index * 0.08}s` }}
+              role="listitem"
             >
               {/* soft ambient gradient veil */}
               <div className="pointer-events-none absolute inset-0 opacity-[.06] bg-luxe-aurora" />
@@ -95,13 +96,7 @@ export default function HistoryBlocks({
                 <div className="flex items-start justify-between mb-6 gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-4 mb-3">
-                      <div
-                        className="w-12 h-12 rounded-full flex items-center justify-center shadow-glow gradient-border"
-                        style={{
-                          backgroundImage:
-                            'linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)), linear-gradient(135deg, hsl(var(--g1)) 0%, hsl(var(--g2)) 45%, hsl(var(--g3)) 100%)',
-                        }}
-                      >
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center shadow-glow gradient-ink ring-1 ring-border">
                         <i className="ri-brain-line text-white text-xl"></i>
                       </div>
                       <div className="min-w-0">
@@ -109,7 +104,7 @@ export default function HistoryBlocks({
                         <div className="flex items-center gap-3 mt-1">
                           <span className="px-3 py-1 rounded-full text-sm font-medium bg-[hsl(var(--muted)/.6)] text-[hsl(var(--muted-foreground))] gradient-border">
                             <i className="ri-time-line mr-1"></i>
-                            {history.timestamp}
+                            {history.timestamp || '—'}
                           </span>
                         </div>
                       </div>
@@ -130,6 +125,7 @@ export default function HistoryBlocks({
                   <button
                     onClick={() => onViewResults(history)}
                     className="btn-primary flex-1 whitespace-nowrap"
+                    aria-label={`View results for "${history.prompt}"`}
                   >
                     <i className="ri-eye-line"></i>
                     <span>View Results</span>
@@ -161,7 +157,7 @@ export default function HistoryBlocks({
       )}
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-6 pt-8">
+        <nav className="flex items-center justify-center gap-6 pt-8" aria-label="Pagination">
           <button
             onClick={prevPage}
             disabled={currentPage === 1}
@@ -179,6 +175,8 @@ export default function HistoryBlocks({
                 className={`h-12 min-w-12 px-3 rounded-xl text-sm font-semibold transition-transform duration-200 ${
                   currentPage === page ? 'btn-primary' : 'btn-outline'
                 }`}
+                aria-current={currentPage === page ? 'page' : undefined}
+                aria-label={`Go to page ${page}`}
               >
                 {page}
               </button>
@@ -193,7 +191,7 @@ export default function HistoryBlocks({
             <span className="font-medium">Next</span>
             <i className="ri-arrow-right-line"></i>
           </button>
-        </div>
+        </nav>
       )}
 
       {historyData.length > 0 && (

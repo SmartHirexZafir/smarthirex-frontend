@@ -6,7 +6,7 @@ import Link from 'next/link';
 export default function FeatureGrid() {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  // Using design tokens (tones) rather than hard-coded Tailwind colors
+  // Using global design tokens (Neon Eclipse) — no local, conflicting styles
   const features = [
     {
       icon: 'ri-upload-cloud-2-line',
@@ -58,7 +58,7 @@ export default function FeatureGrid() {
     },
   ];
 
-  // Tone → styles via HSL tokens
+  // Tone → styles via HSL tokens (explicit strings so Tailwind can see them)
   const toneStyles: Record<
     string,
     { grad: string; soft: string; text: string; chipBg: string }
@@ -106,7 +106,7 @@ export default function FeatureGrid() {
       <div className="container">
         {/* Section header */}
         <div className="text-center mb-16">
-          <div className="inline-flex items-center px-4 py-2 rounded-full glass text-[hsl(var(--muted-foreground))] text-sm font-medium mb-6 gap-2">
+          <div className="inline-flex items-center px-4 py-2 rounded-full ring-1 ring-border bg-[hsl(var(--muted)/.35)] text-[hsl(var(--muted-foreground))] text-sm font-medium mb-6 gap-2">
             <i className="ri-rocket-line" aria-hidden="true"></i>
             <span>Complete Recruitment Ecosystem</span>
           </div>
@@ -131,7 +131,7 @@ export default function FeatureGrid() {
             return (
               <article
                 key={index}
-                className={`group relative glass rounded-2xl p-8 ring-1 ring-border shadow-soft transition-all duration-500 cursor-pointer overflow-hidden
+                className={`group relative panel rounded-2xl p-8 ring-1 ring-border shadow-soft transition-all duration-500 cursor-pointer overflow-hidden
                   hover:-translate-y-2 hover:shadow-xl ${hoveredIndex === index ? 'scale-[1.02]' : ''}`}
                 onMouseEnter={() => setHoveredIndex(index)}
                 onMouseLeave={() => setHoveredIndex(null)}
@@ -166,11 +166,9 @@ export default function FeatureGrid() {
                     >
                       {f.stats}
                     </span>
+                    {/* Keep hover consistent globally (no dynamic class building) */}
                     <i
-                      className={`ri-arrow-right-line text-[hsl(var(--muted-foreground))] group-hover:${tone.text.replace(
-                        'text-',
-                        ''
-                      )} group-hover:translate-x-1 transition-all duration-300`}
+                      className={`ri-arrow-right-line text-[hsl(var(--muted-foreground))] group-hover:text-foreground transition-all duration-300 group-hover:translate-x-1`}
                       aria-hidden="true"
                     />
                   </div>
@@ -182,18 +180,25 @@ export default function FeatureGrid() {
 
         {/* CTA Section */}
         <div className="relative overflow-hidden rounded-3xl p-10 md:p-12 text-center text-white ring-1 ring-border shadow-soft">
-          {/* Gradient BG + glow */}
+          {/* Gradient BG + glow (global tokens only) */}
           <div
             className="absolute inset-0 -z-10 rounded-3xl bg-gradient-to-r from-[hsl(var(--primary))] to-[hsl(var(--accent))]"
             aria-hidden="true"
           />
-          <div className="absolute -inset-8 -z-10 blur-3xl opacity-30 gradient-ink" aria-hidden="true" />
+          <div
+            className="absolute -inset-12 -z-10 blur-3xl opacity-35"
+            style={{
+              background:
+                "radial-gradient(60% 60% at 50% 50%, hsl(var(--primary)/.35), transparent 70%)",
+            }}
+            aria-hidden="true"
+          />
 
           <h3 className="text-3xl font-bold mb-3 tracking-tight">
             Ready to Transform Your Hiring Process?
           </h3>
           <p className="text-lg md:text-xl mb-8 text-white/90">
-            Join thousands of companies already using SmartHirex to find exceptional talent.
+            Join thousands of companies already using Smart HireX to find exceptional talent.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -201,13 +206,11 @@ export default function FeatureGrid() {
               <i className="ri-rocket-line mr-2" aria-hidden="true"></i>
               Start Free Trial
             </Link>
-            <button
-              className="btn btn-outline text-white border-white hover:bg-white hover:text-[hsl(var(--primary))]"
-              type="button"
-            >
+            {/* Use global outline button style; no local color overrides */}
+            <Link href="/signup?next=/meetings" className="btn btn-outline">
               <i className="ri-calendar-line mr-2" aria-hidden="true"></i>
               Schedule Demo
-            </button>
+            </Link>
           </div>
         </div>
       </div>

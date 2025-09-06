@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import ThemeToggle from "./ui/ThemeToogle"; // same path/style as before
 
 type User = {
@@ -14,12 +15,14 @@ type User = {
 // ---- helpers ----
 function initialsFrom(name?: string) {
   if (!name) return "U";
-  return name
-    .trim()
-    .split(/\s+/)
-    .map((n) => n[0]?.toUpperCase())
-    .join("")
-    .slice(0, 2) || "U";
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .map((n) => n[0]?.toUpperCase())
+      .join("")
+      .slice(0, 2) || "U"
+  );
 }
 
 // decode JWT (for email fallback only)
@@ -64,7 +67,9 @@ function readUserFromStorage(): User | undefined {
 
   // Else, minimal user from JWT (email only)
   const token =
-    localStorage.getItem("access_token") || localStorage.getItem("token") || "";
+    localStorage.getItem("access_token") ||
+    localStorage.getItem("token") ||
+    "";
   const payload = parseJwt(token) || null;
   if (payload?.email) {
     const email = payload.email as string;
@@ -85,9 +90,14 @@ function useStorageSync(callback: () => void) {
     const onStorage = (e: StorageEvent) => {
       if (!e.key) return;
       if (
-        ["user", "auth_user", "login_user", "profile", "token", "access_token"].includes(
-          e.key
-        )
+        [
+          "user",
+          "auth_user",
+          "login_user",
+          "profile",
+          "token",
+          "access_token",
+        ].includes(e.key)
       ) {
         callback();
       }
@@ -120,6 +130,7 @@ function useCurrentUser(propUser?: User) {
 }
 
 export default function AppHeader({ user }: { user?: User }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false); // mobile nav
   const [menuOpen, setMenuOpen] = useState(false); // user dropdown
   const [logoError, setLogoError] = useState(false); // final fallback state
@@ -127,6 +138,12 @@ export default function AppHeader({ user }: { user?: User }) {
 
   // resolve current user (prop or storage)
   const { user: currentUser, loading } = useCurrentUser(user);
+  const isAuthed =
+    !!currentUser ||
+    !!(
+      typeof window !== "undefined" &&
+      (localStorage.getItem("access_token") || localStorage.getItem("token"))
+    );
 
   // Close menus on ESC
   useEffect(() => {
@@ -176,17 +193,63 @@ export default function AppHeader({ user }: { user?: User }) {
     }
   };
 
+  // Route guard (frontend fallback): prevent navigation when not authenticated
+  function guardNav(
+    e: React.MouseEvent<HTMLAnchorElement, MouseEvent>,
+    href: string
+  ) {
+    if (!isAuthed) {
+      e.preventDefault();
+      // Keep protected flow — redirect to login instead of changing routes
+      router.push("/login");
+    } else {
+      // if mobile menu is open, close it on navigation
+      setOpen(false);
+    }
+  }
+
+  // Logout clears local storage/session and returns to login (no hardcoded data kept)
+  async function handleLogout() {
+    try {
+      const keepTheme = localStorage.getItem("theme");
+      // Clear common auth keys
+      [
+        "user",
+        "auth_user",
+        "login_user",
+        "profile",
+        "token",
+        "access_token",
+        "refresh_token",
+      ].forEach((k) => localStorage.removeItem(k));
+      sessionStorage.clear();
+
+      // Preserve theme preference
+      if (keepTheme) localStorage.setItem("theme", keepTheme);
+
+      // Optional: try backend logout endpoint if exists (non-blocking)
+      fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    } finally {
+      router.push("/login");
+    }
+  }
+
   return (
-    <header className="nav full-bleed">
+    <header className="nav full-bleed" role="banner">
       <div className="container max-w-[1600px] py-4 md:py-5">
         <div className="grid grid-cols-2 md:grid-cols-3 items-center gap-4">
-          {/* Brand */}
+          {/* Brand (same logo everywhere) */}
           <div className="flex items-center gap-3">
-            <Link href="/dashboard" aria-label="Smart HireX" className="flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              aria-label="Smart HireX"
+              className="flex items-center gap-3"
+              onClick={(e) => guardNav(e, "/dashboard")}
+            >
               {/* Logo (prefer /public/web-logo.png; fallbacks included) */}
               {!logoError ? (
                 <Image
-                  key={logoSrc}                // force reload when src changes
+                  key={logoSrc} // force reload when src changes
                   src={logoSrc}
                   alt="Smart HireX logo"
                   width={32}
@@ -217,13 +280,46 @@ export default function AppHeader({ user }: { user?: User }) {
             </Link>
           </div>
 
-          {/* Center nav (app sections) */}
-          <nav aria-label="Primary" className="hidden md:flex items-center justify-center gap-6">
-            <Link className="nav-item" href="/upload">Upload</Link>
-            <Link className="nav-item" href="/history">History</Link>
-            <Link className="nav-item" href="/test"> Test</Link>
-            <Link className="nav-item" href="/meetings">Meetings</Link>
-            <Link className="nav-item" href="/dashboard">Dashboard</Link>
+          {/* Center nav (app sections, protected) */}
+          <nav
+            aria-label="Primary"
+            className="hidden md:flex items-center justify-center gap-6"
+          >
+            <Link
+              className="nav-item"
+              href="/upload"
+              onClick={(e) => guardNav(e, "/upload")}
+            >
+              Upload
+            </Link>
+            <Link
+              className="nav-item"
+              href="/history"
+              onClick={(e) => guardNav(e, "/history")}
+            >
+              History
+            </Link>
+            <Link
+              className="nav-item"
+              href="/test"
+              onClick={(e) => guardNav(e, "/test")}
+            >
+              Test
+            </Link>
+            <Link
+              className="nav-item"
+              href="/meetings"
+              onClick={(e) => guardNav(e, "/meetings")}
+            >
+              Meetings
+            </Link>
+            <Link
+              className="nav-item"
+              href="/dashboard"
+              onClick={(e) => guardNav(e, "/dashboard")}
+            >
+              Dashboard
+            </Link>
           </nav>
 
           {/* Actions (right) */}
@@ -235,7 +331,7 @@ export default function AppHeader({ user }: { user?: User }) {
             <div className="relative" ref={menuRef}>
               <button
                 type="button"
-                className="flex items-center gap-3 rounded-2xl px-2.5 py-1.5 border border-border/70 bg-muted/20 backdrop-blur-sm hover:bg-muted/40 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]"
+                className="flex items-center gap-3 rounded-2xl px-2.5 py-1.5 border border-input bg-muted/20 backdrop-blur-sm hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
                 onClick={() => setMenuOpen((v) => !v)}
@@ -267,7 +363,13 @@ export default function AppHeader({ user }: { user?: User }) {
                 </div>
 
                 {/* Caret */}
-                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" className="hidden sm:block opacity-80">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="hidden sm:block opacity-80"
+                >
                   <path
                     d="M6 9l6 6 6-6"
                     fill="none"
@@ -285,9 +387,7 @@ export default function AppHeader({ user }: { user?: User }) {
                   className="absolute right-0 mt-2 w-56 rounded-2xl ring-1 ring-border bg-card p-2 shadow-lg animate-rise-in z-50"
                 >
                   <div className="px-3 py-2 mb-1 rounded-xl bg-muted/30">
-                    <div className="text-sm font-semibold">
-                      {displayName}
-                    </div>
+                    <div className="text-sm font-semibold">{displayName}</div>
                     <div className="text-[11px] text-muted-foreground">
                       {displayRole}
                     </div>
@@ -309,6 +409,14 @@ export default function AppHeader({ user }: { user?: User }) {
                   >
                     Settings
                   </Link>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="w-full text-left px-3 py-2 rounded-xl hover:bg-[hsl(var(--destructive)/.15)] text-[hsl(var(--destructive))]"
+                    onClick={handleLogout}
+                  >
+                    Logout
+                  </button>
                 </div>
               )}
             </div>
@@ -321,7 +429,13 @@ export default function AppHeader({ user }: { user?: User }) {
               aria-label="Toggle menu"
               onClick={() => setOpen((v) => !v)}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" role="img" aria-hidden="true">
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                role="img"
+                aria-hidden="true"
+              >
                 <path
                   fill="currentColor"
                   d="M4 6h16M4 12h16M4 18h16"
@@ -334,18 +448,48 @@ export default function AppHeader({ user }: { user?: User }) {
           </div>
         </div>
 
-        {/* Mobile menu */}
+        {/* Mobile menu (protected links) */}
         {open && (
           <div
             id="mobile-menu"
             className="mt-3 md:hidden overflow-hidden rounded-2xl ring-1 ring-border bg-card p-2 animate-rise-in"
           >
             <div className="flex flex-col">
-              <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/upload" onClick={() => setOpen(false)}>Upload</Link>
-              <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/history" onClick={() => setOpen(false)}>History</Link>
-              <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/test" onClick={() => setOpen(false)}>Assign Test</Link>
-              <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/meetings" onClick={() => setOpen(false)}>Meetings</Link>
-              <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/dashboard" onClick={() => setOpen(false)}>Dashboard</Link>
+              <Link
+                className="px-4 py-3 rounded-xl hover:bg-muted/40"
+                href="/upload"
+                onClick={(e) => guardNav(e, "/upload")}
+              >
+                Upload
+              </Link>
+              <Link
+                className="px-4 py-3 rounded-xl hover:bg-muted/40"
+                href="/history"
+                onClick={(e) => guardNav(e, "/history")}
+              >
+                History
+              </Link>
+              <Link
+                className="px-4 py-3 rounded-xl hover:bg-muted/40"
+                href="/test"
+                onClick={(e) => guardNav(e, "/test")}
+              >
+                Assign Test
+              </Link>
+              <Link
+                className="px-4 py-3 rounded-xl hover:bg-muted/40"
+                href="/meetings"
+                onClick={(e) => guardNav(e, "/meetings")}
+              >
+                Meetings
+              </Link>
+              <Link
+                className="px-4 py-3 rounded-xl hover:bg-muted/40"
+                href="/dashboard"
+                onClick={(e) => guardNav(e, "/dashboard")}
+              >
+                Dashboard
+              </Link>
 
               <div className="px-2 pt-2 pb-1">
                 {/* Theme toggle in mobile too */}

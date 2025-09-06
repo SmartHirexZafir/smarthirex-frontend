@@ -1,41 +1,58 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export default function Footer() {
+  const year = new Date().getFullYear();
+
   return (
-    <footer className="full-bleed border-t border-white/10">
-      <div className="container max-w-[1600px] py-10 md:py-14">
+    <footer className="site-footer full-bleed">
+      <div className="app-container py-10 md:py-14">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
+          {/* Brand (same logo + name everywhere) */}
           <div>
-            <div className="text-xl font-bold gradient-text">Nebula Luxe Pro</div>
+            <Link href="/" className="inline-flex items-center gap-2 group" aria-label="Smart HireX Home">
+              <Image
+                src="/web-logo.png"
+                alt="Smart HireX logo"
+                width={28}
+                height={28}
+                priority
+                className="rounded-lg ring-1 ring-border"
+              />
+              <span className="text-xl font-extrabold gradient-text leading-none">Smart HireX</span>
+            </Link>
             <p className="mt-3 text-sm text-muted-foreground max-w-sm">
-              A future-proof design system focused on accessibility, performance, and premium aesthetics.
+              AI-powered recruitment that helps you upload resumes, analyze candidates, and shortlist the best matches with intelligent scoring and chat assistance.
             </p>
           </div>
 
-          <nav aria-label="Products" className="grid gap-2 text-sm">
-            <h3 className="font-semibold mb-2">Product</h3>
+          {/* Product */}
+          <nav aria-label="Product" className="grid gap-2 text-sm">
+            <h3 className="font-semibold mb-2 text-foreground">Product</h3>
             <Link className="nav-item" href="/features">Features</Link>
-            <Link className="nav-item" href="/roadmap">Roadmap</Link>
-            <Link className="nav-item" href="/changelog">Changelog</Link>
+            <Link className="nav-item" href="/pricing">Pricing</Link>
+            <Link className="nav-item" href="/docs">Docs</Link>
           </nav>
 
+          {/* Company */}
           <nav aria-label="Company" className="grid gap-2 text-sm">
-            <h3 className="font-semibold mb-2">Company</h3>
+            <h3 className="font-semibold mb-2 text-foreground">Company</h3>
             <Link className="nav-item" href="/about">About</Link>
             <Link className="nav-item" href="/careers">Careers</Link>
             <Link className="nav-item" href="/press">Press</Link>
           </nav>
 
+          {/* Resources */}
           <nav aria-label="Resources" className="grid gap-2 text-sm">
-            <h3 className="font-semibold mb-2">Resources</h3>
-            <Link className="nav-item" href="/docs">Docs</Link>
+            <h3 className="font-semibold mb-2 text-foreground">Resources</h3>
+            <Link className="nav-item" href="/docs">Documentation</Link>
             <Link className="nav-item" href="/guides">Guides</Link>
             <Link className="nav-item" href="/support">Support</Link>
           </nav>
         </div>
 
         <div className="mt-10 pt-6 border-t border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
-          <p>© {new Date().getFullYear()} Nebula Luxe Pro. All rights reserved.</p>
+          <p>© {year} Smart HireX. All rights reserved.</p>
           <div className="flex gap-4">
             <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
             <Link href="/terms" className="hover:text-foreground">Terms</Link>

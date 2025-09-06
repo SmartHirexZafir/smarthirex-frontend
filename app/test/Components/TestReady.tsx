@@ -25,7 +25,8 @@ type Props = {
 };
 
 const DEFAULT_API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:10000";
+  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") ||
+  "http://localhost:10000";
 
 export default function TestReady({
   token,
@@ -53,11 +54,14 @@ export default function TestReady({
         body: JSON.stringify({ token }),
       });
 
+      // Friendly handling for common flow guards
       if (!res.ok) {
         const txt = await res.text();
         const msg =
           res.status === 410
             ? "This test link has expired."
+            : res.status === 409
+            ? "A test has already been started for this candidate (only one test type is allowed)."
             : txt || `Failed to start test (status ${res.status})`;
         throw new Error(msg);
       }
@@ -74,16 +78,25 @@ export default function TestReady({
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-      <h2 className="mb-2 text-lg font-medium">Are you ready to begin?</h2>
-      <p className="mb-6 text-sm text-gray-600">
+    <section
+      className="panel glass rounded-2xl border border-border bg-card p-6 text-foreground shadow-xl"
+      aria-labelledby="test-ready-title"
+    >
+      <h2 id="test-ready-title" className="mb-2 text-lg font-semibold">
+        Are you ready to begin?
+      </h2>
+      <p className="mb-6 text-sm text-muted-foreground">
         Find a quiet place and ensure a stable internet connection. Once you
         start, you can answer the questions at your pace and submit when
         finished.
       </p>
 
       {err && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div
+          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          role="alert"
+          aria-live="assertive"
+        >
           {err}
         </div>
       )}
@@ -92,18 +105,20 @@ export default function TestReady({
         <button
           onClick={handleStart}
           disabled={loading || !token}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+          aria-disabled={loading || !token}
+          className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "Starting…" : "Yes, start the test"}
         </button>
         <button
           onClick={onCancel}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+          className="inline-flex items-center justify-center rounded-lg border border-input px-4 py-2 text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           disabled={loading}
+          aria-disabled={loading}
         >
           Not now
         </button>
       </div>
-    </div>
+    </section>
   );
 }

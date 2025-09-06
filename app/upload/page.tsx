@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import UploadSection from './UploadSection';
 import ChatbotSection from './ChatbotSection';
 import CandidateResults from './CandidateResults';
@@ -47,6 +48,8 @@ interface Candidate {
 }
 
 export default function UploadPage() {
+  const router = useRouter();
+
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [activePrompt, setActivePrompt] = useState<string>('Show all available candidates');
@@ -54,6 +57,15 @@ export default function UploadPage() {
 
   // Tracks the prompt currently being fulfilled (prevents stale updates)
   const pendingPromptRef = useRef<string>('');
+
+  // ✅ Route protection (require auth). If unauthenticated, do not allow entering this page.
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) {
+      // Send them to login and remember the intended destination
+      router.replace('/login?next=/upload');
+    }
+  }, [router]);
 
   useEffect(() => {
     // reserved for future init

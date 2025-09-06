@@ -1,18 +1,50 @@
+import * as React from "react";
 import { HTMLAttributes } from "react";
 import { cn } from "../../lib/util";
 
-export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div role="group" className={cn("card", className)} {...props} />;
-}
+/**
+ * Global Card primitives (Neon Eclipse)
+ * - Uses ONLY global classes (.card, border-border, etc.)
+ * - Forward refs for composition
+ * - No local styling that conflicts with global tokens
+ */
 
-export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-6 pt-6 pb-2 flex items-center justify-between gap-3", className)} {...props} />;
-}
+export const Card = React.forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => {
+    return <div ref={ref} role="group" className={cn("card", className)} {...props} />;
+  }
+);
+Card.displayName = "Card";
 
-export function CardContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-6 pb-6", className)} {...props} />;
-}
+export const CardHeader = React.forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => {
+    return (
+      <div
+        ref={ref}
+        className={cn("px-6 pt-6 pb-2 flex items-center justify-between gap-3", className)}
+        {...props}
+      />
+    );
+  }
+);
+CardHeader.displayName = "CardHeader";
 
-export function CardFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-6 pb-6 pt-2 border-t border-white/10", className)} {...props} />;
-}
+export const CardContent = React.forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => {
+    return <div ref={ref} className={cn("px-6 pb-6", className)} {...props} />;
+  }
+);
+CardContent.displayName = "CardContent";
+
+export const CardFooter = React.forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => {
+    return (
+      <div
+        ref={ref}
+        className={cn("px-6 pb-6 pt-2 border-t border-border", className)}
+        {...props}
+      />
+    );
+  }
+);
+CardFooter.displayName = "CardFooter";

@@ -25,8 +25,8 @@ export type CodeTestCaseResult = {
 export type RubricCriterion = {
   id?: string;
   description?: string;
-  weight?: number;     // 0..1
-  score?: number;      // 0..5 (or any scale returned by backend)
+  weight?: number; // 0..1
+  score?: number; // 0..5 (or any scale returned by backend)
   comments?: string;
 };
 
@@ -40,23 +40,23 @@ export type RubricBreakdown = {
 export type SubmitDetail = {
   question: string;
   submitted: string;
-  correct: string;      // MCQs have this; free-form often empty
-  is_correct: boolean;  // may be false for ungraded, true/false for auto-graded
-  explanation: string;  // backend comments / rubric notes
+  correct: string; // MCQs have this; free-form often empty
+  is_correct: boolean; // may be false for ungraded, true/false for auto-graded
+  explanation: string; // backend comments / rubric notes
 
   // New (optional) — shown when provided by backend:
   type?: "mcq" | "code" | "scenario";
-  score?: number;             // points earned
-  max_score?: number;         // max points
-  tests?: CodeTestCaseResult[];          // for code questions
-  rubric_breakdown?: RubricBreakdown;    // for scenario (or code) questions
-  rubric?: RubricBreakdown;              // alt key some backends use
+  score?: number; // points earned
+  max_score?: number; // max points
+  tests?: CodeTestCaseResult[]; // for code questions
+  rubric_breakdown?: RubricBreakdown; // for scenario (or code) questions
+  rubric?: RubricBreakdown; // alt key some backends use
 };
 
 export type SubmitResponse = {
   test_id: string;
   candidate_id: string;
-  score: number;           // percent from backend (legacy)
+  score: number; // percent from backend (legacy)
   details: SubmitDetail[];
 };
 
@@ -69,26 +69,31 @@ type Props = {
   allowSiteBack?: boolean;
 };
 
-/** ------------------------- Small UI helpers ------------------------- */
+/** ------------------------- Small UI helpers (global-theme friendly) ------------------------- */
 function Badge({
   children,
-  tone = "gray",
+  tone = "muted",
   title,
 }: {
   children: React.ReactNode;
-  tone?: "gray" | "green" | "red" | "amber" | "indigo";
+  tone?: "muted" | "success" | "destructive" | "accent" | "primary";
   title?: string;
 }) {
   const map: Record<string, string> = {
-    gray: "bg-gray-100 text-gray-700",
-    green: "bg-green-100 text-green-700",
-    red: "bg-red-100 text-red-700",
-    amber: "bg-amber-100 text-amber-700",
-    indigo: "bg-indigo-100 text-indigo-700",
+    // matches global tokens used across the app (Neon Eclipse theme-friendly)
+    muted: "bg-muted/60 text-muted-foreground border-border/60",
+    success:
+      "bg-[hsl(var(--success))]/15 text-[hsl(var(--success))] border-[hsl(var(--success))]/30",
+    destructive:
+      "bg-[hsl(var(--destructive))]/10 text-[hsl(var(--destructive))] border-[hsl(var(--destructive))]/25",
+    accent:
+      "bg-[hsl(var(--accent))]/15 text-[hsl(var(--accent))] border-[hsl(var(--accent))]/30",
+    primary:
+      "bg-primary/15 text-primary border-primary/30",
   };
   return (
     <div
-      className={`ml-3 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs ${map[tone]}`}
+      className={`ml-3 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs ${map[tone]}`}
       title={title}
     >
       {children}
@@ -106,8 +111,11 @@ function Disclose({
   defaultOpen?: boolean;
 }) {
   return (
-    <details className="mt-3 rounded-lg border border-gray-200" {...(defaultOpen ? { open: true } : {})}>
-      <summary className="cursor-pointer select-none rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">
+    <details
+      className="mt-3 rounded-lg border border-border bg-muted/30"
+      {...(defaultOpen ? { open: true } : {})}
+    >
+      <summary className="cursor-pointer select-none rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/60">
         {summary}
       </summary>
       <div className="px-3 pb-3 pt-1">{children}</div>
@@ -118,8 +126,8 @@ function Disclose({
 function KeyVal({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div className="grid grid-cols-12 gap-2 text-xs">
-      <div className="col-span-4 text-gray-500">{k}</div>
-      <div className="col-span-8 break-words font-medium text-gray-800">{v}</div>
+      <div className="col-span-4 text-muted-foreground">{k}</div>
+      <div className="col-span-8 break-words font-medium text-foreground">{v}</div>
     </div>
   );
 }
@@ -127,7 +135,7 @@ function KeyVal({ k, v }: { k: string; v: React.ReactNode }) {
 function MonoBlock({ children }: { children?: string }) {
   if (!children) return null;
   return (
-    <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-gray-50 p-2 text-xs text-gray-800">
+    <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted/40 p-2 text-xs text-foreground">
       {children}
     </pre>
   );
@@ -177,7 +185,7 @@ export default function TestResult({
     const MARK = "__TEST_RESULT_NO_BACK__";
     try {
       const cur = (history.state || {}) as Record<string, unknown>;
-      if (cur[MARK] !== true) {
+      if ((cur as any)[MARK] !== true) {
         history.replaceState({ ...(cur || {}), [MARK]: true }, "");
       }
       history.pushState({ [MARK]: true }, "");
@@ -211,23 +219,32 @@ export default function TestResult({
     const hasCorrect = (d?.correct || "").trim().length > 0;
     const isFreeForm = !hasCorrect;
     const isAutoGraded =
-      isFreeForm && typeof d?.is_correct === "boolean" && (d.explanation?.length > 0 || Number.isFinite(d?.score));
+      isFreeForm &&
+      typeof d?.is_correct === "boolean" &&
+      (d.explanation?.length > 0 || Number.isFinite(d?.score));
 
     if (hasCorrect) {
       return (
-        <Badge tone={d.is_correct ? "green" : "red"} title={d.is_correct ? "MCQ marked correct" : "MCQ marked incorrect"}>
+        <Badge
+          tone={d.is_correct ? "success" : "destructive"}
+          title={d.is_correct ? "MCQ marked correct" : "MCQ marked incorrect"}
+        >
           {d.is_correct ? "Correct" : "Incorrect"}
         </Badge>
       );
     }
     if (isAutoGraded) {
       return (
-        <Badge tone={d.is_correct ? "green" : "amber"} title="Free-form auto-graded">
+        <Badge tone={d.is_correct ? "success" : "accent"} title="Free-form auto-graded">
           {d.is_correct ? "Auto-graded: Pass" : "Auto-graded"}
         </Badge>
       );
     }
-    return <Badge tone="gray" title="Free-form (not auto-graded)">Free-form</Badge>;
+    return (
+      <Badge tone="muted" title="Free-form (not auto-graded)">
+        Free-form
+      </Badge>
+    );
   }
 
   // Derive type if backend omitted it
@@ -249,11 +266,13 @@ export default function TestResult({
     return (
       <Disclose summary={<span>View rubric breakdown</span>}>
         <div className="space-y-2">
-          {crits.length === 0 && <div className="text-xs text-gray-500">No rubric criteria provided.</div>}
+          {crits.length === 0 && (
+            <div className="text-xs text-muted-foreground">No rubric criteria provided.</div>
+          )}
           {crits.length > 0 && (
-            <div className="overflow-hidden rounded-md border">
+            <div className="overflow-hidden rounded-md border border-border">
               <table className="min-w-full text-left text-xs">
-                <thead className="bg-gray-50 text-gray-600">
+                <thead className="bg-muted/50 text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 font-medium">Criterion</th>
                     <th className="px-3 py-2 font-medium">Weight</th>
@@ -261,21 +280,25 @@ export default function TestResult({
                     <th className="px-3 py-2 font-medium">Comments</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-border/60">
                   {crits.map((c, idx) => {
                     const wPct =
-                      Number.isFinite(c?.weight) && c!.weight! >= 0
-                        ? `${Math.round((c!.weight! as number) * 100)}%`
+                      Number.isFinite(c?.weight) && (c!.weight as number) >= 0
+                        ? `${Math.round((c!.weight as number) * 100)}%`
                         : "—";
                     const sc = Number.isFinite(c?.score) ? String(c!.score) : "—";
                     return (
                       <tr key={idx} className="align-top">
                         <td className="px-3 py-2">
-                          <div className="font-medium text-gray-800">{c?.description || c?.id || "—"}</div>
+                          <div className="font-medium text-foreground">
+                            {c?.description || c?.id || "—"}
+                          </div>
                         </td>
-                        <td className="px-3 py-2 text-gray-700">{wPct}</td>
-                        <td className="px-3 py-2 text-gray-700">{sc}</td>
-                        <td className="px-3 py-2 text-gray-600">{c?.comments || "—"}</td>
+                        <td className="px-3 py-2 text-foreground/80">{wPct}</td>
+                        <td className="px-3 py-2 text-foreground/80">{sc}</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {c?.comments || "—"}
+                        </td>
                       </tr>
                     );
                   })}
@@ -285,9 +308,9 @@ export default function TestResult({
           )}
 
           {(Number.isFinite(total) || Number.isFinite(max)) && (
-            <div className="text-xs text-gray-600">
+            <div className="text-xs text-muted-foreground">
               Total:{" "}
-              <span className="font-semibold text-gray-800">
+              <span className="font-semibold text-foreground">
                 {Number.isFinite(total) ? total : "—"}
                 {Number.isFinite(max) ? ` / ${max}` : ""}
               </span>
@@ -309,29 +332,40 @@ export default function TestResult({
       <Disclose
         summary={
           <span>
-            View code tests <span className="text-gray-500">({passed}/{total} passed)</span>
+            View code tests{" "}
+            <span className="text-muted-foreground">
+              ({passed}/{total} passed)
+            </span>
           </span>
         }
       >
         <div className="space-y-3">
           {tests.map((t, idx) => {
-            const tone = t.ok ? "green" : t.timeout ? "amber" : "red";
+            const tone = t.ok ? "success" : t.timeout ? "accent" : "destructive";
             return (
-              <div key={idx} className="rounded-lg border border-gray-200 p-3">
+              <div key={idx} className="rounded-lg border border-border p-3 bg-muted/20">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium text-gray-800">{t.name || `Test ${idx + 1}`}</div>
+                  <div className="text-sm font-medium text-foreground">
+                    {t.name || `Test ${idx + 1}`}
+                  </div>
                   <Badge tone={tone as any}>
                     {t.ok ? "Pass" : t.timeout ? "Timeout" : "Fail"}
                   </Badge>
                 </div>
                 <div className="mt-2 grid grid-cols-12 gap-3">
                   <div className="col-span-12 md:col-span-6">
-                    <KeyVal k="Time" v={`${Number.isFinite(t.time_sec) ? t.time_sec!.toFixed(3) : "—"} s`} />
+                    <KeyVal
+                      k="Time"
+                      v={`${Number.isFinite(t.time_sec) ? t.time_sec!.toFixed(3) : "—"} s`}
+                    />
                     {t.match_result && (
                       <>
                         <KeyVal k="Match mode" v={t.match_result.mode || "—"} />
                         {"expected" in (t.match_result || {}) && (
-                          <KeyVal k="Expected" v={<MonoBlock>{t.match_result.expected || ""}</MonoBlock>} />
+                          <KeyVal
+                            k="Expected"
+                            v={<MonoBlock>{t.match_result.expected || ""}</MonoBlock>}
+                          />
                         )}
                       </>
                     )}
@@ -354,21 +388,21 @@ export default function TestResult({
     const m = Number(d?.max_score);
     if (!Number.isFinite(s) || !Number.isFinite(m) || m <= 0) return null;
     return (
-      <Badge tone="indigo" title="Auto-graded score">
+      <Badge tone="primary" title="Auto-graded score">
         {s} / {m}
       </Badge>
     );
   }
 
   return (
-    <div className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div className="panel glass space-y-6 rounded-2xl border border-border bg-card p-6 text-foreground shadow-xl">
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-medium">{title || "Your result"}</h2>
+        <h2 className="text-lg font-semibold">{title || "Your result"}</h2>
 
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-muted-foreground">
           Overall score (MCQs only):{" "}
-          <span className="font-semibold">
+          <span className="font-semibold text-foreground">
             {correctMcq}
             {typeof totalMcq === "number" && totalMcq > 0 ? ` / ${totalMcq}` : ""}{" "}
             {`(${Number.isFinite(percent) ? percent : 0}%)`}
@@ -377,19 +411,22 @@ export default function TestResult({
 
         {/* Optional: show aggregate auto-graded score if backend provided per-question scores */}
         {autoAgg.max > 0 && (
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted-foreground">
             Auto-graded score (free-form/coding):{" "}
-            <span className="font-semibold">
-              {autoAgg.sum} / {autoAgg.max} {autoAgg.pct !== null ? `(${autoAgg.pct}%)` : ""}
+            <span className="font-semibold text-foreground">
+              {autoAgg.sum} / {autoAgg.max}{" "}
+              {autoAgg.pct !== null ? `(${autoAgg.pct}%)` : ""}
             </span>
           </div>
         )}
 
-        <div className="text-xs text-gray-500">
-          Test ID: {result?.test_id || "—"} · Candidate ID: {result?.candidate_id || "—"}
+        <div className="text-xs text-muted-foreground">
+          Test ID: {result?.test_id || "—"} · Candidate ID:{" "}
+          {result?.candidate_id || "—"}
         </div>
-        <div className="text-xs text-gray-500">
-          You can now safely <span className="font-medium">close this tab</span> and return to your email.
+        <div className="text-xs text-muted-foreground">
+          You can now safely <span className="font-medium">close this tab</span> and
+          return to your email.
         </div>
       </div>
 
@@ -400,9 +437,9 @@ export default function TestResult({
           const qType = deriveType(d);
 
           return (
-            <div key={i} className="rounded-xl border border-gray-200 p-4">
+            <div key={i} className="rounded-xl border border-border bg-muted/20 p-4">
               <div className="mb-1 flex items-center justify-between">
-                <div className="text-[15px] font-medium">
+                <div className="text-[15px] font-medium text-foreground">
                   Q{i + 1}. {d?.question || "—"}
                 </div>
                 <div className="flex items-center">
@@ -413,20 +450,26 @@ export default function TestResult({
 
               <div className="text-sm">
                 <div className="mt-1">
-                  <span className="text-gray-600">Your answer:</span>{" "}
-                  <span className="break-words font-medium">{d?.submitted || "—"}</span>
+                  <span className="text-muted-foreground">Your answer:</span>{" "}
+                  <span className="break-words font-medium text-foreground">
+                    {d?.submitted || "—"}
+                  </span>
                 </div>
 
                 {/* Only show the correct answer row if it exists (MCQs) */}
                 {hasCorrect && (
                   <div className="mt-1">
-                    <span className="text-gray-600">Correct answer:</span>{" "}
-                    <span className="break-words font-medium">{d?.correct || "—"}</span>
+                    <span className="text-muted-foreground">Correct answer:</span>{" "}
+                    <span className="break-words font-medium text-foreground">
+                      {d?.correct || "—"}
+                    </span>
                   </div>
                 )}
 
                 {d?.explanation && (
-                  <div className="mt-2 text-xs text-gray-500">{d.explanation}</div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {d.explanation}
+                  </div>
                 )}
               </div>
 
@@ -443,7 +486,7 @@ export default function TestResult({
         {onRetake && (
           <button
             onClick={onRetake}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+            className="inline-flex items-center justify-center rounded-lg border border-input px-4 py-2 text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Retake
           </button>
@@ -452,7 +495,7 @@ export default function TestResult({
         {/* New default: Close tab (do not navigate back to site) */}
         <button
           onClick={tryCloseTab}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Close tab
         </button>
@@ -461,7 +504,7 @@ export default function TestResult({
         {allowSiteBack && (
           <button
             onClick={onBack}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+            className="inline-flex items-center justify-center rounded-lg border border-input px-4 py-2 text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Back
           </button>
@@ -470,7 +513,11 @@ export default function TestResult({
 
       {/* Tiny toast */}
       {toast && (
-        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900/90 px-4 py-2 text-xs text-white shadow-lg">
+        <div
+          className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full border border-border bg-card px-4 py-2 text-xs text-foreground shadow-xl"
+          role="status"
+          aria-live="polite"
+        >
           {toast}
         </div>
       )}

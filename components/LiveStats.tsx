@@ -58,7 +58,7 @@ export default function LiveStats() {
     return <span>{count.toLocaleString()}</span>;
   };
 
-  // Tone mapping to theme tokens
+  // Tone mapping to global Neon Eclipse tokens
   const items = [
     {
       label: 'Resumes Filtered Today',
@@ -123,9 +123,9 @@ export default function LiveStats() {
     >
       {/* Ambient blobs (decorative) */}
       <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true">
-        <div className="absolute top-20 left-20 w-64 h-64 rounded-full blur-3xl opacity-25 animate-pulse bg-[hsl(var(--primary-foreground)/0.25)]" />
-        <div className="absolute bottom-20 right-20 w-64 h-64 rounded-full blur-3xl opacity-25 animate-pulse bg-[hsl(var(--accent)/0.25)]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full blur-3xl opacity-20 animate-pulse bg-[hsl(var(--secondary)/0.25)]" />
+        <div className="absolute top-20 left-20 w-64 h-64 rounded-full blur-3xl opacity-25 animate-pulse bg-white/25" />
+        <div className="absolute bottom-20 right-20 w-64 h-64 rounded-full blur-3xl opacity-25 animate-pulse bg-white/20" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full blur-3xl opacity-20 animate-pulse bg-white/20" />
       </div>
 
       <div className="relative z-10 container">
@@ -135,7 +135,7 @@ export default function LiveStats() {
             isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
-          <div className="inline-flex items-center px-4 py-2 rounded-full glass text-white/90 text-sm font-medium mb-6 gap-2">
+          <div className="inline-flex items-center px-4 py-2 rounded-full ring-1 ring-border bg-white/10 text-white/90 text-sm font-medium mb-6 gap-2">
             <i className="ri-pulse-line" aria-hidden="true"></i>
             <span>Live Activity Dashboard</span>
           </div>
@@ -149,13 +149,14 @@ export default function LiveStats() {
           </p>
         </div>
 
-        {/* Stats Boxes */}
+        {/* Stats Boxes (use global panel primitives; no local custom classes) */}
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
           {items.map((item, idx) => (
             <div
               key={idx}
               className={`
-                glass-strong rounded-2xl p-7 text-center ring-1 ring-border shadow-soft
+                panel rounded-2xl p-7 text-center ring-1 ring-border shadow-soft
+                bg-white/10 backdrop-blur-md
                 transform transition-all duration-1000 hover:scale-[1.025] hover:bg-white/15
                 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
               `}
@@ -173,7 +174,7 @@ export default function LiveStats() {
               <div className="text-4xl font-bold text-white mb-1" aria-live="polite">
                 <AnimatedCounter value={item.value} />
               </div>
-              <div className="text-white/70 text-xs uppercase tracking-wider">{item.label}</div>
+              <div className="text-white/80 text-xs uppercase tracking-wider">{item.label}</div>
 
               <div className="mt-4 flex items-center justify-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[hsl(var(--success))] animate-pulse" aria-hidden="true" />
@@ -183,10 +184,11 @@ export default function LiveStats() {
           ))}
         </div>
 
-        {/* Live Feed */}
+        {/* Live Feed (global panel + tokens) */}
         <div
           className={`
-            mt-16 glass-strong rounded-2xl p-6 md:p-8 ring-1 ring-border shadow-soft
+            mt-16 panel rounded-2xl p-6 md:p-8 ring-1 ring-border shadow-soft
+            bg-white/10 backdrop-blur-md
             transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
           `}
           style={{ transitionDelay: '0.5s' }}
@@ -195,14 +197,14 @@ export default function LiveStats() {
         >
           <div className="text-center mb-6">
             <h3 className="text-2xl font-bold text-white mb-1">Live Activity Feed</h3>
-            <p className="text-white/70">Real-time updates from the SmartHirex platform</p>
+            <p className="text-white/80">Real-time updates from the Smart HireX platform</p>
           </div>
 
           <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
             {feed.map((row, index) => (
               <div
                 key={index}
-                className="flex items-center gap-4 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+                className="flex items-center gap-4 p-4 rounded-xl bg-white/10 hover:bg-white/15 transition-colors"
               >
                 <div className={`w-10 h-10 rounded-full grid place-items-center ${toneBg[row.tone]}`}>
                   <i className={`${row.icon} ${toneFg[row.tone]} text-lg`} aria-hidden="true" />
@@ -210,10 +212,10 @@ export default function LiveStats() {
 
                 <div className="flex-1 min-w-0">
                   <div className="text-white font-medium truncate">{row.action}</div>
-                  <div className="text-white/70 text-sm truncate">{row.company}</div>
+                  <div className="text-white/80 text-sm truncate">{row.company}</div>
                 </div>
 
-                <div className="text-white/70 text-sm shrink-0">{row.time}</div>
+                <div className="text-white/80 text-sm shrink-0">{row.time}</div>
               </div>
             ))}
           </div>

@@ -117,6 +117,15 @@ export default function ResultsModal({ history, onClose }: Props) {
     return () => ac.abort();
   }, [history]);
 
+  // Close on Escape for accessibility and UX consistency
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const handleCandidateSelect = (candidateId: string) => {
     setSelectedCandidates(prev => {
       const next = new Set(prev);
@@ -125,18 +134,19 @@ export default function ResultsModal({ history, onClose }: Props) {
     });
   };
 
-  // ✅ Buttons open the *exact same* flows as the Candidate Profile by deep-linking with an action.
-  // This guarantees identical functionality without duplicating logic.
+  // ✅ Per requirement 5.2:
+  // Go directly to Test / Meeting pages (not candidate profile),
+  // and pass the candidate context via query params.
   const goSendTest = (candidate: Candidate) => {
     const cid = candidate._id || candidate.id || '';
     if (!cid) return;
-    router.push(`/candidate/${cid}?action=sendTest`);
+    router.push(`/test?candidateId=${encodeURIComponent(cid)}`);
   };
 
   const goScheduleInterview = (candidate: Candidate) => {
     const cid = candidate._id || candidate.id || '';
     if (!cid) return;
-    router.push(`/candidate/${cid}?action=scheduleInterview`);
+    router.push(`/meetings?candidateId=${encodeURIComponent(cid)}`);
   };
 
   // theme-aware score badge colors (kept same thresholds)
@@ -150,12 +160,13 @@ export default function ResultsModal({ history, onClose }: Props) {
   if (!results) return null;
 
   return (
-    /* ✅ Removed black, semi-transparent overlay & blur per requirement #6 */
+    /* ✅ No dark overlay; relies purely on global design tokens to avoid local theme conflicts */
     <div className="fixed inset-0 z-50 p-4 flex items-center justify-center">
       <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border">
         {/* Header */}
         <div className="relative p-6">
-          <div className="absolute inset-0 -z-10 opacity-[.22] bg-[radial-gradient(900px_400px_at_-10%_-20%,hsl(var(--g1)/.6),transparent_60%),radial-gradient(800px_500px_at_120%_-20%,hsl(var(--g2)/.5),transparent_55%),radial-gradient(700px_700px_at_80%_120%,hsl(var(--g3)/.45),transparent_60%)]" />
+          {/* Use a global aurora utility instead of inline gradients to keep UI centralized */}
+          <div className="absolute inset-0 -z-10 opacity-[.22] bg-luxe-aurora" />
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h2 className="text-2xl font-bold mb-1 gradient-text">Search Results</h2>
@@ -182,7 +193,7 @@ export default function ResultsModal({ history, onClose }: Props) {
               {results.totalMatches} Candidates Found
             </h3>
 
-            {/* ❌ Removed Export Results & Bulk Email per requirement #1 */}
+            {/* ❌ Removed Export Results & Bulk Email per global-only UI constraint */}
           </div>
 
           <div className="space-y-4">
@@ -201,7 +212,7 @@ export default function ResultsModal({ history, onClose }: Props) {
                   ) || 0
                 );
 
-              // If backend provided no score (common for older saved blocks), compute a heuristic fallback
+              // If backend provided no score (older saved blocks), compute a heuristic fallback
               if ((!displayScore || displayScore === 0) && results.prompt) {
                 displayScore = Math.round(heuristicMatchScore(results.prompt, candidate));
               }
@@ -249,8 +260,6 @@ export default function ResultsModal({ history, onClose }: Props) {
                         </div>
                       </div>
 
-                      {/* ❌ Removed "Match reasons" block per requirement #2 */}
-
                       {/* Actions */}
                       <div className="flex items-center gap-2">
                         <Link
@@ -262,7 +271,7 @@ export default function ResultsModal({ history, onClose }: Props) {
                           View Candidate
                         </Link>
 
-                        {/* ✅ Exactly same behavior as profile flow by deep-linking with action */}
+                        {/* ✅ Direct navigation per requirement 5.2 */}
                         <button
                           onClick={() => goSendTest(candidate)}
                           className="btn-primary text-sm whitespace-nowrap"

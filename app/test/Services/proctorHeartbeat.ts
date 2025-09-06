@@ -56,6 +56,12 @@ type InternalState = {
   lastStatus?: HeartbeatStatus;
 };
 
+// Extend HTMLVideoElement typing with experimental rVFC methods
+type RVFCVideo = HTMLVideoElement & {
+  requestVideoFrameCallback?: (cb: (ts: number) => void) => number;
+  cancelVideoFrameCallback?: (handle: number) => void;
+};
+
 export class ProctorHeartbeat {
   private opts: Required<Omit<ProctorHeartbeatOptions, "onStatusChange" | "fetchImpl" | "extra">> &
     Pick<ProctorHeartbeatOptions, "onStatusChange" | "fetchImpl" | "extra">;
@@ -82,6 +88,7 @@ export class ProctorHeartbeat {
     this._onPageHide = this._onPageHide.bind(this);
     this._tick = this._tick.bind(this);
     this._attachVideoCallbacks = this._attachVideoCallbacks.bind(this);
+    this._detachVideoCallbacks = this._detachVideoCallbacks.bind(this);
   }
 
   /** Provide/replace identity fields */
@@ -92,6 +99,10 @@ export class ProctorHeartbeat {
 
   /** Provide/replace media references */
   setMedia(params: MediaParams) {
+    // If the video element changed, clean up listeners on the old one first
+    if (params.videoEl !== this.st.videoEl) {
+      this._detachVideoCallbacks();
+    }
     this.st.stream = params.stream ?? null;
     this.st.videoEl = params.videoEl ?? null;
     this._attachVideoCallbacks();
@@ -128,47 +139,59 @@ export class ProctorHeartbeat {
     window.removeEventListener("pagehide", this._onPageHide);
     window.removeEventListener("beforeunload", this._onPageHide);
 
-    // Detach rVFC if present
-    if (this.st.videoEl && "cancelVideoFrameCallback" in this.st.videoEl) {
-      try {
-        // @ts-ignore experimental
-        this.st.videoEl.cancelVideoFrameCallback?.(this._rVfcId!);
-      } catch {}
-    }
+    // Detach any video callbacks/listeners
+    this._detachVideoCallbacks();
   }
 
   // ---------- Internal ----------
 
   private _rVfcId: number | null = null;
+  private _timeUpdateHandler: EventListener | null = null;
+  private _observedVideoEl: RVFCVideo | null = null;
 
-  private _attachVideoCallbacks() {
-    const v = this.st.videoEl;
+  private _detachVideoCallbacks() {
+    const v = this._observedVideoEl;
     if (!v) return;
 
+    // Cancel rVFC loop if present
+    if (this._rVfcId && typeof v.cancelVideoFrameCallback === "function") {
+      try {
+        v.cancelVideoFrameCallback(this._rVfcId);
+      } catch {}
+    }
+    this._rVfcId = null;
+
+    // Remove fallback timeupdate listener if present
+    if (this._timeUpdateHandler) {
+      try {
+        v.removeEventListener("timeupdate", this._timeUpdateHandler as EventListener);
+      } catch {}
+    }
+    this._timeUpdateHandler = null;
+    this._observedVideoEl = null;
+  }
+
+  private _attachVideoCallbacks() {
+    const raw = this.st.videoEl as RVFCVideo | null;
+    if (!raw) return;
+
+    // Always detach any previous handlers before attaching new ones
+    this._detachVideoCallbacks();
+    this._observedVideoEl = raw;
+
     // Modern browsers: requestVideoFrameCallback (rVFC).
-    const hasRVFC = "requestVideoFrameCallback" in v;
-    if (hasRVFC) {
+    if (typeof raw.requestVideoFrameCallback === "function") {
       const loop = (now: number /* DOMHighResTimeStamp */) => {
         this.st.lastFrameTs = now;
-        // @ts-ignore experimental
-        this._rVfcId = v.requestVideoFrameCallback(loop);
+        this._rVfcId = raw.requestVideoFrameCallback!(loop);
       };
-      // Cancel previous loop if any
-      if (this._rVfcId && "cancelVideoFrameCallback" in v) {
-        try {
-          // @ts-ignore experimental
-          v.cancelVideoFrameCallback(this._rVfcId);
-        } catch {}
-      }
-      // @ts-ignore experimental
-      this._rVfcId = v.requestVideoFrameCallback(loop);
+      this._rVfcId = raw.requestVideoFrameCallback(loop);
     } else {
-      // Fallback: periodically sample readyState/timeupdate
-      const onTimeUpdate = () => {
+      // Fallback: listen to timeupdate; keep a stable handler to allow proper removal.
+      this._timeUpdateHandler = () => {
         this.st.lastFrameTs = performance.now();
       };
-      v.removeEventListener("timeupdate", onTimeUpdate); // avoid doubles
-      v.addEventListener("timeupdate", onTimeUpdate);
+      raw.addEventListener("timeupdate", this._timeUpdateHandler as EventListener);
     }
   }
 
@@ -198,10 +221,7 @@ export class ProctorHeartbeat {
       this.st.backoffMs = this.opts.intervalMs;
     } else {
       // exponential backoff up to max
-      this.st.backoffMs = Math.min(
-        this.st.backoffMs * 2,
-        this.opts.maxBackoffMs
-      );
+      this.st.backoffMs = Math.min(this.st.backoffMs * 2, this.opts.maxBackoffMs);
     }
     this._queueNext(this.st.backoffMs);
   }
@@ -284,7 +304,10 @@ export class ProctorHeartbeat {
     // Prefer Beacon for background/unload events
     if (useBeacon && "sendBeacon" in navigator) {
       try {
-        const ok = navigator.sendBeacon(this.opts.url, new Blob([body], { type: "application/json" }));
+        const ok = navigator.sendBeacon(
+          this.opts.url,
+          new Blob([body], { type: "application/json" })
+        );
         return ok;
       } catch {
         // fallthrough to fetch

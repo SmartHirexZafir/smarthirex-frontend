@@ -1,6 +1,15 @@
 // app/test/services/tests.ts
 // Centralized client for Test-related API calls (invites, start/submit, history, grading, PDFs)
 // Safe to import from client components. Uses fetch with small conveniences (auth header, timeouts).
+// Updated per requirements:
+// - Robust exception handling with friendly messages (incl. 409 one-test-type gate, 410 expired)
+// - Strict env-driven API base (no hardcoding)
+// - Consistent newest-first sorting for histories
+// - Helpers to open/download attempt PDFs
+// - Defensive JSON parsing & request timeouts
+// - No UI here (global-only UI handled elsewhere)
+
+import { API_BASE, clientAuthHeaders } from "@/lib/auth";
 
 /* ========================
  * Types
@@ -15,12 +24,12 @@ export type CandidateRef = {
 };
 
 export type InvitePayload = {
-  candidate_id: string;                  // required
+  candidate_id: string; // required
   subject?: string;
-  body_html?: string;                    // backend replaces {TEST_LINK}
-  question_count?: number;               // 1..50 (default 4)
+  body_html?: string; // backend replaces {TEST_LINK}
+  question_count?: number; // 1..50 (default 4)
   // Soft extensions (backend may ignore if unsupported):
-  test_type?: TestType;                  // "smart" | "custom"
+  test_type?: TestType; // "smart" | "custom"
   custom?: {
     title?: string;
     questions?: Array<{
@@ -133,34 +142,19 @@ export type CandidateHistoryResponse = {
 /* ========================
  * Config & helpers
  * ======================== */
-export const API_BASE = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_BASE ||
-  "http://localhost:10000"
-).replace(/\/$/, "");
-
-const getAuthToken = (): string | null =>
-  (typeof window !== "undefined" &&
-    (localStorage.getItem("token") ||
-      localStorage.getItem("authToken") ||
-      localStorage.getItem("access_token") ||
-      localStorage.getItem("AUTH_TOKEN"))) ||
-  null;
-
 const authHeaders = (): Record<string, string> => {
-  const h: Record<string, string> = { "Content-Type": "application/json" };
-  const t = getAuthToken();
-  if (t) h.Authorization = `Bearer ${t}`;
-  return h;
+  // Use centralized auth header builder (cookie/localStorage aware)
+  return { ...clientAuthHeaders(), Accept: "application/json" };
 };
 
 async function safeJson<T = any>(res: Response): Promise<T> {
   const txt = await res.text();
+  if (!txt) return {} as T;
   try {
     return JSON.parse(txt) as T;
   } catch {
-  
-    return (txt ?? null) as T;
+    // Return a minimal object to avoid crashing callers expecting objects
+    return { raw: txt } as unknown as T;
   }
 }
 
@@ -173,13 +167,59 @@ function withTimeout(ms: number): { signal: AbortSignal; cancel: () => void } {
   };
 }
 
+function friendlyHttpMessage(status: number): string | null {
+  switch (status) {
+    case 400:
+      return "Bad request.";
+    case 401:
+      return "Unauthorized. Please log in again.";
+    case 403:
+      return "Forbidden. You don’t have access to this resource.";
+    case 404:
+      return "Not found.";
+    case 409:
+      // Requirement: Only one test type per candidate
+      return "A test has already been started for this candidate (only one test type is allowed).";
+    case 410:
+      return "This test link has expired.";
+    case 422:
+      return "Unprocessable request. Please check your inputs.";
+    case 500:
+      return "Server error. Please try again.";
+    default:
+      return null;
+  }
+}
+
 function assertOk(res: Response, body: any) {
   if (!res.ok) {
-    const msg =
-      (body && (body.detail || body.error || body.message)) ||
-      `Request failed with status ${res.status}`;
+    const base =
+      (body && (body.detail || body.error || body.message)) || undefined;
+    const friendly = friendlyHttpMessage(res.status);
+    const msg = base || friendly || `Request failed with status ${res.status}`;
     throw new Error(msg);
   }
+}
+
+function ts(val?: string): number {
+  if (!val) return 0;
+  const d = new Date(val);
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function sortAttemptsDesc<T extends { submitted_at?: string; created_at?: string }>(
+  arr: T[]
+): T[] {
+  return [...arr].sort(
+    (a, b) =>
+      ts(b.submitted_at || b.created_at) - ts(a.submitted_at || a.created_at)
+  );
+}
+
+function sortCandidateSummariesDesc<T extends { submittedAt?: string }>(
+  arr: T[]
+): T[] {
+  return [...arr].sort((a, b) => ts(b.submittedAt) - ts(a.submittedAt));
 }
 
 /* ========================
@@ -187,7 +227,10 @@ function assertOk(res: Response, body: any) {
  * ======================== */
 
 /** Create + send a test invite (smart or custom). */
-export async function inviteTest(payload: InvitePayload, timeoutMs = 20000): Promise<InviteResponse> {
+export async function inviteTest(
+  payload: InvitePayload,
+  timeoutMs = 20000
+): Promise<InviteResponse> {
   const { signal, cancel } = withTimeout(timeoutMs);
   try {
     const res = await fetch(`${API_BASE}/tests/invite`, {
@@ -205,7 +248,10 @@ export async function inviteTest(payload: InvitePayload, timeoutMs = 20000): Pro
 }
 
 /** Start a test by token – validates and returns generated questions. */
-export async function startTest(token: string, timeoutMs = 20000): Promise<StartResponse> {
+export async function startTest(
+  token: string,
+  timeoutMs = 20000
+): Promise<StartResponse> {
   const { signal, cancel } = withTimeout(timeoutMs);
   try {
     const res = await fetch(`${API_BASE}/tests/start`, {
@@ -223,7 +269,11 @@ export async function startTest(token: string, timeoutMs = 20000): Promise<Start
 }
 
 /** Submit answers – returns score + details; backend also updates candidate.test_score */
-export async function submitTest(token: string, answers: Answer[], timeoutMs = 30000): Promise<SubmitResponse> {
+export async function submitTest(
+  token: string,
+  answers: Answer[],
+  timeoutMs = 30000
+): Promise<SubmitResponse> {
   const { signal, cancel } = withTimeout(timeoutMs);
   try {
     const res = await fetch(`${API_BASE}/tests/submit`, {
@@ -241,7 +291,9 @@ export async function submitTest(token: string, answers: Answer[], timeoutMs = 3
 }
 
 /** List ALL attempts across candidates plus the subset that still need manual marking (custom). */
-export async function listAllAttempts(timeoutMs = 15000): Promise<HistoryAllResponse> {
+export async function listAllAttempts(
+  timeoutMs = 15000
+): Promise<HistoryAllResponse> {
   const { signal, cancel } = withTimeout(timeoutMs);
   try {
     const res = await fetch(`${API_BASE}/tests/history/all`, {
@@ -252,8 +304,12 @@ export async function listAllAttempts(timeoutMs = 15000): Promise<HistoryAllResp
     const data = await safeJson<HistoryAllResponse>(res);
     assertOk(res, data);
     return {
-      attempts: Array.isArray(data.attempts) ? data.attempts : [],
-      needs_marking: Array.isArray(data.needs_marking) ? data.needs_marking : [],
+      attempts: Array.isArray(data.attempts)
+        ? sortAttemptsDesc(data.attempts)
+        : [],
+      needs_marking: Array.isArray(data.needs_marking)
+        ? sortAttemptsDesc(data.needs_marking)
+        : [],
     };
   } finally {
     cancel();
@@ -261,7 +317,10 @@ export async function listAllAttempts(timeoutMs = 15000): Promise<HistoryAllResp
 }
 
 /** List attempts for a specific candidate (newest first). */
-export async function listAttemptsForCandidate(candidateId: string, timeoutMs = 15000): Promise<CandidateHistoryResponse> {
+export async function listAttemptsForCandidate(
+  candidateId: string,
+  timeoutMs = 15000
+): Promise<CandidateHistoryResponse> {
   const { signal, cancel } = withTimeout(timeoutMs);
   try {
     const res = await fetch(`${API_BASE}/tests/history/${candidateId}`, {
@@ -274,7 +333,9 @@ export async function listAttemptsForCandidate(candidateId: string, timeoutMs = 
     // Normalize shape defensively
     return {
       candidateId: data.candidateId || candidateId,
-      attempts: Array.isArray(data.attempts) ? data.attempts : [],
+      attempts: Array.isArray(data.attempts)
+        ? sortCandidateSummariesDesc(data.attempts)
+        : [],
     };
   } finally {
     cancel();
@@ -282,7 +343,11 @@ export async function listAttemptsForCandidate(candidateId: string, timeoutMs = 
 }
 
 /** Save a manual grade for a custom attempt; backend should update candidate test_score. */
-export async function gradeCustomAttempt(attemptId: string, score: number, timeoutMs = 15000): Promise<{ ok: true }> {
+export async function gradeCustomAttempt(
+  attemptId: string,
+  score: number,
+  timeoutMs = 15000
+): Promise<{ ok: true }> {
   if (Number.isNaN(score) || score < 0 || score > 100) {
     throw new Error("Score must be between 0 and 100.");
   }
@@ -307,11 +372,35 @@ export function attemptPdfUrl(candidateId: string, attemptId: string): string {
   return `${API_BASE}/tests/history/${candidateId}/${attemptId}/report.pdf`;
 }
 
+/** Open the attempt PDF in a new tab. Throws if popup is blocked. */
+export function openAttemptPdfInNewTab(
+  candidateId: string,
+  attemptId: string
+): void {
+  const url = attemptPdfUrl(candidateId, attemptId);
+  const w =
+    typeof window !== "undefined"
+      ? window.open(url, "_blank", "noopener,noreferrer")
+      : null;
+  if (!w) {
+    throw new Error(
+      "Unable to open the PDF (popup blocked). Please allow popups for this site."
+    );
+  }
+}
+
 /** Optional helper to download a PDF and trigger a browser download. */
-export async function downloadAttemptPdf(candidateId: string, attemptId: string, filename?: string): Promise<void> {
+export async function downloadAttemptPdf(
+  candidateId: string,
+  attemptId: string,
+  filename?: string
+): Promise<void> {
   const url = attemptPdfUrl(candidateId, attemptId);
   const res = await fetch(url, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`Failed to fetch PDF (${res.status})`);
+  if (!res.ok) {
+    const data = await safeJson(res).catch(() => ({}));
+    assertOk(res, data);
+  }
   const blob = await res.blob();
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -350,11 +439,15 @@ async function tryPost(path: string, body: any): Promise<void> {
 }
 
 /** Send a periodic heartbeat (best-effort; ignores errors). */
-export async function proctorHeartbeat(payload: HeartbeatPayload): Promise<void> {
+export async function proctorHeartbeat(
+  payload: HeartbeatPayload
+): Promise<void> {
   await tryPost("/proctor/heartbeat", payload);
 }
 
 /** Upload a snapshot image (best-effort; ignores errors). */
-export async function proctorSnapshot(payload: SnapshotPayload): Promise<void> {
+export async function proctorSnapshot(
+  payload: SnapshotPayload
+): Promise<void> {
   await tryPost("/proctor/snapshot", payload);
 }

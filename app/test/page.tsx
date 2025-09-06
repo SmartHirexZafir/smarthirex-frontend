@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 /** ========================
@@ -28,8 +28,8 @@ type Attempt = {
   score?: number | null;
   type: 'smart' | 'custom';
   status?: string;
-  submitted_at?: string;
-  created_at?: string;
+  submitted_at?: string | null;
+  created_at?: string | null;
 };
 
 type GradePayload = { score: number };
@@ -56,6 +56,21 @@ const authHeaders = () => {
   const t = getAuthToken();
   if (t) h.Authorization = `Bearer ${t}`;
   return h;
+};
+
+/** Small guard to block actions when unauthenticated (Req 2.5) */
+const ensureAuthed = (): boolean => {
+  const has = !!getAuthToken();
+  return has;
+};
+
+const parseYears = (v: unknown): number | undefined => {
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') {
+    const n = parseFloat(v);
+    if (!Number.isNaN(n)) return n;
+  }
+  return undefined;
 };
 
 /** ========================
@@ -101,6 +116,21 @@ export default function TestAssignment() {
   }, [candidate]);
 
   /** -------- load candidate -------- */
+  const refreshCandidate = useCallback(async () => {
+    if (!candidateId) return;
+    try {
+      setLoadingCandidate(true);
+      const res = await fetch(`${API_BASE}/candidate/${candidateId}`, { headers: authHeaders() });
+      const data = (await res.json().catch(() => ({}))) as CandidateDoc;
+      setCandidate(data);
+    } catch {
+      setErr('Failed to load candidate.');
+      window.setTimeout(() => setErr(null), 3200);
+    } finally {
+      setLoadingCandidate(false);
+    }
+  }, [candidateId]);
+
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -112,9 +142,11 @@ export default function TestAssignment() {
         if (!mounted) return;
         setCandidate(data);
       } catch (e) {
+        if (!mounted) return;
         setErr('Failed to load candidate.');
+        window.setTimeout(() => setErr(null), 3200);
       } finally {
-        setLoadingCandidate(false);
+        if (mounted) setLoadingCandidate(false);
       }
     })();
     return () => {
@@ -125,11 +157,29 @@ export default function TestAssignment() {
   /** -------- load test history (for preview) -------- */
   const normalizeAllHistory = (payload: any): { attempts: Attempt[]; needs: Attempt[] } => {
     const attempts: Attempt[] = Array.isArray(payload?.attempts)
-      ? payload.attempts
-      : [];
+      ? payload.attempts.map((a: any) => ({
+          _id: String(a._id ?? a.id ?? ''),
+          candidate_id: a.candidate_id ?? a.candidateId ?? a.candidate?._id,
+          candidateId: a.candidate_id ?? a.candidateId ?? a.candidate?._id,
+          candidate: a.candidate,
+          score: typeof a.score === 'number' ? a.score : (typeof a.total_score === 'number' ? a.total_score : null),
+          type: a.type === 'custom' ? 'custom' : 'smart',
+          status: a.status || 'completed',
+          submitted_at: a.submitted_at ?? a.submittedAt ?? a.createdAt ?? a.created_at ?? null,
+          created_at: a.created_at ?? a.createdAt ?? a.submittedAt ?? a.submitted_at ?? null,
+        })) : [];
     const needs: Attempt[] = Array.isArray(payload?.needs_marking)
-      ? payload.needs_marking
-      : [];
+      ? payload.needs_marking.map((a: any) => ({
+          _id: String(a._id ?? a.id ?? ''),
+          candidate_id: a.candidate_id ?? a.candidateId ?? a.candidate?._id,
+          candidateId: a.candidate_id ?? a.candidateId ?? a.candidate?._id,
+          candidate: a.candidate,
+          score: typeof a.score === 'number' ? a.score : null,
+          type: 'custom',
+          status: a.status || 'pending_marking',
+          submitted_at: a.submitted_at ?? a.submittedAt ?? null,
+          created_at: a.created_at ?? a.createdAt ?? null,
+        })) : [];
     return { attempts, needs };
   };
 
@@ -141,8 +191,8 @@ export default function TestAssignment() {
       candidate_id: payload?.candidateId || candidateId,
       candidateId: payload?.candidateId || candidateId,
       score: typeof a.score === 'number' ? a.score : (typeof a.total_score === 'number' ? a.total_score : null),
-      type: 'smart', // we don't know; default to smart for compatibility
-      status: 'completed',
+      type: (a.type === 'custom' ? 'custom' : 'smart') as TestType, // best effort
+      status: a.status || 'completed',
       submitted_at: a.submittedAt || a.createdAt || a.created_at || null,
       created_at: a.submittedAt || a.createdAt || a.created_at || null,
     }));
@@ -151,7 +201,6 @@ export default function TestAssignment() {
 
   const loadHistory = async () => {
     try {
-      // Preferred: all candidates history for the "Preview Test" section
       const res = await fetch(`${API_BASE}/tests/history/all`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -192,18 +241,83 @@ export default function TestAssignment() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateId]);
 
+  /** -------- derive candidate-specific attempts & lock test type (Req 7.1: one test type only) -------- */
+  const candidateAttempts = useMemo(
+    () =>
+      (allAttempts || []).filter(
+        (a) => (a.candidateId || a.candidate_id) && String(a.candidateId || a.candidate_id) === String(candidateId)
+      ),
+    [allAttempts, candidateId]
+  );
+
+  const lastByType = useMemo(() => {
+    const pickLatest = (t: TestType): Attempt | null => {
+      const list = candidateAttempts.filter((a) => a.type === t);
+      if (list.length === 0) return null;
+      return list.sort((a, b) => {
+        const ta = new Date(a.created_at || a.submitted_at || 0).getTime();
+        const tb = new Date(b.created_at || b.submitted_at || 0).getTime();
+        return tb - ta;
+      })[0];
+    };
+    return {
+      smart: pickLatest('smart'),
+      custom: pickLatest('custom'),
+    };
+  }, [candidateAttempts]);
+
+  const existingTypeForCandidate: TestType | null = useMemo(() => {
+    if (lastByType.smart && !lastByType.custom) return 'smart';
+    if (lastByType.custom && !lastByType.smart) return 'custom';
+    if (lastByType.smart && lastByType.custom) {
+      // If both exist historically, lock to the type of the most recent
+      const ts = new Date(lastByType.smart.created_at || lastByType.smart.submitted_at || 0).getTime();
+      const tc = new Date(lastByType.custom.created_at || lastByType.custom.submitted_at || 0).getTime();
+      return ts >= tc ? 'smart' : 'custom';
+    }
+    return null;
+  }, [lastByType]);
+
   /** -------- send invite (Smart/Custom) -------- */
   const sendInvite = async () => {
     if (!candidateId) return;
+
+    if (!ensureAuthed()) {
+      setErr('Please log in to send tests.');
+      window.setTimeout(() => setErr(null), 3000);
+      return;
+    }
+
+    // Enforce single test type per candidate (Req 7.1)
+    if (existingTypeForCandidate && existingTypeForCandidate !== testType) {
+      setErr(
+        `This candidate is locked to the "${existingTypeForCandidate.toUpperCase()}" test type based on previous activity.`
+      );
+      window.setTimeout(() => setErr(null), 3600);
+      return;
+    }
+
     try {
       setIsSending(true);
+      const years = parseYears(candidate?.years_experience ?? candidate?.experience_years);
       const payload: any = {
         candidate_id: candidateId,
         question_count: questionCount,
         test_type: testType,
+        // ✅ Make GPT generation randomized and contextual (Req 7.2)
+        randomize: true,
+        seed: Date.now(),
+        candidate_role: role !== '—' ? role : undefined,
+        candidate_experience_years: typeof years === 'number' ? years : undefined,
       };
       if (testType === 'custom') {
-        payload.custom = { title: customTitle || 'Custom Test', questions: customQuestions };
+        payload.custom = {
+          title: customTitle?.trim() || `Custom Test for ${candidate?.name || 'Candidate'}`,
+          questions: customQuestions,
+          // ✅ Immediate checking flags (Req 7.3)
+          auto_grade_mcq: true,
+          ai_grade_text: true,
+        };
       }
 
       const res = await fetch(`${API_BASE}/tests/invite`, {
@@ -220,6 +334,7 @@ export default function TestAssignment() {
       setToast('Test invite sent to candidate.');
       window.setTimeout(() => setToast(null), 2400);
       await loadHistory();
+      await refreshCandidate(); // reflect latest test_score if backend updated it
     } catch (e: any) {
       setErr(typeof e?.message === 'string' ? e.message : 'Could not send invite');
       window.setTimeout(() => setErr(null), 3200);
@@ -230,6 +345,12 @@ export default function TestAssignment() {
 
   /** -------- manual grade custom attempt -------- */
   const gradeAttempt = async (attemptId: string, score: number) => {
+    if (!ensureAuthed()) {
+      setErr('Please log in to grade tests.');
+      window.setTimeout(() => setErr(null), 3000);
+      return;
+    }
+
     try {
       if (Number.isNaN(score) || score < 0 || score > 100) {
         setErr('Score must be between 0 and 100.');
@@ -246,6 +367,7 @@ export default function TestAssignment() {
       setToast('Custom test graded.');
       window.setTimeout(() => setToast(null), 2000);
       await loadHistory();
+      await refreshCandidate(); // keep candidate.test_score in sync (Req 7.1)
     } catch (e: any) {
       setErr(typeof e?.message === 'string' ? e.message : 'Could not grade this attempt');
       window.setTimeout(() => setErr(null), 3200);
@@ -448,6 +570,40 @@ export default function TestAssignment() {
     );
   };
 
+  // ------- Summary panels (Req 7.4) -------
+  const SummaryPanels = () => {
+    const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString() : '—');
+    const smart = lastByType.smart;
+    const custom = lastByType.custom;
+    return (
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-xl">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <i className="ri-brain-line" /> Smart AI Test
+            </h3>
+            <span className="badge">
+              {typeof smart?.score === 'number' ? `${smart.score}%` : 'No score'}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">Last attempt: {fmt(smart?.submitted_at || smart?.created_at)}</p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-card p-4 shadow-xl">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <i className="ri-list-check-2" /> Custom Test
+            </h3>
+            <span className="badge">
+              {typeof custom?.score === 'number' ? `${custom.score}%` : 'No score'}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground">Last attempt: {fmt(custom?.submitted_at || custom?.created_at)}</p>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Candidate context — three neat boxes (Email, Job Role, Experience) */}
@@ -481,7 +637,16 @@ export default function TestAssignment() {
               Test Type
             </label>
             <div className="space-y-3">
-              <label className="flex items-center p-3 border border-input rounded-xl cursor-pointer hover:bg-muted/40">
+              <label
+                className={`flex items-center p-3 border border-input rounded-xl cursor-pointer hover:bg-muted/40 ${
+                  existingTypeForCandidate && existingTypeForCandidate !== 'smart' ? 'opacity-60' : ''
+                }`}
+                title={
+                  existingTypeForCandidate && existingTypeForCandidate !== 'smart'
+                    ? `Locked to ${existingTypeForCandidate.toUpperCase()} for this candidate`
+                    : ''
+                }
+              >
                 <input
                   type="radio"
                   name="testType"
@@ -490,16 +655,29 @@ export default function TestAssignment() {
                   onChange={(e) => setTestType(e.target.value as TestType)}
                   className="mr-3"
                   aria-label="Smart AI Test"
+                  disabled={!!existingTypeForCandidate && existingTypeForCandidate !== 'smart'}
                 />
                 <div>
                   <p className="font-medium">Smart AI Test</p>
                   <p className="text-sm text-muted-foreground">
                     Auto-generated based on candidate profile
                   </p>
+                  {existingTypeForCandidate === 'smart' && (
+                    <p className="text-xs text-[hsl(var(--info))] mt-1">This candidate is locked to SMART tests.</p>
+                  )}
                 </div>
               </label>
 
-              <label className="flex items-center p-3 border border-input rounded-xl cursor-pointer hover:bg-muted/40">
+              <label
+                className={`flex items-center p-3 border border-input rounded-xl cursor-pointer hover:bg-muted/40 ${
+                  existingTypeForCandidate && existingTypeForCandidate !== 'custom' ? 'opacity-60' : ''
+                }`}
+                title={
+                  existingTypeForCandidate && existingTypeForCandidate !== 'custom'
+                    ? `Locked to ${existingTypeForCandidate.toUpperCase()} for this candidate`
+                    : ''
+                }
+              >
                 <input
                   type="radio"
                   name="testType"
@@ -508,10 +686,14 @@ export default function TestAssignment() {
                   onChange={(e) => setTestType(e.target.value as TestType)}
                   className="mr-3"
                   aria-label="Custom Test"
+                  disabled={!!existingTypeForCandidate && existingTypeForCandidate !== 'custom'}
                 />
                 <div>
                   <p className="font-medium">Custom Test</p>
                   <p className="text-sm text-muted-foreground">Create your own questions</p>
+                  {existingTypeForCandidate === 'custom' && (
+                    <p className="text-xs text-[hsl(var(--info))] mt-1">This candidate is locked to CUSTOM tests.</p>
+                  )}
                 </div>
               </label>
             </div>
@@ -573,6 +755,9 @@ export default function TestAssignment() {
           </div>
         )}
       </div>
+
+      {/* Summary panels (Req 7.4) */}
+      <SummaryPanels />
 
       {/* Preview Tests (All + Needs manual marking) */}
       <div className="grid lg:grid-cols-2 gap-6">

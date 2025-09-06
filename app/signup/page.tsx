@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { API_BASE, getGoogleAuthUrl } from '@/lib/auth';
 
 const SUCCESS_KEY = 'signup_success_meta';          // { email: string, savedAt: number }
 const SUCCESS_TTL_MS = 24 * 60 * 60 * 1000;         // 24 hours
@@ -25,13 +26,12 @@ export default function SignupPage() {
   const [showPass, setShowPass] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // === Google login (only addition) ===
-  const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
+  // === Google login (now uses centralized helper) ===
   const handleGoogleLogin = () => {
-    const redirectUrl = `${window.location.origin}/login`;
-    window.location.href = `${API_BASE}/auth/google?redirect_url=${encodeURIComponent(redirectUrl)}`;
+    const url = getGoogleAuthUrl('/login');
+    window.location.href = url;
   };
-  // ====================================
+  // ====================
 
   // Ensure success lock only when recent + optional reset flag
   useEffect(() => {
@@ -55,7 +55,7 @@ export default function SignupPage() {
         if (fresh && meta.email) {
           setSuccessEmail(meta.email);
           setSuccessMessage(
-            'SmartHirex has sent you a verification email. Please check your inbox to continue.'
+            'Smart HireX has sent you a verification email. Please check your inbox to continue.'
           );
         } else {
           localStorage.removeItem(SUCCESS_KEY); // expired -> unlock form
@@ -97,7 +97,7 @@ export default function SignupPage() {
     setIsLoading(true);
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/signup`,
+        `${API_BASE}/auth/signup`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -108,11 +108,11 @@ export default function SignupPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Signup failed');
 
-      // ✅ Success: lock the page into a "check email" state (no login links here)
+      // ✅ Success: lock the page into a "check email" state
       const email = formData.email;
       setSuccessEmail(email);
       setSuccessMessage(
-        'SmartHirex has sent you a verification email. Please check your inbox to continue.'
+        'Smart HireX has sent you a verification email. Please check your inbox to continue.'
       );
 
       // Clear form fields (optional)
@@ -153,17 +153,29 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] grid lg:grid-cols-2 gap-8 py-10 px-4 sm:px-8">
-      {/* Left: Brand / Hero (same visuals) */}
+      {/* Left: Brand / Hero (uses only global primitives; no local UI overrides) */}
       <section className="relative hidden lg:flex panel overflow-hidden items-center justify-center">
-        <div className="absolute inset-0 bg-luxe-radial opacity-70 pointer-events-none" />
-        <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full blur-3xl opacity-20 gradient-ink" />
+        {/* Subtle grid background using global token */}
+        <div className="absolute inset-0 neon-grid opacity-30 pointer-events-none" aria-hidden="true" />
+        {/* Soft gradient glow */}
+        <div
+          className="absolute -top-24 -left-24 h-96 w-96 rounded-full blur-3xl opacity-20 pointer-events-none"
+          style={{ background: 'radial-gradient(60% 60% at 50% 50%, hsl(var(--g1)/.45), transparent 70%)' }}
+          aria-hidden="true"
+        />
         <div className="relative z-10 p-12 max-w-xl">
           <Link href="/" className="inline-flex items-center gap-3 mb-10 group">
-            <span className="h-14 w-14 rounded-2xl grid place-items-center gradient-ink shadow-glow">
+            <span
+              className="h-14 w-14 rounded-2xl grid place-items-center shadow-glow ring-1 ring-border"
+              style={{
+                background:
+                  'linear-gradient(135deg, hsl(var(--g1)) 0%, hsl(var(--g2)) 45%, hsl(var(--g3)) 100%)',
+              }}
+            >
               <i className="ri-brain-line text-white text-2xl" />
             </span>
-            <span className="text-4xl font-bold gradient-text font-pacifico group-hover:opacity-90 transition">
-              SmartHirex
+            <span className="text-4xl font-bold gradient-text group-hover:opacity-90 transition">
+              Smart HireX
             </span>
           </Link>
 
@@ -183,7 +195,7 @@ export default function SignupPage() {
             ].map((f, i) => (
               <li
                 key={i}
-                className="flex items-start gap-3 p-3 rounded-2xl bg-[hsl(var(--muted))/0.35] ring-1 ring-border"
+                className="flex items-start gap-3 p-3 rounded-2xl bg-[hsl(var(--muted)/0.35)] ring-1 ring-border"
               >
                 <span className="mt-0.5 h-8 w-8 rounded-xl grid place-items-center bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]">
                   <i className={f.icon} />
@@ -195,7 +207,7 @@ export default function SignupPage() {
 
           <div className="mt-10 flex items-center gap-2 text-xs text-muted-foreground">
             <i className="ri-lock-2-line" />
-            <span>No passwords stored. Tokens are securely encrypted.</span>
+            <span>Passwords are encrypted. OAuth supported.</span>
           </div>
         </div>
       </section>
@@ -203,7 +215,7 @@ export default function SignupPage() {
       {/* Right: Card / Form */}
       <section className="flex items-center">
         <div className="w-full">
-          {/* Success screen (unchanged layout) */}
+          {/* Success screen */}
           {successMessage ? (
             <div className="card p-10 text-center">
               <div className="mx-auto mb-6 h-14 w-14 rounded-2xl grid place-items-center bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">
@@ -214,14 +226,14 @@ export default function SignupPage() {
                 Verification email has been sent to <span className="font-semibold">{successEmail}</span>.
               </p>
               <p className="text-muted-foreground mt-2">
-                Please open your inbox and click the verification link to proceed. Login is only possible via the email link.
+                Please open your inbox and click the verification link to proceed.
               </p>
 
-              {/* NEW: manual reset button (frontend-only) */}
+              {/* Manual reset button (frontend-only) */}
               <button
                 type="button"
                 onClick={clearSuccessAndShowForm}
-                className="mt-6 btn-outline px-4 py-2 rounded-xl text-sm"
+                className="btn btn-outline mt-6 text-sm"
                 title="Use a different email"
               >
                 Use a different email
@@ -231,12 +243,18 @@ export default function SignupPage() {
             <div className="card p-8 sm:p-10">
               <div className="text-center mb-6">
                 <div className="inline-flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-2xl grid place-items-center gradient-ink text-white shadow-soft">
+                  <span
+                    className="h-12 w-12 rounded-2xl grid place-items-center text-white shadow-soft ring-1 ring-border"
+                    style={{
+                      background:
+                        'linear-gradient(135deg, hsl(var(--g1)) 0%, hsl(var(--g2)) 45%, hsl(var(--g3)) 100%)',
+                    }}
+                  >
                     <i className="ri-user-add-line text-xl" />
-                  </div>
+                  </span>
                   <div className="text-left">
                     <h2 className="text-2xl font-semibold">Create your account</h2>
-                    <p className="text-sm text-muted-foreground">Start hiring smarter with SmartHirex</p>
+                    <p className="text-sm text-muted-foreground">Start hiring smarter with Smart HireX</p>
                   </div>
                 </div>
               </div>
@@ -379,8 +397,12 @@ export default function SignupPage() {
                   <div className="mt-2">
                     <div className="h-2 rounded-full bg-[hsl(var(--muted))/0.6] overflow-hidden">
                       <div
-                        className="h-full rounded-full gradient-ink transition-all"
-                        style={{ width: `${(passStrength / 5) * 100}%` }}
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${(passStrength / 5) * 100}%`,
+                          background:
+                            'linear-gradient(135deg, hsl(var(--g1)) 0%, hsl(var(--g2)) 45%, hsl(var(--g3)) 100%)',
+                        }}
                       />
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">{strengthText}</div>
@@ -461,32 +483,33 @@ export default function SignupPage() {
             </div>
           )}
 
-          {/* When success screen is showing, do NOT show any login link */}
+          {/* Below Sign Up: enable the Login link per requirement */}
           {!successMessage && (
             <>
               <div className="mt-6 text-center text-sm text-muted-foreground">
                 Already have an account?{' '}
-                <span className="opacity-80">Login is only possible via the verification email.</span>
+                <Link href="/login" className="text-foreground underline underline-offset-4 hover:no-underline">
+                  Log in
+                </Link>
               </div>
 
-              {/* === Added Google at the END of signup page === */}
+              {/* Google SSO (global btn-google shows Google colors) */}
               <div className="mt-8 text-center">
-                <div className="text-sm text-muted-foreground mb-2">Prefer single sign-on?</div>
+                <div className="text-sm text-muted-foreground mb-2">Or continue with</div>
                 <button
                   type="button"
                   onClick={handleGoogleLogin}
-                  className="btn-outline"
+                  className="btn-google"
                   aria-label="Login with Google"
                 >
                   <i className="ri-google-fill" /> Login with Google
                 </button>
               </div>
-              {/* ============================================== */}
             </>
           )}
 
           <div className="mt-6 text-center text-xs text-muted-foreground">
-            © {new Date().getFullYear()} SmartHirex. All rights reserved.
+            © {new Date().getFullYear()} Smart HireX. All rights reserved.
           </div>
         </div>
       </section>

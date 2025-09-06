@@ -78,7 +78,7 @@ export default function CandidateResults({
   const isBadText = (s?: string | null) => {
     const t = String(s ?? '').trim().toLowerCase();
     return !t || t === 'n/a' || t === 'na' || t === 'none' || t === '-' || t === 'unknown' || t === 'not specified';
-    };
+  };
   const pickFirstGood = (...vals: (string | undefined | null)[]) => {
     for (const v of vals) {
       if (!isBadText(v)) return String(v).trim();
@@ -99,7 +99,6 @@ export default function CandidateResults({
   const toPercentText = (val: any): string | null => {
     const n = Number(val);
     if (!Number.isFinite(n)) return null;
-    // Heuristic: if value looks like ratio, scale to percent
     const pct = n <= 1 ? n * 100 : n;
     const bounded = Math.max(0, Math.min(100, pct));
     return `${bounded.toFixed(2)}%`;
@@ -208,7 +207,7 @@ export default function CandidateResults({
       {Array.from({ length: itemsPerPage }).map((_, i) => (
         <div
           key={i}
-          className="surface glass border border-border rounded-2xl p-6 animate-pulse"
+          className="card p-6 animate-pulse"
           aria-hidden="true"
         >
           <div className="mb-4 flex items-start gap-4">
@@ -227,7 +226,7 @@ export default function CandidateResults({
   );
 
   return (
-    <section className="card-glass relative overflow-hidden animate-rise-in" aria-labelledby="filtered-title">
+    <section className="card relative overflow-hidden animate-rise-in" aria-labelledby="filtered-title">
       {/* Ambient overlays */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute inset-0 opacity-[0.06] gradient-ink" />
@@ -242,7 +241,7 @@ export default function CandidateResults({
               <h3 id="filtered-title" className="text-2xl md:text-3xl font-extrabold gradient-text glow">
                 Filtered Candidates
               </h3>
-              <p className="mt-1 text-[hsl(var(--muted-foreground))]">
+              <p className="mt-1 text-[hsl(var(--muted-foreground))]" aria-live="polite">
                 <HeaderStatus />
               </p>
               {!isProcessing && !promptChanging && (
@@ -353,7 +352,7 @@ export default function CandidateResults({
                   return (
                     <article
                       key={id}
-                      className="surface glass border border-border rounded-2xl p-6 hover:shadow-glow transition-all duration-300 h-full flex flex-col"
+                      className="card p-6 hover:shadow-glow transition-all duration-300 h-full flex flex-col"
                     >
                       <div className="mb-4 flex items-start gap-4">
                         <Avatar name={name} />
@@ -447,7 +446,7 @@ export default function CandidateResults({
                   <button
                     onClick={prevPage}
                     disabled={page === 1}
-                    className="surface rounded-lg px-4 py-2 text-foreground hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    className="btn btn-outline"
                   >
                     <i className="ri-arrow-left-line mr-2" />
                     Previous
@@ -458,9 +457,11 @@ export default function CandidateResults({
                       <button
                         key={p}
                         onClick={() => setCurrentPage(p)}
-                        className={`h-10 w-10 rounded-lg text-sm font-medium transition ${
-                          page === p ? 'btn btn-primary' : 'surface text-foreground hover:shadow-glow'
-                        }`}
+                        className={
+                          page === p
+                            ? 'btn btn-primary h-10 w-10 p-0 rounded-full'
+                            : 'btn btn-outline h-10 w-10 p-0 rounded-full'
+                        }
                       >
                         {p}
                       </button>
@@ -470,7 +471,7 @@ export default function CandidateResults({
                   <button
                     onClick={nextPage}
                     disabled={page === totalPages}
-                    className="surface rounded-lg px-4 py-2 text-foreground hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    className="btn btn-outline"
                   >
                     Next
                     <i className="ri-arrow-right-line ml-2" />

@@ -1,10 +1,17 @@
-// app/(auth)/login/page.tsx (or your LoginPage component file)
+// app/(auth)/login/page.tsx
 
 'use client';
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import {
+  API_BASE,
+  authFetch as authFetchLib,
+  setAuthToken,
+  tryPersistTokenFromUrl,
+  getGoogleAuthUrl,
+} from '@/lib/auth';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,11 +35,6 @@ export default function LoginPage() {
   const [role, setRole] = useState('');
   const [company, setCompany] = useState('');
 
-  const API_BASE = useMemo(
-    () => (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, ''),
-    []
-  );
-
   // If redirected from verify page like /login?verified=1, show success info
   useEffect(() => {
     if (searchParams?.get('verified') === '1') {
@@ -48,20 +50,6 @@ export default function LoginPage() {
     } catch {
       return { __raw: text };
     }
-  };
-
-  // Helper: authorized fetch for OAuth-protected endpoints (sends JWT if present and includes cookies)
-  const authFetch = async (url: string, init?: RequestInit) => {
-    const token = (typeof window !== 'undefined' && localStorage.getItem('token')) || '';
-    const headers: Record<string, string> = {
-      ...(init?.headers as Record<string, string>),
-    };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    return fetch(url, {
-      credentials: 'include',
-      ...init,
-      headers,
-    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,8 +81,8 @@ export default function LoginPage() {
         throw new Error((data as any)?.detail || 'Login failed');
       }
 
-      // Success -> keep your existing behavior
-      localStorage.setItem('token', (data as any).token);
+      // Success -> persist token using centralized helper (sets cookie + localStorage for compatibility)
+      if ((data as any)?.token) setAuthToken((data as any).token);
       localStorage.setItem('user', JSON.stringify((data as any).user));
       router.push('/upload');
     } catch (err: any) {
@@ -127,13 +115,12 @@ export default function LoginPage() {
 
   // --- Login with Google: start OAuth flow by redirecting to backend ---
   const handleGoogleLogin = () => {
-    // After OAuth, backend should redirect back to this page with ?oauth=google&token=...&needs_profile=0|1
-    const redirectUrl = `${window.location.origin}/login`;
-    const url = `${API_BASE}/auth/google?redirect_url=${encodeURIComponent(redirectUrl)}`;
+    // After OAuth, backend should redirect back to this page (/login)
+    const url = getGoogleAuthUrl('/login');
     window.location.href = url;
   };
 
-  // --- After OAuth redirect: detect params, store token, fetch user, and decide if profile modal is needed ---
+  // --- After OAuth redirect: detect params, store token (cookie+LS), fetch user, and decide if profile modal is needed ---
   useEffect(() => {
     const provider =
       (searchParams?.get('oauth') || searchParams?.get('provider') || '').toLowerCase();
@@ -142,26 +129,18 @@ export default function LoginPage() {
       searchParams?.get('google') === '1' ||
       searchParams?.get('g') === 'google';
 
-    // Token might come as ?token=... or ?jwt=... or ?access_token=...
-    const tokenParam =
-      searchParams?.get('token') ||
-      searchParams?.get('jwt') ||
-      searchParams?.get('access_token') ||
-      '';
+    // Persist token from query params if present (?token= / ?jwt= / ?access_token=)
+    const persistedToken = tryPersistTokenFromUrl(typeof window !== 'undefined' ? window.location.search : '');
 
     const needsProfileParam = searchParams?.get('needs_profile') || '';
 
     // Only run when redirected from Google OR when token is present
-    if (!isGoogle && !tokenParam) return;
+    if (!isGoogle && !persistedToken) return;
 
     (async () => {
       try {
-        if (tokenParam) {
-          localStorage.setItem('token', tokenParam);
-        }
-
-        // Try to get current user from backend
-        const res = await authFetch(`${API_BASE}/auth/me`, { method: 'GET' });
+        // Try to get current user from backend (uses centralized authFetch which sends cookie/header)
+        const res = await authFetchLib(`${API_BASE}/auth/me`, { method: 'GET' });
         const data = await safeJson(res);
 
         // Accept either { user: {...} } or the user object directly
@@ -201,7 +180,7 @@ export default function LoginPage() {
         throw new Error('Please provide your name, role, and company.');
       }
 
-      const res = await authFetch(`${API_BASE}/auth/complete-profile`, {
+      const res = await authFetchLib(`${API_BASE}/auth/complete-profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -228,26 +207,35 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h[calc(100vh-4rem)] min-h-[calc(100vh-4rem)] grid lg:grid-cols-2 gap-8">
-      {/* Left: Brand / Hero */}
-      <section className="relative hidden lg:flex rounded-3xl panel overflow-hidden items-center justify-center">
-        {/* Aurora gradient background using tokens */}
-        <div className="absolute inset-0 bg-luxe-radial opacity-70 pointer-events-none" />
-        <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full blur-3xl opacity-20 gradient-ink" />
+    <div className="min-h-[calc(100vh-4rem)] grid lg:grid-cols-2 gap-8 py-10 px-4 sm:px-8">
+      {/* Left: Brand / Hero (marketing panel). Uses only global primitives (no local overrides). */}
+      <section className="relative hidden lg:flex panel overflow-hidden items-center justify-center">
+        {/* Subtle grid + glow using global tokens */}
+        <div className="absolute inset-0 neon-grid opacity-30 pointer-events-none" aria-hidden="true" />
+        <div
+          className="absolute -top-24 -left-24 h-96 w-96 rounded-full blur-3xl opacity-20 pointer-events-none"
+          style={{ background: 'radial-gradient(60% 60% at 50% 50%, hsl(var(--g1)/.45), transparent 70%)' }}
+          aria-hidden="true"
+        />
         <div className="relative z-10 p-12 max-w-xl">
           <Link href="/" className="inline-flex items-center gap-3 mb-10">
-            <span className="h-14 w-14 rounded-2xl shadow-glow grid place-items-center gradient-ink">
+            <span
+              className="h-14 w-14 rounded-2xl grid place-items-center shadow-glow ring-1 ring-border"
+              style={{
+                background:
+                  'linear-gradient(135deg, hsl(var(--g1)) 0%, hsl(var(--g2)) 45%, hsl(var(--g3)) 100%)',
+              }}
+            >
               <i className="ri-brain-line text-white text-2xl" />
             </span>
-            <span className="text-4xl font-bold gradient-text font-pacifico">SmartHirex</span>
+            <span className="text-4xl font-bold gradient-text">Smart HireX</span>
           </Link>
 
           <h1 className="text-4xl font-semibold leading-tight mb-4">
             Welcome back to your <span className="gradient-text">hiring cockpit</span>
           </h1>
-          <p className="text-[hsl(var(--muted-foreground))] mb-8">
-            Upload resumes, filter, score & schedule — all in one place. Secure, fast and
-            delightful.
+          <p className="text-muted-foreground mb-8">
+            Upload resumes, filter, score & schedule — all in one place. Secure, fast and delightful.
           </p>
 
           <ul className="grid gap-4">
@@ -258,17 +246,17 @@ export default function LoginPage() {
             ].map((f, i) => (
               <li
                 key={i}
-                className="flex items-start gap-3 p-3 rounded-2xl bg[hsla(var(--muted)/0.35)] bg-[hsl(var(--muted))/0.35] ring-1 ring-border"
+                className="flex items-start gap-3 p-3 rounded-2xl bg-[hsl(var(--muted))/0.35] ring-1 ring-border"
               >
                 <span className="mt-0.5 h-8 w-8 rounded-xl grid place-items-center bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]">
-                  <i className={`${f.icon}`} />
+                  <i className={f.icon} />
                 </span>
                 <p className="text-sm">{f.text}</p>
               </li>
             ))}
           </ul>
 
-          <div className="mt-10 flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+          <div className="mt-10 flex items-center gap-2 text-xs text-muted-foreground">
             <i className="ri-lock-2-line" />
             <span>We never store your password. Sessions are securely encrypted.</span>
           </div>
@@ -281,14 +269,18 @@ export default function LoginPage() {
           <div className="card p-8 shadow-elev-2">
             <div className="text-center mb-6">
               <div className="inline-flex items-center gap-3">
-                <div className="h-12 w-12 rounded-2xl gradient-ink grid place-items-center shadow-soft">
-                  <i className="ri-login-circle-line text-white text-xl" />
-                </div>
+                <span
+                  className="h-12 w-12 rounded-2xl grid place-items-center text-white shadow-soft ring-1 ring-border"
+                  style={{
+                    background:
+                      'linear-gradient(135deg, hsl(var(--g1)) 0%, hsl(var(--g2)) 45%, hsl(var(--g3)) 100%)',
+                  }}
+                >
+                  <i className="ri-login-circle-line text-xl" />
+                </span>
                 <div className="text-left">
                   <h2 className="text-2xl font-semibold">Sign in</h2>
-                  <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                    Access your SmartHirex workspace
-                  </p>
+                  <p className="text-sm text-muted-foreground">Access your Smart HireX workspace</p>
                 </div>
               </div>
             </div>
@@ -318,7 +310,7 @@ export default function LoginPage() {
                   Email Address
                 </label>
                 <div className="relative">
-                  <i className="ri-mail-line absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+                  <i className="ri-mail-line absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
                     id="email"
                     name="email"
@@ -337,7 +329,7 @@ export default function LoginPage() {
                   Password
                 </label>
                 <div className="relative">
-                  <i className="ri-key-2-line absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+                  <i className="ri-key-2-line absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <input
                     id="password"
                     name="password"
@@ -372,12 +364,12 @@ export default function LoginPage() {
                         type="button"
                         onClick={handleResendVerification}
                         disabled={resendLoading || !email}
-                        className="btn-primary px-3 py-1.5 rounded-xl text-xs"
+                        className="btn btn-primary px-3 py-1.5 rounded-xl text-xs"
                       >
                         {resendLoading ? 'Sending…' : 'Resend verification email'}
                       </button>
                       {resendMsg && (
-                        <p className="text-xs text-[hsl(var(--muted-foreground))]">{resendMsg}</p>
+                        <p className="text-xs text-muted-foreground">{resendMsg}</p>
                       )}
                     </div>
                   </div>
@@ -392,7 +384,7 @@ export default function LoginPage() {
                   />
                   Remember me
                 </label>
-                <Link href="/forgot-password" className="text-sm text-[hsl(var(--secondary))] hover:underline">
+                <Link href="/forgot-password" className="text-sm text-secondary hover:underline">
                   Forgot password?
                 </Link>
               </div>
@@ -400,7 +392,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="btn-primary w-full py-3 rounded-2xl transition-transform hover:scale-[1.01] active:scale-[0.99] focus-visible:ring-offset-0"
+                className="btn btn-primary w-full py-3 rounded-2xl transition-transform hover:scale-[1.01] active:scale-[0.99] focus-visible:ring-offset-0"
               >
                 {isLoading ? (
                   <span className="inline-flex items-center gap-2">
@@ -420,16 +412,16 @@ export default function LoginPage() {
                   <span className="w-full border-t border-border" />
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="bg-card px-3 text-[hsl(var(--muted-foreground))]">or</span>
+                  <span className="bg-card px-3 text-muted-foreground">or</span>
                 </div>
               </div>
 
-              {/* Social: Google is now functional */}
+              {/* Social: Google uses global brand-colored button */}
               <div className="mt-6">
                 <button
                   type="button"
                   onClick={handleGoogleLogin}
-                  className="btn-outline w-full"
+                  className="btn btn-google w-full"
                   aria-label="Sign in with Google"
                 >
                   <i className="ri-google-fill" /> Login with Google
@@ -437,33 +429,28 @@ export default function LoginPage() {
               </div>
             </form>
 
-            <div className="mt-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            <div className="mt-6 text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{' '}
-              <Link href="/signup" className="text-[hsl(var(--primary))] hover:underline font-medium">
+              <Link href="/signup" className="text-primary hover:underline font-medium">
                 Sign up now
               </Link>
             </div>
-          </div>
-
-          {/* Footer */}
-          <div className="mt-6 text-center text-xs text-[hsl(var(--muted-foreground))]">
-            © {new Date().getFullYear()} SmartHirex. All rights reserved.
           </div>
         </div>
       </section>
 
       {/* Profile Completion Modal (shown after successful Login with Google if needed) */}
       {profileOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center"
-        >
-          <div className="absolute inset-0 bg-black/50" />
-          <div className="relative z-10 w-full max-w-lg card p-6 shadow-elev-3 rounded-3xl">
+        <>
+          <div className="modal-backdrop" />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="modal max-w-lg w-[92vw]"
+          >
             <div className="mb-4">
               <h3 className="text-xl font-semibold">Complete your profile</h3>
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">
+              <p className="text-sm text-muted-foreground">
                 You&apos;re signed in with Google. Please tell us a bit about you.
               </p>
             </div>
@@ -521,7 +508,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={profileLoading}
-                className="btn-primary mt-2 w-full py-3 rounded-2xl"
+                className="btn btn-primary mt-2 w-full py-3 rounded-2xl"
               >
                 {profileLoading ? (
                   <span className="inline-flex items-center gap-2">
@@ -537,7 +524,7 @@ export default function LoginPage() {
               </button>
             </form>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

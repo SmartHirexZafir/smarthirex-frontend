@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import HistoryFilter from './HistoryFilter';
 import HistoryBlocks from './HistoryBlocks';
 import ResultsModal from './ResultsModal';
@@ -9,12 +9,35 @@ import RerunPromptModal from './RerunPromptModal';
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
 
+/** Normalize a score coming from Mongo (handles 0–1 ratios & 0–100 values). */
+function normalizePercent(val: unknown): number | null {
+  const n = typeof val === 'string' ? parseFloat(val) : typeof val === 'number' ? val : NaN;
+  if (!Number.isFinite(n)) return null;
+  const pct = n <= 1 ? n * 100 : n;
+  const bounded = Math.max(0, Math.min(100, pct));
+  return Math.round((bounded + Number.EPSILON) * 100) / 100; // 2dp
+}
+
+/** Merge/compute matching score for a candidate (prompt match % shown on cards). */
+function computeMatchingScore(c: any): number | null {
+  return (
+    normalizePercent(c?.prompt_matching_score) ??
+    normalizePercent(c?.semantic_score) ??
+    normalizePercent(c?.final_score) ??
+    normalizePercent(c?.match_score) ??
+    null
+  );
+}
+
 export default function HistoryPage() {
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [filteredData, setFilteredData] = useState<any[]>([]);
   const [selectedHistory, setSelectedHistory] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
   const [rerunFor, setRerunFor] = useState<any | null>(null); // ✅ new: controls Re-run Prompt popup
+
+  // Scroll lock bookkeeping so "View Results" doesn't jump to top (Req 5.1)
+  const scrollLockRef = useRef<{ y: number; locked: boolean }>({ y: 0, locked: false });
 
   // fetch history (ignores AbortError cleanly)
   const fetchHistory = async () => {
@@ -70,6 +93,10 @@ export default function HistoryPage() {
     // No AbortController; just stop applying results after unmount
     return () => {
       isActive = false;
+      // Ensure scroll is unlocked if the component unmounts while modal is open
+      if (scrollLockRef.current.locked) {
+        unlockScroll();
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -83,9 +110,109 @@ export default function HistoryPage() {
     setFilteredData(filteredResults);
   }, []);
 
-  const handleViewResults = (history: any) => {
+  // -------- View Results: lock scroll + ensure matching scores come from Mongo (Req 5.1) --------
+  const lockScroll = () => {
+    if (typeof window === 'undefined' || scrollLockRef.current.locked) return;
+    const y = window.scrollY || window.pageYOffset || 0;
+    scrollLockRef.current = { y, locked: true };
+    // Lock the body at current position so page doesn't jump to top
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${y}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+  };
+
+  const unlockScroll = () => {
+    if (typeof window === 'undefined' || !scrollLockRef.current.locked) return;
+    const { y } = scrollLockRef.current;
+    // Restore styles
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.width = '';
+    scrollLockRef.current = { y: 0, locked: false };
+    // Restore scroll position exactly where the user was
+    window.scrollTo(0, y);
+  };
+
+  // Try multiple detail endpoints to fetch results including match scores
+  const fetchHistoryDetail = async (h: any) => {
+    const id = h?._id ?? h?.id ?? h?.historyId ?? h?.history_id;
+    if (!id) return null;
+
+    const paths = [
+      `${API_BASE}/history/${id}`,
+      `${API_BASE}/history/detail/${id}`,
+      `${API_BASE}/history/user-history/${id}`,
+    ];
+
+    for (const url of paths) {
+      try {
+        const res = await fetch(url, { credentials: 'include' });
+        if (res.status === 404) continue;
+        if (!res.ok) {
+          const _txt = await res.text().catch(() => '');
+          continue;
+        }
+        const data = await res.json();
+        return data || null;
+      } catch {
+        // try next
+      }
+    }
+    return null;
+  };
+
+  const hydrateWithScores = (raw: any): any => {
+    if (!raw) return raw;
+    // Normalize candidates/results array names
+    const results: any[] =
+      (Array.isArray(raw.results) && raw.results) ||
+      (Array.isArray(raw.candidates) && raw.candidates) ||
+      (Array.isArray(raw.resumes) && raw.resumes) ||
+      [];
+
+    const withScores = results.map((c) => {
+      const matchingScore = computeMatchingScore(c);
+      return { ...c, matchingScore, match_score: matchingScore ?? c?.match_score ?? null };
+    });
+
+    return { ...raw, results: withScores };
+  };
+
+  const openResultsModal = async (history: any) => {
+    // 1) Lock scroll so opening the modal never jumps the page (Req 5.1)
+    lockScroll();
+
+    // 2) Set initial selection quickly (UI responsive), then hydrate with details
     setSelectedHistory(history);
     setShowModal(true);
+
+    // 3) Fetch detail & inject matching scores if available from Mongo
+    const detail = await fetchHistoryDetail(history);
+    if (detail) {
+      setSelectedHistory((prev: any) => {
+        // Prefer detail version but keep any metadata from the original block
+        const merged = { ...prev, ...detail };
+        return hydrateWithScores(merged);
+      });
+    } else {
+      // If no detail endpoint, still compute scores from what we have
+      setSelectedHistory((prev: any) => hydrateWithScores(prev));
+    }
+  };
+
+  const closeResultsModal = () => {
+    setShowModal(false);
+    setSelectedHistory(null);
+    unlockScroll();
+  };
+
+  const handleViewResults = (history: any) => {
+    // Wrap the existing behavior with the improved modal open (Req 5.1)
+    void openResultsModal(history);
   };
 
   /**
@@ -114,7 +241,7 @@ export default function HistoryPage() {
     }
   };
 
-  // ✅ New: open the popup-style rerun modal scoped to a specific history block
+  // ✅ New: open the popup-style rerun modal scoped to a specific history block (Req 5.3)
   const openRerunModal = (history: any) => {
     setRerunFor(history);
   };
@@ -129,7 +256,7 @@ export default function HistoryPage() {
         <div className="container relative z-10 max-w-6xl">
           <div className="mx-auto max-w-4xl text-center animate-rise-in">
             <h1 className="mb-4 font-bold gradient-text">
-              Prompt History & Matching Results
+              Prompt History &amp; Matching Results
             </h1>
 
             <p className="mx-auto max-w-3xl text-[hsl(var(--muted-foreground))] leading-relaxed">
@@ -183,15 +310,15 @@ export default function HistoryPage() {
           <HistoryBlocks
             historyData={filteredData}
             onViewResults={handleViewResults}
-            onOpenRerunModal={openRerunModal}   // ✅ new scoped rerun flow
+            onOpenRerunModal={openRerunModal}   // ✅ new scoped rerun flow (Req 5.3)
             onRerunPrompt={handleRerunPrompt}   // legacy fallback (kept)
           />
         </div>
       </section>
 
-      {/* Results Modal */}
+      {/* Results Modal (scroll-locked; scores hydrated from Mongo when available) */}
       {showModal && (
-        <ResultsModal history={selectedHistory} onClose={() => setShowModal(false)} />
+        <ResultsModal history={selectedHistory} onClose={closeResultsModal} />
       )}
 
       {/* ✅ Re-run Prompt Modal (scoped to the selected history block) */}
@@ -204,6 +331,7 @@ export default function HistoryPage() {
           }}
         />
       )}
+      {/* Footer is rendered globally in layout.tsx to keep a single unified footer across pages. */}
     </div>
   );
 }

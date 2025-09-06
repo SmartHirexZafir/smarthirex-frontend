@@ -80,11 +80,7 @@ function getCandId(a: Attempt): string | undefined {
 }
 
 function getCandEmail(a: Attempt): string {
-  return (
-    a.candidate?.email ||
-    a.candidate?.resume?.email ||
-    "—"
-  );
+  return a.candidate?.email || a.candidate?.resume?.email || "—";
 }
 
 function getCandName(a: Attempt): string {
@@ -94,7 +90,11 @@ function getCandName(a: Attempt): string {
 /* ========================
  * Component
  * ======================== */
-export default function PreviewPanel({ highlightCandidateId }: { highlightCandidateId?: string }) {
+export default function PreviewPanel({
+  highlightCandidateId,
+}: {
+  highlightCandidateId?: string;
+}) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -117,11 +117,15 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
     setLoading(true);
     setErr(null);
     try {
-      const res = await fetch(`${API_BASE}/tests/history/all`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}/tests/history/all`, {
+        headers: authHeaders(),
+      });
       const data = (await res.json().catch(() => ({}))) as HistoryResponse;
 
       const arr = Array.isArray(data?.attempts) ? data!.attempts! : [];
-      const needs = Array.isArray(data?.needs_marking) ? data!.needs_marking! : [];
+      const needs = Array.isArray(data?.needs_marking)
+        ? data!.needs_marking!
+        : [];
 
       const sortDesc = (x: Attempt, y: Attempt) => {
         const tx = toDate(x.submitted_at || x.created_at)?.getTime() ?? 0;
@@ -132,7 +136,11 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
       setAttempts([...arr].sort(sortDesc));
       setNeedsMarking([...needs].sort(sortDesc));
     } catch (e: any) {
-      setErr(typeof e?.message === "string" ? e.message : "Failed to load test history.");
+      setErr(
+        typeof e?.message === "string"
+          ? e.message
+          : "Failed to load test history."
+      );
     } finally {
       setLoading(false);
     }
@@ -157,18 +165,27 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error((data && (data.detail || data.error)) || "Could not save grade.");
+        throw new Error(
+          (data && (data.detail || data.error)) || "Could not save grade."
+        );
       }
       showToast("Custom test graded.");
       await fetchHistory();
     } catch (e: any) {
-      setErr(typeof e?.message === "string" ? e.message : "Failed to grade attempt.");
+      setErr(
+        typeof e?.message === "string"
+          ? e.message
+          : "Failed to grade attempt."
+      );
     } finally {
       setSavingId(null);
     }
   };
 
-  const highlightSet = useMemo(() => new Set<string>(highlightCandidateId ? [highlightCandidateId] : []), [highlightCandidateId]);
+  const highlightSet = useMemo(
+    () => new Set<string>(highlightCandidateId ? [highlightCandidateId] : []),
+    [highlightCandidateId]
+  );
 
   return (
     <div className="space-y-6">
@@ -180,6 +197,7 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
             type="button"
             onClick={fetchHistory}
             className="px-3 py-2 rounded-lg border border-input text-foreground hover:bg-muted/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Refresh test history"
           >
             <i className="ri-refresh-line mr-1" />
             Refresh
@@ -189,7 +207,11 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
 
       {/* Loading / Error */}
       {loading && (
-        <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+        <div
+          className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground"
+          aria-live="polite"
+          aria-busy="true"
+        >
           Loading test history…
         </div>
       )}
@@ -203,8 +225,10 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
       {!loading && (
         <div className="bg-card text-foreground rounded-2xl shadow-xl border border-border p-4 md:p-5">
           <div className="flex items-center justify-between mb-3">
-            <div className="font-medium">All tests & scores</div>
-            <div className="text-xs text-muted-foreground">{attempts.length} total</div>
+            <div className="font-medium">All tests &amp; scores</div>
+            <div className="text-xs text-muted-foreground">
+              {attempts.length} total
+            </div>
           </div>
 
           {attempts.length === 0 ? (
@@ -216,10 +240,19 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
                 const isSmart = a.type === "smart";
                 const isHighlighted = cid && highlightSet.has(cid);
                 const scoreStr =
-                  a.score === null || a.score === undefined ? "—" : `${a.score}%`;
+                  a.score === null || a.score === undefined
+                    ? "—"
+                    : `${a.score}%`;
                 const pdfHref = cid
                   ? `/tests/history/${cid}/${a._id}/report.pdf`
                   : undefined;
+
+                const badgeBase =
+                  "px-2 py-0.5 rounded-full text-[11px] border";
+                const smartBadge =
+                  "bg-[hsl(var(--success))]/15 text-[hsl(var(--success))] border-[hsl(var(--success))]/30";
+                const customBadge =
+                  "bg-[hsl(var(--accent))]/15 text-[hsl(var(--accent))] border-[hsl(var(--accent))]/30";
 
                 return (
                   <div
@@ -236,12 +269,14 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
                           <span className="truncate">{getCandName(a)}</span>
                           <span
                             className={[
-                              "px-2 py-0.5 rounded-full text-[11px] border",
-                              isSmart
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                : "bg-amber-50 text-amber-700 border-amber-200",
+                              badgeBase,
+                              isSmart ? smartBadge : customBadge,
                             ].join(" ")}
-                            title={isSmart ? "Auto-evaluated by AI" : "Custom test (may require manual marking)"}
+                            title={
+                              isSmart
+                                ? "Auto-evaluated by AI"
+                                : "Custom test (may require manual marking)"
+                            }
                           >
                             {isSmart ? "Smart AI" : "Custom"}
                           </span>
@@ -258,8 +293,12 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
 
                       <div className="flex items-center gap-3 ml-auto">
                         <div className="text-right">
-                          <div className="text-xs text-muted-foreground">Score</div>
-                          <div className="text-base font-semibold">{scoreStr}</div>
+                          <div className="text-xs text-muted-foreground">
+                            Score
+                          </div>
+                          <div className="text-base font-semibold">
+                            {scoreStr}
+                          </div>
                         </div>
 
                         {cid && (
@@ -346,6 +385,7 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
                               [a._id]: Number(e.target.value),
                             }))
                           }
+                          aria-label="Enter custom test score (0–100)"
                         />
                         <button
                           type="button"
@@ -394,20 +434,18 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
           <div
             role="status"
             aria-live="polite"
-            className="panel glass shadow-lux px-4 py-3 min-w-[260px]"
+            className="rounded-2xl border border-border bg-card text-foreground shadow-xl px-4 py-3 min-w-[260px]"
           >
             <div className="flex items-start gap-3">
               <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[hsl(var(--success))]" />
               <div className="flex-1 text-sm">
                 <div className="font-medium">Success</div>
-                <div className="mt-0.5 text-[hsl(var(--muted-foreground))]">
-                  {toast}
-                </div>
+                <div className="mt-0.5 text-muted-foreground">{toast}</div>
               </div>
               <button
                 type="button"
                 onClick={() => setToast(null)}
-                className="icon-btn h-8 w-8"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Close"
                 title="Close"
               >
@@ -423,20 +461,18 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
           <div
             role="status"
             aria-live="assertive"
-            className="panel glass shadow-lux px-4 py-3 min-w-[260px]"
+            className="rounded-2xl border border-border bg-card text-foreground shadow-xl px-4 py-3 min-w-[260px]"
           >
             <div className="flex items-start gap-3">
               <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[hsl(var(--destructive))]" />
               <div className="flex-1 text-sm">
                 <div className="font-medium">Action failed</div>
-                <div className="mt-0.5 text-[hsl(var(--muted-foreground))]">
-                  {err}
-                </div>
+                <div className="mt-0.5 text-muted-foreground">{err}</div>
               </div>
               <button
                 type="button"
                 onClick={() => setErr(null)}
-                className="icon-btn h-8 w-8"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Close"
                 title="Close"
               >

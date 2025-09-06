@@ -13,7 +13,7 @@ import { AppHeaderGate, MarketingHeaderGate } from "./components/HeaderGate";
 import MarketingHeader from "@/components/navigation/AppHeader";
 import AppHeader from "@/components/AppHeader";
 
-// Single footer
+// Single footer (shared site-wide)
 import Footer from "@/components/Footer";
 
 // Toast + route progress + suspense fallback
@@ -23,7 +23,7 @@ import LoaderOverlay from "@/components/system/LoaderOverlay";
 
 import { Suspense } from "react";
 
-/** Google fonts */
+/** Google fonts (expose as CSS variables used by Tailwind & globals.css) */
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
@@ -75,7 +75,9 @@ export const viewport: Viewport = {
   ],
 };
 
-/** No-FOUC theme setter — runs before paint */
+/** No-FOUC theme setter — runs before paint.
+ *  Global-only theming: default is Dark (Neon Eclipse); add `light` class to <html> for Light.
+ */
 const themeScript = `
   try {
     const stored = localStorage.getItem("theme");
@@ -97,9 +99,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Preconnect for faster font fetch */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        {/* Prevent color-scheme flash and ensure global theme is applied before paint */}
         <script id="theme-script" dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
 
+      {/* Global-only UI surface and background; no page-level backgrounds */}
       <body className="min-h-screen flex flex-col page-aurora">
         {/* a11y skip link */}
         <a
@@ -109,11 +113,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
 
-        {/* App wrappers */}
+        {/* Toasts & route-progress are global; they must wrap headers + content so z-index stacks correctly */}
         <Toaster>
           <RouteLoader />
 
-          {/* Headers via gates */}
+          {/* Headers via gates (marketing vs. in-app) — both inherit global nav styles */}
           <MarketingHeaderGate>
             <MarketingHeader />
           </MarketingHeaderGate>
@@ -121,16 +125,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <AppHeader />
           </AppHeaderGate>
 
-          {/* Page content */}
+          {/* Main content area (flex-1 keeps the single Footer stuck to bottom across all pages) */}
           <main id="main" className="flex-1 w-full">
-            <Suspense fallback={<LoaderOverlay fullscreen />}>
-              {children}
-            </Suspense>
+            <Suspense fallback={<LoaderOverlay fullscreen />}>{children}</Suspense>
           </main>
         </Toaster>
 
-        {/* Footer everywhere */}
+        {/* One shared footer across the entire site */}
         <Footer />
+
+        {/* Portal roots for modals/dropdowns if any component needs a stable DOM mount */}
+        <div id="portal-root" />
+        <div id="overlay-root" />
       </body>
     </html>
   );

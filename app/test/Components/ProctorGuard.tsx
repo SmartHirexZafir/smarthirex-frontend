@@ -80,6 +80,7 @@ export default function ProctorGuard({
   const [proctorError, setProctorError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null); // transient notices (e.g., screenshot attempt)
+  const [hbActive, setHbActive] = useState<boolean>(false); // track ProctorHeartbeat activation
 
   const previewStyle = useMemo<React.CSSProperties>(() => {
     const base: React.CSSProperties = {
@@ -112,24 +113,22 @@ export default function ProctorGuard({
     const v = videoRef.current;
     if (!v) return;
 
-    // @ts-ignore experimental types - requestVideoFrameCallback
-    if ("requestVideoFrameCallback" in v) {
+    // Use a safe "any" check so TS doesn't narrow v to never.
+    const hasRVFC = typeof (v as any).requestVideoFrameCallback === "function";
+
+    if (hasRVFC) {
       let id: number | null = null;
       const loop = (now: number) => {
         lastFrameAtRef.current = now;
-        // @ts-ignore experimental
-        id = v.requestVideoFrameCallback(loop);
+        id = (v as any).requestVideoFrameCallback(loop);
       };
-      // kick it off
-      // @ts-ignore experimental
-      id = v.requestVideoFrameCallback(loop);
+      id = (v as any).requestVideoFrameCallback(loop);
 
       // cleanup on detach
       return () => {
         try {
-          if (id && "cancelVideoFrameCallback" in v) {
-            // @ts-ignore experimental
-            v.cancelVideoFrameCallback(id);
+          if (id && typeof (v as any).cancelVideoFrameCallback === "function") {
+            (v as any).cancelVideoFrameCallback(id);
           }
         } catch {}
       };
@@ -411,12 +410,14 @@ export default function ProctorGuard({
     hb.setIdentity({ testSessionId: sessionId, userId: candidateId ?? undefined });
     hb.setMedia({ stream: streamRef.current, videoEl: videoRef.current });
     hb.start();
+    setHbActive(true);
 
     hbRef.current = hb;
 
     return () => {
       try { hb.stop(); } catch {}
       hbRef.current = null;
+      setHbActive(false);
     };
   }, [sessionId, apiBase, heartbeatIntervalSec, candidateId]);
 
@@ -433,10 +434,10 @@ export default function ProctorGuard({
     };
   }, [restartCameraIfNeeded, heartbeatIntervalSec]);
 
-  // Legacy heartbeat (kept for compatibility) — disabled when ProctorHeartbeat is active
+  // Legacy heartbeat (kept for compatibility) — only runs when ProctorHeartbeat is NOT active
   useEffect(() => {
     if (!sessionId) return;
-    if (hbRef.current) return; // ProctorHeartbeat is authoritative
+    if (hbActive) return; // ProctorHeartbeat is authoritative
 
     let alive = true;
     const send = () =>
@@ -474,7 +475,7 @@ export default function ProctorGuard({
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("blur", onBlur);
     };
-  }, [sessionId, heartbeatIntervalSec, sendHeartbeat, captureAndUploadSnapshot, enableSnapshots]);
+  }, [sessionId, hbActive, heartbeatIntervalSec, sendHeartbeat, captureAndUploadSnapshot, enableSnapshots]);
 
   // Snapshot interval
   useEffect(() => {

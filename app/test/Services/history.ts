@@ -1,5 +1,13 @@
 // app/test/services/history.ts
 // Thin client for test history endpoints: list-all, list-by-candidate, manual grading, PDF helpers.
+// Updated to align with global requirements:
+// - Robust exception handling with friendly messages
+// - Safe JSON parsing and request timeouts
+// - Consistent newest-first sorting
+// - Helpers to open/download PDF reports (browser-friendly)
+// - No hardcoded URLs beyond env-derived API base
+
+import { API_BASE, clientAuthHeaders } from "@/lib/auth";
 
 export type TestType = "smart" | "custom";
 
@@ -42,25 +50,9 @@ export type GradePayload = { score: number };
 /* ========================
  * Config & helpers
  * ======================== */
-export const API_BASE = (
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_API_BASE ||
-  "http://localhost:10000"
-).replace(/\/$/, "");
-
-const getAuthToken = (): string | null =>
-  (typeof window !== "undefined" &&
-    (localStorage.getItem("token") ||
-      localStorage.getItem("authToken") ||
-      localStorage.getItem("access_token") ||
-      localStorage.getItem("AUTH_TOKEN"))) ||
-  null;
-
 const authHeaders = (): Record<string, string> => {
-  const h: Record<string, string> = { "Content-Type": "application/json" };
-  const t = getAuthToken();
-  if (t) h.Authorization = `Bearer ${t}`;
-  return h;
+  // Use centralized auth header builder (cookie/localStorage aware)
+  return { ...clientAuthHeaders(), Accept: "application/json" };
 };
 
 function withTimeout(ms: number): { signal: AbortSignal; cancel: () => void } {
@@ -71,21 +63,68 @@ function withTimeout(ms: number): { signal: AbortSignal; cancel: () => void } {
 
 async function safeJson<T = any>(res: Response): Promise<T> {
   const txt = await res.text();
+  if (!txt) return {} as T;
   try {
     return JSON.parse(txt) as T;
   } catch {
-  
-    return (txt ?? null) as T;
+    // Return a generic object to avoid breaking callers expecting objects
+    return { raw: txt } as unknown as T;
+  }
+}
+
+function friendlyHttpMessage(status: number): string | null {
+  switch (status) {
+    case 400:
+      return "Bad request.";
+    case 401:
+      return "Unauthorized. Please log in again.";
+    case 403:
+      return "Forbidden. Your account cannot access this resource.";
+    case 404:
+      return "Not found.";
+    case 409:
+      // Aligns with “only one test type” requirement
+      return "A test has already been started for this candidate (only one test type is allowed).";
+    case 410:
+      return "This link has expired.";
+    case 422:
+      return "Unprocessable request. Please check your inputs.";
+    case 500:
+      return "Server error. Please try again.";
+    default:
+      return null;
   }
 }
 
 function assertOk(res: Response, body: any) {
   if (!res.ok) {
-    const msg =
-      (body && (body.detail || body.error || body.message)) ||
-      `Request failed with status ${res.status}`;
+    const base =
+      (body && (body.detail || body.error || body.message)) || undefined;
+    const friendly = friendlyHttpMessage(res.status);
+    const msg = base || friendly || `Request failed with status ${res.status}`;
     throw new Error(msg);
   }
+}
+
+function ts(val?: string): number {
+  if (!val) return 0;
+  const d = new Date(val);
+  return Number.isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function sortAttemptsDesc<T extends { submitted_at?: string; created_at?: string }>(
+  arr: T[]
+): T[] {
+  return [...arr].sort(
+    (a, b) =>
+      ts(b.submitted_at || b.created_at) - ts(a.submitted_at || a.created_at)
+  );
+}
+
+function sortCandidateSummariesDesc<T extends { submittedAt?: string }>(
+  arr: T[]
+): T[] {
+  return [...arr].sort((a, b) => ts(b.submittedAt) - ts(a.submittedAt));
 }
 
 /* ========================
@@ -103,10 +142,11 @@ export async function listAllHistory(timeoutMs = 15000): Promise<HistoryAllRespo
     });
     const data = await safeJson<HistoryAllResponse>(res);
     assertOk(res, data);
-    return {
-      attempts: Array.isArray(data?.attempts) ? data.attempts : [],
-      needs_marking: Array.isArray(data?.needs_marking) ? data.needs_marking : [],
-    };
+    const attempts = Array.isArray(data?.attempts) ? sortAttemptsDesc(data.attempts) : [];
+    const needs_marking = Array.isArray(data?.needs_marking)
+      ? sortAttemptsDesc(data.needs_marking)
+      : [];
+    return { attempts, needs_marking };
   } finally {
     cancel();
   }
@@ -126,9 +166,12 @@ export async function listHistoryForCandidate(
     });
     const data = await safeJson<CandidateHistoryResponse>(res);
     assertOk(res, data);
+    const attempts = Array.isArray(data?.attempts)
+      ? sortCandidateSummariesDesc(data.attempts)
+      : [];
     return {
       candidateId: data?.candidateId || candidateId,
-      attempts: Array.isArray(data?.attempts) ? data.attempts : [],
+      attempts,
     };
   } finally {
     cancel();
@@ -165,6 +208,15 @@ export function attemptPdfUrl(candidateId: string, attemptId: string): string {
   return `${API_BASE}/tests/history/${candidateId}/${attemptId}/report.pdf`;
 }
 
+/** Open the PDF in a new tab (non-blocking). Throws if popup is blocked. */
+export function openAttemptPdfInNewTab(candidateId: string, attemptId: string): void {
+  const url = attemptPdfUrl(candidateId, attemptId);
+  const w = typeof window !== "undefined" ? window.open(url, "_blank", "noopener,noreferrer") : null;
+  if (!w) {
+    throw new Error("Unable to open the PDF (popup blocked). Please allow popups for this site.");
+  }
+}
+
 /** Fetch and trigger download of the PDF report for an attempt. */
 export async function downloadAttemptPdf(
   candidateId: string,
@@ -173,7 +225,10 @@ export async function downloadAttemptPdf(
 ): Promise<void> {
   const url = attemptPdfUrl(candidateId, attemptId);
   const res = await fetch(url, { headers: authHeaders() });
-  if (!res.ok) throw new Error(`Failed to fetch PDF (${res.status})`);
+  if (!res.ok) {
+    const data = await safeJson(res).catch(() => ({}));
+    assertOk(res, data);
+  }
   const blob = await res.blob();
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);

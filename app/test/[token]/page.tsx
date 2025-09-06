@@ -19,8 +19,13 @@ import ProctorGuard from "@/app/test/Components/ProctorGuard";
 type SubmitResponse = RunnerSubmitResponse;
 type Question = RunnerQuestion;
 
+/* ✅ Align API base with the rest of the app:
+   - prefer NEXT_PUBLIC_API_BASE_URL, fallback to NEXT_PUBLIC_API_BASE, then localhost
+   - trim trailing slashes */
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "") || "http://localhost:10000";
+  (process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_BASE ||
+    "http://localhost:10000").replace(/\/$/, "");
 
 export default function TestTokenPage() {
   const params = useParams();

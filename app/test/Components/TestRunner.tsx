@@ -8,16 +8,16 @@ import React, { useEffect, useMemo, useState } from "react";
 export type Question = {
   type: "mcq" | "code" | "scenario" | string;
   question: string;
-  options?: string[];              // MCQ only (expected 4)
-  correct_answer?: string | null;  // MCQ -> string; others -> null
+  options?: string[]; // MCQ only (expected 4)
+  correct_answer?: string | null; // MCQ -> string; others -> null
 
   // Optional (if backend provides them)
   id?: string | number;
-  placeholder?: string;            // textarea placeholder
-  language?: string;               // default language for code question, e.g., "python"
-  language_options?: string[];     // allowed languages for code question
-  starter_code?: string;           // code template (pre-filled)
-  max_words?: number;              // soft cap for scenario free-form
+  placeholder?: string; // textarea placeholder
+  language?: string; // default language for code question, e.g., "python"
+  language_options?: string[]; // allowed languages for code question
+  starter_code?: string; // code template (pre-filled)
+  max_words?: number; // soft cap for scenario free-form
 };
 
 export type SubmitDetail = {
@@ -56,15 +56,26 @@ function resolveApiBase(override?: string) {
 
 // --- helpers ---
 function validMcqOptions(opts: unknown): opts is string[] {
-  return Array.isArray(opts) && opts.length === 4 && opts.every(o => typeof o === "string" && o.trim().length > 0);
+  return (
+    Array.isArray(opts) &&
+    opts.length === 4 &&
+    opts.every((o) => typeof o === "string" && o.trim().length > 0)
+  );
 }
 
 function fallbackOptions(): string[] {
   return ["Option 1", "Option 2", "Option 3", "Option 4"];
 }
 
-function clampWords(text: string, maxWords?: number): { text: string; words: number } {
-  if (!maxWords || maxWords <= 0) return { text, words: text.trim() ? text.trim().split(/\s+/).length : 0 };
+function clampWords(
+  text: string,
+  maxWords?: number
+): { text: string; words: number } {
+  if (!maxWords || maxWords <= 0)
+    return {
+      text,
+      words: text.trim() ? text.trim().split(/\s+/).length : 0,
+    };
   const parts = text.trim() ? text.trim().split(/\s+/) : [];
   if (parts.length <= maxWords) return { text, words: parts.length };
   const trimmed = parts.slice(0, maxWords).join(" ");
@@ -94,7 +105,7 @@ export default function TestRunner({
   const [toast, setToast] = useState<string | null>(null);
   function nudge(msg: string) {
     setToast(msg);
-    window.clearTimeout((nudge as any)._t);
+    (nudge as any)._t && window.clearTimeout((nudge as any)._t);
     (nudge as any)._t = window.setTimeout(() => setToast(null), 1600);
   }
 
@@ -120,11 +131,16 @@ export default function TestRunner({
         const prefill: Record<number, string> = {};
         safeQuestions.forEach((q, i) => {
           const t = String(q.type || "").toLowerCase();
-          if (t === "code" && typeof q.starter_code === "string" && !(i in answers)) {
+          if (
+            t === "code" &&
+            typeof q.starter_code === "string" &&
+            !(i in answers)
+          ) {
             prefill[i] = q.starter_code;
           }
         });
-        if (Object.keys(prefill).length) setAnswers(a => ({ ...prefill, ...a }));
+        if (Object.keys(prefill).length)
+          setAnswers((a) => ({ ...prefill, ...a }));
       }
     } catch {
       // ignore
@@ -146,7 +162,7 @@ export default function TestRunner({
   }
 
   function updateCodeLang(i: number, lang: string) {
-    setCodeLang(prev => ({ ...prev, [i]: lang }));
+    setCodeLang((prev) => ({ ...prev, [i]: lang }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -163,7 +179,8 @@ export default function TestRunner({
       // Extended metadata (type, language, question_id) is optional and safe to ignore on older servers.
       const payloadAnswers = safeQuestions.map((q, i) => {
         const type = String(q.type || "").toLowerCase();
-        const lang = type === "code" ? (codeLang[i] || q.language || "python") : undefined;
+        const lang =
+          type === "code" ? codeLang[i] || q.language || "python" : undefined;
         return {
           answer: (answers[i] ?? "").toString(),
           type: q.type || undefined,
@@ -181,21 +198,36 @@ export default function TestRunner({
 
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
-        throw new Error(txt || `Failed to submit test (status ${res.status})`);
+        // Friendly messages that match global flow rules
+        const msg =
+          res.status === 409
+            ? "A test has already been started for this candidate (only one test type is allowed)."
+            : res.status === 410
+            ? "This test link has expired."
+            : txt || `Failed to submit test (status ${res.status})`;
+        throw new Error(msg);
       }
 
-      const data = (await res.json().catch(() => null)) as SubmitResponse | null;
+      const data = (await res.json().catch(() => null)) as
+        | SubmitResponse
+        | null;
       if (!data || !data.test_id) {
-        throw new Error("Unexpected server response while submitting the test.");
+        throw new Error(
+          "Unexpected server response while submitting the test."
+        );
       }
 
       // Clear autosave on success
-      try { localStorage.removeItem(LS_KEY); } catch {}
+      try {
+        localStorage.removeItem(LS_KEY);
+      } catch {}
 
       onSubmitted(data);
     } catch (e: any) {
       const aborted = e?.name === "AbortError";
-      const msg = aborted ? "Network timeout while submitting the test. Please try again." : (e?.message || "Failed to submit test.");
+      const msg = aborted
+        ? "Network timeout while submitting the test. Please try again."
+        : e?.message || "Failed to submit test.";
       setErr(msg);
       onError?.(msg);
     } finally {
@@ -255,7 +287,10 @@ export default function TestRunner({
     // Try to clear clipboard on blur (best-effort, silent on failure)
     const onBlur = () => {
       try {
-        if (typeof navigator !== "undefined" && (navigator as any).clipboard?.writeText) {
+        if (
+          typeof navigator !== "undefined" &&
+          (navigator as any).clipboard?.writeText
+        ) {
           (navigator as any).clipboard.writeText(" ").catch(() => {});
         }
       } catch {
@@ -269,7 +304,9 @@ export default function TestRunner({
       document.removeEventListener("copy", onCopy);
       document.removeEventListener("cut", onCut);
       document.removeEventListener("paste", onPaste);
-      window.removeEventListener("keydown", onKey, { capture: true } as any);
+      window.removeEventListener("keydown", onKey, {
+        capture: true,
+      } as any);
       window.removeEventListener("blur", onBlur);
     };
   }, []);
@@ -286,29 +323,27 @@ export default function TestRunner({
   }, [loading]);
 
   // ---------- Small helpers ----------
-  function CodeLangPicker({
-    idx,
-    q,
-  }: {
-    idx: number;
-    q: Question;
-  }) {
-    const options = Array.isArray(q.language_options) && q.language_options.length > 0
-      ? q.language_options
-      : ["python", "node", "java", "cpp"]; // non-hardcoded default list matching backend runner; can be ignored by server
+  function CodeLangPicker({ idx, q }: { idx: number; q: Question }) {
+    const options =
+      Array.isArray(q.language_options) && q.language_options.length > 0
+        ? q.language_options
+        : ["python", "node", "java", "cpp"]; // default list; server can ignore
 
     const current = codeLang[idx] || q.language || options[0];
 
     return (
       <div className="mb-2">
-        <label className="text-xs text-gray-600">Language</label>
+        <label className="text-xs text-muted-foreground">Language</label>
         <select
-          className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="input mt-1 w-full"
           value={current}
           onChange={(e) => updateCodeLang(idx, e.target.value)}
+          aria-label="Select programming language"
         >
           {options.map((opt) => (
-            <option key={opt} value={opt}>{opt}</option>
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
           ))}
         </select>
       </div>
@@ -323,10 +358,17 @@ export default function TestRunner({
     maxWords?: number;
   }) {
     if (!maxWords || maxWords <= 0) return null;
-    const words = (answers[idx] || "").trim() ? (answers[idx] || "").trim().split(/\s+/).length : 0;
+    const words = (answers[idx] || "").trim()
+      ? (answers[idx] || "").trim().split(/\s+/).length
+      : 0;
     const over = words > maxWords;
     return (
-      <div className={`mt-1 text-xs ${over ? "text-red-600" : "text-gray-500"}`}>
+      <div
+        className={`mt-1 text-xs ${
+          over ? "text-[hsl(var(--destructive))]" : "text-muted-foreground"
+        }`}
+        aria-live="polite"
+      >
         {words}/{maxWords} words
       </div>
     );
@@ -334,7 +376,7 @@ export default function TestRunner({
 
   return (
     <form
-      className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm select-none"
+      className="panel glass space-y-6 rounded-2xl border border-border bg-card p-6 text-foreground shadow-xl select-none"
       onSubmit={handleSubmit}
       // double safety nets (browser won’t always obey all):
       onCopy={(e) => {
@@ -354,20 +396,27 @@ export default function TestRunner({
         nudge("Right-click is disabled during the test.");
       }}
       autoComplete="off"
+      aria-labelledby="test-runner-title"
     >
       {/* tiny anti-autofill honeypot */}
       <input type="text" name="no-fill" className="hidden" autoComplete="off" />
 
-      <h2 className="text-lg font-medium">Answer the questions</h2>
+      <h2 id="test-runner-title" className="text-lg font-semibold">
+        Answer the questions
+      </h2>
 
       {err && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div
+          className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-[hsl(var(--destructive))]"
+          role="alert"
+          aria-live="assertive"
+        >
           {err}
         </div>
       )}
 
       {safeQuestions.length === 0 && (
-        <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
+        <div className="rounded-lg border border-amber-300/50 bg-amber-100/30 px-3 py-2 text-sm text-foreground">
           No questions were generated. You can still submit or go back.
         </div>
       )}
@@ -378,22 +427,30 @@ export default function TestRunner({
         const isCode = t === "code";
         const isScenario = t === "scenario";
         const opts = isMcq
-          ? (validMcqOptions(q.options) ? q.options! : fallbackOptions())
+          ? validMcqOptions(q.options)
+            ? q.options!
+            : fallbackOptions()
           : [];
 
         const placeholder =
           q.placeholder ||
-          (isCode ? "Write your solution here…" : isScenario ? "Describe your approach…" : "");
+          (isCode
+            ? "Write your solution here…"
+            : isScenario
+            ? "Describe your approach…"
+            : "");
 
         return (
-          <div key={idx} className="rounded-xl border border-gray-200 p-4">
+          <div key={idx} className="rounded-xl border border-border bg-muted/20 p-4">
             <div className="mb-2 text-sm font-medium">
               Q{idx + 1}.{" "}
-              <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-normal uppercase tracking-wide text-gray-700">
+              <span className="rounded bg-muted/70 px-2 py-0.5 text-xs font-normal uppercase tracking-wide text-foreground/80">
                 {t}
               </span>
             </div>
-            <div className="mb-3 text-[15px] leading-relaxed whitespace-pre-wrap">{q.question}</div>
+            <div className="mb-3 whitespace-pre-wrap text-[15px] leading-relaxed">
+              {q.question}
+            </div>
 
             {isMcq ? (
               <div
@@ -408,12 +465,12 @@ export default function TestRunner({
                     <label
                       key={id}
                       htmlFor={id}
-                      className={
-                        "flex items-center gap-3 rounded-lg border px-3 py-2 text-sm transition " +
-                        (selected
-                          ? "border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50"
-                          : "border-gray-300 hover:bg-gray-50")
-                      }
+                      className={[
+                        "flex items-center gap-3 rounded-lg border px-3 py-2 text-sm transition",
+                        selected
+                          ? "border-primary ring-2 ring-primary/30 bg-primary/10"
+                          : "border-input hover:bg-muted/60",
+                      ].join(" ")}
                     >
                       <input
                         id={id}
@@ -423,6 +480,7 @@ export default function TestRunner({
                         checked={selected}
                         onChange={(e) => updateAnswer(idx, e.target.value)}
                         className="h-4 w-4"
+                        aria-checked={selected}
                       />
                       <span className="break-words">{opt}</span>
                     </label>
@@ -434,24 +492,35 @@ export default function TestRunner({
                 {isCode && <CodeLangPicker idx={idx} q={q} />}
 
                 <textarea
-                  value={answers[idx] ?? (isCode && q.starter_code ? q.starter_code : "")}
-                  onChange={(e) => updateAnswer(idx, e.target.value, isScenario ? q.max_words : undefined)}
-                  className="h-44 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={
+                    answers[idx] ?? (isCode && q.starter_code ? q.starter_code : "")
+                  }
+                  onChange={(e) =>
+                    updateAnswer(
+                      idx,
+                      e.target.value,
+                      isScenario ? q.max_words : undefined
+                    )
+                  }
+                  className="textarea h-44 w-full"
                   placeholder={placeholder}
                   spellCheck={false}
+                  aria-label={`Answer for question ${idx + 1}`}
                 />
 
                 {isScenario && <WordCounter idx={idx} maxWords={q.max_words} />}
 
                 {/* Small hints that align with backend behavior but don't enforce hard rules */}
                 {isCode && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    Your code will be evaluated on the backend. Choose a language and submit your solution.
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Your code will be evaluated on the backend. Choose a language and
+                    submit your solution.
                   </p>
                 )}
                 {isScenario && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    Provide a clear, structured response. It may be graded using a rubric.
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Provide a clear, structured response. It may be graded using a
+                    rubric.
                   </p>
                 )}
               </div>
@@ -464,15 +533,17 @@ export default function TestRunner({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+          className="inline-flex items-center justify-center rounded-lg border border-input px-4 py-2 text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           disabled={loading}
+          aria-disabled={loading}
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={loading}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          aria-busy={loading}
         >
           {loading ? "Submitting…" : "Submit"}
         </button>
@@ -480,7 +551,11 @@ export default function TestRunner({
 
       {/* tiny toast */}
       {toast && (
-        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900/90 px-4 py-2 text-xs text-white shadow-lg">
+        <div
+          className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full border border-border bg-card px-4 py-2 text-xs text-foreground shadow-xl"
+          role="status"
+          aria-live="polite"
+        >
           {toast}
         </div>
       )}

@@ -5,18 +5,15 @@ import Hero from '../components/Hero';
 import FeaturesCarousel from '../components/FeaturesCarousel';
 import LiveStats from '../components/LiveStats';
 import Testimonials from '../components/Testimonials';
-import Footer from '@/components/Footer';
 
 export default function Home() {
   return (
-    // No extra header/footer here — layout.tsx provides the single nav + minimal footer
-    // Keep background neutral so sections manage their own look
+    // Single footer is rendered globally in layout.tsx — do not duplicate locally
     <div className="min-h-screen bg-transparent">
       <Hero />
       <FeaturesCarousel />
       <LiveStats />
       <Testimonials />
-      <Footer />
     </div>
   );
 }

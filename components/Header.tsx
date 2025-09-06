@@ -1,64 +1,72 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState } from 'react';
+import ThemeToggle from './ui/ThemeToogle';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <header className="nav">
-      <div className="container">
+    <header className="nav full-bleed" role="banner">
+      <div className="app-container">
         <div className="flex items-center justify-between h-16 md:h-20">
-          {/* Brand */}
+          {/* Brand — use the same logo + name everywhere; remove extra dot/decoration */}
           <div className="flex items-center">
-            <Link href="/" className="flex items-center gap-3 group" aria-label="SmartHirex Home">
-              <div className="w-10 h-10 rounded-2xl grid place-items-center gradient-border glow
-                              bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g2))] text-white">
-                <i className="ri-brain-line text-xl"></i>
-              </div>
-              <span className="text-2xl md:text-[1.6rem] font-bold tracking-tight gradient-text">
-                SmartHirex
+            <Link
+              href="/"
+              className="flex items-center gap-2 group"
+              aria-label="Smart HireX Home"
+            >
+              <Image
+                src="/web-logo.png"
+                alt="Smart HireX logo"
+                width={28}
+                height={28}
+                priority
+                className="rounded-lg ring-1 ring-border"
+              />
+              <span className="text-[22px] md:text-[24px] font-extrabold gradient-text leading-none">
+                Smart HireX
               </span>
             </Link>
           </div>
 
-          {/* Desktop CTA (Login intentionally removed) */}
+          {/* Right-side actions (Login intentionally removed; global theme toggle kept) */}
           <div className="hidden md:flex items-center gap-3">
-            <Link
-              href="/signup"
-              className="btn btn-primary"
-            >
+            <ThemeToggle />
+            <Link href="/signup" className="btn btn-primary">
               Sign Up
             </Link>
           </div>
 
           {/* Mobile menu toggle */}
           <button
-            className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border hover:bg-muted/40 transition-colors"
+            className="md:hidden icon-btn"
             onClick={() => setIsMenuOpen((v) => !v)}
             aria-label="Toggle menu"
             aria-expanded={isMenuOpen}
             aria-controls="mobile-menu"
           >
-            <i className="ri-menu-line text-2xl text-foreground/80"></i>
+            <i className="ri-menu-line text-xl" aria-hidden="true" />
           </button>
         </div>
 
-        {/* Mobile menu */}
+        {/* Mobile menu (Login removed here as well) */}
         {isMenuOpen && (
           <nav
             id="mobile-menu"
-            className="md:hidden border-t border-border py-6 glass-strong bg-background/90"
+            className="md:hidden mt-3 overflow-hidden rounded-2xl ring-1 ring-border bg-card p-2 animate-rise-in"
             role="navigation"
             aria-label="Mobile Navigation"
           >
-            <div className="flex flex-col gap-4">
-              {/* Login intentionally removed on mobile as well */}
-              <Link
-                href="/signup"
-                className="btn btn-primary w-full text-center"
-              >
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between rounded-xl bg-muted/30 p-2">
+                <span className="text-sm text-muted-foreground">Theme</span>
+                <ThemeToggle />
+              </div>
+              <Link href="/signup" className="btn btn-primary w-full text-center">
                 Sign Up
               </Link>
             </div>

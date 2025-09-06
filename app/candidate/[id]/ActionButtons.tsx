@@ -13,7 +13,7 @@ type Candidate = {
   job_role?: string;
   predicted_role?: string;
   category?: string;
-  test_score?: number; // <-- used to gate Schedule flow
+  test_score?: number; // <-- used to gate Schedule flow (primary field)
 };
 
 type ActionButtonsProps = {
@@ -51,7 +51,7 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
   const [isRejected, setIsRejected] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Error toast (also used for the “please complete test” dialog)
+  // Error toast (also used for the “please complete test” dialog / auth gate)
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,12 +62,25 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
   // Derive a safe candidate email for scheduling
   const candidateEmail = candidate.email || candidate.resume?.email || "";
 
+  // ───────────────── Auth guard (Req. 2.5: prevent route changes when not authenticated) ─────────────────
+  const ensureAuthed = (): boolean => {
+    const token = getAuthToken();
+    if (!token) {
+      setErrorMsg("Please log in to continue.");
+      return false;
+    }
+    return true;
+  };
+
   const updateCandidateStatus = async (newStatus: string): Promise<boolean> => {
     if (!candidate?._id) {
       console.error("Missing candidate _id for status update");
       setErrorMsg("Unable to update status. Candidate ID is missing.");
       return false;
     }
+
+    // Block status mutations when unauthenticated (prevents route bypass)
+    if (!ensureAuthed()) return false;
 
     try {
       setLoading(true);
@@ -149,6 +162,8 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
       setErrorMsg("Unable to open Test page — candidate ID is missing.");
       return;
     }
+    if (!ensureAuthed()) return; // must be logged in
+
     router.push(`/test?candidateId=${candidate._id}`);
   };
 
@@ -156,10 +171,19 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
   //    - must have an email (hard block)
   //    - must have a test score (soft guard that shows dialog until test completed)
   const hasEmail = !!candidateEmail;
+
+  // Broaden test completion detection beyond `test_score` to tolerate backend variants
+  const rawTestScore =
+    candidate?.test_score ??
+    (candidate as any)?.testScore ??
+    (candidate as any)?.latest_test_score ??
+    (candidate as any)?.assessment_score ??
+    (candidate as any)?.result_score;
+
   const hasTestScore =
-    candidate?.test_score !== undefined &&
-    candidate?.test_score !== null &&
-    !Number.isNaN(Number(candidate?.test_score));
+    rawTestScore !== undefined &&
+    rawTestScore !== null &&
+    !Number.isNaN(Number(rawTestScore));
 
   const scheduleHardDisabled = !hasEmail; // truly disable when we can't proceed at all
   const scheduleSoftBlocked = !hasTestScore; // clickable but shows guidance dialog
@@ -169,6 +193,7 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
       setErrorMsg("Unable to schedule — candidate ID is missing.");
       return;
     }
+    if (!ensureAuthed()) return; // must be logged in
     if (scheduleHardDisabled) return; // native disabled prevents click; extra guard
 
     if (scheduleSoftBlocked) {
@@ -183,13 +208,14 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
     router.push(`/meetings?candidateId=${candidate._id}`);
   };
 
-  // ---- Unified visual style for ALL four action buttons ----
-  const baseBtn = "btn btn-soft w-full hover:translate-y-[-1px]"; // same shape/background
+  // ---- Unified visual style for ALL four action buttons (global tokens only) ----
+  const baseBtn = "btn w-full hover:translate-y-[-1px]"; // use global 'btn' to avoid local variants
+
   const shortlistBtnCls = [
     baseBtn,
     isShortlisted
       ? "ring-2 ring-[hsl(var(--success))] bg-[hsl(var(--success)/.15)] text-[hsl(var(--success))]"
-      : "text-[hsl(var(--success))]",
+      : "btn-outline text-[hsl(var(--success))]",
     loading ? "opacity-80 cursor-not-allowed" : "",
   ].join(" ");
 
@@ -197,16 +223,16 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
     baseBtn,
     isRejected
       ? "ring-2 ring-[hsl(var(--destructive))] bg-[hsl(var(--destructive)/.15)] text-[hsl(var(--destructive))]"
-      : "text-[hsl(var(--destructive))]",
+      : "btn-outline text-[hsl(var(--destructive))]",
     loading ? "opacity-80 cursor-not-allowed" : "",
   ].join(" ");
 
-  const sendTestBtnCls = [baseBtn, "text-[hsl(var(--info))]"].join(" ");
+  const sendTestBtnCls = [baseBtn, "btn-outline text-[hsl(var(--info))]"].join(" ");
   const scheduleBtnCls = [
     baseBtn,
     scheduleHardDisabled || scheduleSoftBlocked
-      ? "opacity-60" // visually disabled when missing email or awaiting test
-      : "text-[hsl(var(--primary))]",
+      ? "btn-outline opacity-60" // visually disabled when missing email or awaiting test
+      : "btn-outline text-[hsl(var(--primary))]",
     scheduleHardDisabled ? "cursor-not-allowed" : "",
   ].join(" ");
 
@@ -279,7 +305,7 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
               className={[
                 "badge",
                 isShortlisted
-                  ? "bg-[hsl(var(--success)/0.18)] text-[hsl(var(--success))]"
+                  ? "bg-[hsl(var(--success)/0.18)] text-[hsl(var(--success)))]"
                   : isRejected
                   ? "bg-[hsl(var(--destructive)/0.18)] text-[hsl(var(--destructive))]"
                   : "bg-[hsl(var(--info)/0.18)] text-[hsl(var(--info))]",

@@ -134,6 +134,15 @@ export default function RerunPromptModal({ history, onClose }: Props) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages.length]);
 
+  // Close on Escape for better UX/accessibility
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   const canSubmit = useMemo(() => input.trim().length > 0 && !submitting, [input, submitting]);
 
   /** Build chatbot-like options payload (harmless if backend ignores it). */
@@ -170,7 +179,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
       prefilter_role_regex: true,
     };
 
-    // prune undefined to keep payload tidy
+    // prune undefined/empty arrays to keep payload tidy
     Object.keys(opts).forEach((k) => {
       if (opts[k] === undefined || (Array.isArray(opts[k]) && opts[k].length === 0)) {
         delete opts[k];
@@ -248,16 +257,23 @@ export default function RerunPromptModal({ history, onClose }: Props) {
   };
 
   return (
-    /* ✅ Clean popup (no dark overlay) */
-    <div className="fixed inset-0 z-50 p-4 flex items-center justify-center">
+    /* ✅ Clean popup that relies on global UI tokens (no custom local theme overrides) */
+    <div
+      className="fixed inset-0 z-50 p-4 flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rerun-modal-title"
+      aria-describedby="rerun-modal-desc"
+    >
       <div className="w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border">
         {/* Header */}
         <div className="relative p-6 border-b border-border bg-card/80">
-          <div className="absolute inset-0 -z-10 opacity-[.18] bg-[radial-gradient(900px_400px_at_-10%_-20%,hsl(var(--g1)/.5),transparent_60%),radial-gradient(800px_500px_at_120%_-20%,hsl(var(--g2)/.4),transparent_55%),radial-gradient(700px_700px_at_80%_120%,hsl(var(--g3)/.35),transparent_60%)]" />
+          {/* Use global aurora—no local gradients to avoid theme clashes */}
+          <div className="absolute inset-0 -z-10 opacity-20 bg-luxe-aurora" />
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h2 className="text-xl font-bold gradient-text">Re-run Prompt (Scoped)</h2>
-              <p className="text-sm text-muted-foreground truncate">
+              <h2 id="rerun-modal-title" className="text-xl font-bold gradient-text">Re-run Prompt (Scoped)</h2>
+              <p id="rerun-modal-desc" className="text-sm text-muted-foreground truncate">
                 Only within this block — applies to the {originalCount} saved CVs.
               </p>
               <p className="text-xs text-muted-foreground/90 mt-1">

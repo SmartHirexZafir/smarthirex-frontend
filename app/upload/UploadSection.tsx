@@ -50,11 +50,30 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
   });
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const timersRef = useRef<number[]>([]);
   const procRef = useRef<ProcessingFile[]>([]);
   useEffect(() => {
     procRef.current = processingFiles;
   }, [processingFiles]);
+
+  // ⬇️ Individual timer refs so the toast auto-hide is never cancelled by unrelated state changes
+  const toastTimerRef = useRef<number | null>(null);
+  const progressTimerRef = useRef<number | null>(null);
+
+  const clearAllTimers = () => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    if (progressTimerRef.current) {
+      window.clearTimeout(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  };
+
+  // cleanup on unmount only
+  useEffect(() => {
+    return () => clearAllTimers();
+  }, []);
 
   // Derived counts
   const totalCount = processingFiles.length;
@@ -71,20 +90,21 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
   // auto-hide toast + progress after done
   useEffect(() => {
     const allDone = totalCount > 0 && processingFiles.every((f) => f.status !== 'processing');
-
     if (!allDone) return;
-    // build one clear summary toast
-    const skipped =
-      agg.duplicates + agg.unsupported + agg.empty + agg.too_large + agg.parse_error;
 
+    // build one clear summary toast
+    const skipped = agg.duplicates + agg.unsupported + agg.empty + agg.too_large + agg.parse_error;
     const summary = `Uploaded ${agg.inserted} of ${agg.received} · Duplicates: ${agg.duplicates} · Unsupported: ${agg.unsupported} · Empty: ${agg.empty} · Too large: ${agg.too_large} · Parse errors: ${agg.parse_error}`;
 
     setToastType(skipped === 0 ? 'success' : 'warning');
     setToastMsg(summary);
     setShowToast(true);
 
-    const t1 = window.setTimeout(() => setShowToast(false), TOAST_HOLD_MS);
-    const t2 = window.setTimeout(() => {
+    // clear any previous timers before setting fresh ones
+    clearAllTimers();
+
+    // Let the progress UI collapse first, then hide the toast separately (prevents toast being cleared prematurely)
+    progressTimerRef.current = window.setTimeout(() => {
       setShowProgress(false);
       setProcessingFiles([]);
       setAgg({
@@ -97,12 +117,11 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
         parse_error: 0,
       });
     }, PROGRESS_HOLD_MS);
-    timersRef.current.push(t1, t2);
 
-    return () => {
-      timersRef.current.forEach((id) => window.clearTimeout(id));
-      timersRef.current = [];
-    };
+    toastTimerRef.current = window.setTimeout(() => {
+      setShowToast(false);
+    }, TOAST_HOLD_MS);
+    // NOTE: No cleanup return here; unmount cleanup handles timer clearing so the toast isn't cancelled early.
   }, [processingFiles, totalCount, agg]);
 
   // ---------- DnD ----------
@@ -126,15 +145,11 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
   };
 
   // ---------- Core upload (true per-file progress, parallel with limit) ----------
-  const clearTimers = () => {
-    timersRef.current.forEach((id) => window.clearTimeout(id));
-    timersRef.current = [];
-  };
-
   async function processFiles(files: FileWithPreview[]) {
     if (!files.length) return;
 
-    clearTimers();
+    // starting a new batch -> reset timers/notifications
+    clearAllTimers();
     setShowToast(false);
     setShowProgress(true);
 
@@ -203,9 +218,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
             // If endpoint missing/blocked, try next path
             if (status === 404 || status === 405) {
               // reset progress for next attempt (visual clarity)
-              setProcessingFiles((prev) =>
-                prev.map((f) => (f.id === row.id ? { ...f, progress: 0 } : f))
-              );
+              setProcessingFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, progress: 0 } : f)));
               return tryPath(pathIndex + 1);
             }
 
@@ -260,11 +273,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
 
           xhr.onerror = () => {
             // network glitch? try next path
-            setProcessingFiles((prev) =>
-              prev.map((f) =>
-                f.id === row.id ? { ...f, progress: 0 } : f
-              )
-            );
+            setProcessingFiles((prev) => prev.map((f) => (f.id === row.id ? { ...f, progress: 0 } : f)));
             tryPath(pathIndex + 1);
           };
 
@@ -315,7 +324,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
           'surface glass gradient-border rounded-3xl p-12 md:p-14 text-center transition-all ease-lux cursor-pointer',
           'border-2 border-dashed',
           isDragOver
-            ? 'ring-2 ring-[hsl(var(--primary)/.45)] bg-[hsl(var(--muted)/.7)] shadow-glow scale-[1.01]'
+            ? 'ring-2 ring-[hsl(var(--primary)/.45)] bg-[hsl(var(--muted)/.7)] shadow-glow scale-[1.01)]'
             : 'hover:bg-[hsl(var(--muted)/.55)] hover:ring-1 hover:ring-[hsl(var(--primary)/.25)]',
         ].join(' ')}
         onDragOver={handleDragOver}

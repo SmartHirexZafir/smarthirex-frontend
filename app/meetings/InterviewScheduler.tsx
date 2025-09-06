@@ -1,7 +1,8 @@
-'use client';
+// app/meetings/InterviewScheduler.tsx
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 /** ========================
  *  Types
@@ -18,6 +19,8 @@ type Props = {
   prefilled?: Prefilled;
   /** Optional: bubble up a toast string after scheduling */
   onToast?: (msg: string) => void;
+  /** Optional: bubble up errors (used by parent); safe to omit */
+  onError?: (msg: string) => void;
 };
 
 type CandidateDoc = {
@@ -39,7 +42,7 @@ type ScheduleResponse = {
 
 type Attempt = {
   _id: string;
-  type: 'smart' | 'custom';
+  type: "smart" | "custom";
   score?: number | null;
   created_at?: string;
   submitted_at?: string;
@@ -51,23 +54,36 @@ type Attempt = {
 const API_BASE = (
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_API_BASE ||
-  'http://localhost:10000'
-).replace(/\/$/, '');
+  "http://localhost:10000"
+).replace(/\/$/, "");
 
 const getAuthToken = (): string | null =>
-  (typeof window !== 'undefined' &&
-    (localStorage.getItem('token') ||
-      localStorage.getItem('authToken') ||
-      localStorage.getItem('access_token') ||
-      localStorage.getItem('AUTH_TOKEN'))) ||
+  (typeof window !== "undefined" &&
+    (localStorage.getItem("token") ||
+      localStorage.getItem("authToken") ||
+      localStorage.getItem("access_token") ||
+      localStorage.getItem("AUTH_TOKEN"))) ||
   null;
 
 const authHeaders = () => {
-  const h: Record<string, string> = { 'Content-Type': 'application/json' };
+  const h: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
   const t = getAuthToken();
   if (t) h.Authorization = `Bearer ${t}`;
   return h;
 };
+
+async function safeJson<T = any>(res: Response): Promise<T> {
+  const txt = await res.text();
+  if (!txt) return {} as T;
+  try {
+    return JSON.parse(txt) as T;
+  } catch {
+    return { raw: txt } as unknown as T;
+  }
+}
 
 /** Combine a YYYY-MM-DD date and a 'hh:mm AM/PM' time into ISO string */
 function toISOFromDateAnd12h(dateStr: string, time12h: string): string | null {
@@ -77,12 +93,12 @@ function toISOFromDateAnd12h(dateStr: string, time12h: string): string | null {
   let [, hh, mm, ap] = m;
   let h = parseInt(hh, 10);
   const minutes = parseInt(mm, 10);
-  const isPM = ap.toUpperCase() === 'PM';
+  const isPM = ap.toUpperCase() === "PM";
   if (h === 12) h = isPM ? 12 : 0;
   else if (isPM) h += 12;
 
   // Build a Date in local timezone
-  const d = new Date(dateStr + 'T00:00:00');
+  const d = new Date(dateStr + "T00:00:00");
   d.setHours(h, minutes, 0, 0);
   return d.toISOString();
 }
@@ -92,107 +108,130 @@ function pickMeetingUrl(resp?: ScheduleResponse): string | undefined {
   return (resp?.meetingUrl as string) || (resp?.meeting_url as string) || undefined;
 }
 
+/** Friendly mapping for common server errors (Req 8.2) */
+function friendlyHttpMessage(status: number): string | null {
+  switch (status) {
+    case 400:
+      return "Bad request.";
+    case 401:
+      return "Unauthorized. Please log in again.";
+    case 403:
+      return "Forbidden. You don’t have access to this action.";
+    case 404:
+      return "Not found.";
+    case 409:
+      return "A test has already been started for this candidate (only one test type is allowed).";
+    case 410:
+      return "This link has expired.";
+    case 422:
+      return "Unprocessable request. Please check your inputs.";
+    case 500:
+      return "Server error. Please try again.";
+    default:
+      return null;
+  }
+}
+
 /** ========================
  *  Component
  *  ======================== */
-export default function InterviewScheduler({ prefilled, onToast }: Props) {
+export default function InterviewScheduler({ prefilled, onToast, onError }: Props) {
   const router = useRouter();
 
   // ---- Local UI state (kept from original logic) ----
-  const [selectedCandidate, setSelectedCandidate] = useState('');
-  const [selectedDate, setSelectedDate] = useState('');
-  const [selectedTime, setSelectedTime] = useState('');
-  const [notes, setNotes] = useState('');
+  const [selectedCandidate, setSelectedCandidate] = useState("");
+  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedTime, setSelectedTime] = useState("");
+  const [notes, setNotes] = useState("");
   const [isScheduling, setIsScheduling] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
-  // ---- New: real candidates (only with tests) + fallbacks ----
+  // ---- Candidates from backend (NO local hardcoded fallbacks per “no hardcoding”) ----
   const [candidates, setCandidates] = useState<CandidateDoc[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadingList, setLoadingList] = useState(false);
 
   // Prefilled candidate details and latest test
   const [prefilledCandidate, setPrefilledCandidate] = useState<CandidateDoc | null>(null);
   const [latestAttempt, setLatestAttempt] = useState<Attempt | null>(null);
 
+  // If user chooses from dropdown, also verify latest attempt for that candidate (extra safety gate)
+  const [selectedLatestAttempt, setSelectedLatestAttempt] = useState<Attempt | null>(null);
+  const [checkingSelectedGate, setCheckingSelectedGate] = useState(false);
+
   // Small success toast for this component (if parent doesn't provide onToast)
   const [toast, setToast] = useState<string | null>(null);
-  const showToast = (msg: string) => {
+  const emitToast = (msg: string) => {
     if (onToast) onToast(msg);
     else {
       setToast(msg);
       window.setTimeout(() => setToast(null), 2200);
     }
   };
+  const emitError = (msg: string) => {
+    if (onError) onError(msg);
+    else emitToast(msg);
+  };
 
   // Meeting URL to show on confirmation
   const [meetingUrl, setMeetingUrl] = useState<string | undefined>(undefined);
 
-  // ---- Static fallback candidates (kept, used only if backend fails) ----
-  const fallbackCandidates: CandidateDoc[] = [
-    {
-      _id: '1',
-      name: 'Sarah Johnson',
-      email: 'sarah.johnson@email.com',
-      job_role: 'Frontend Developer',
-      avatar:
-        'https://readdy.ai/api/search-image?query=professional%20female%20software%20developer%20headshot%2C%20confident%20tech%20professional%2C%20modern%20corporate%20portrait%2C%20clean%20background%2C%20business%20casual%20attire%2C%20friendly%20smile%2C%20professional%20photography&width=100&height=100&seq=candidate-interview-001&orientation=squarish',
-      test_score: 80,
-    },
-    {
-      _id: '2',
-      name: 'Michael Chen',
-      email: 'michael.chen@email.com',
-      job_role: 'Backend Developer',
-      avatar:
-        'https://readdy.ai/api/search-image?query=professional%20male%20software%20developer%20headshot%2C%20confident%20tech%20professional%2C%20modern%20corporate%20portrait%2C%20clean%20background%2C%20business%20casual%20attire%2C%20friendly%20smile%2C%20professional%20photography&width=100&height=100&seq=candidate-interview-002&orientation=squarish',
-      test_score: 76,
-    },
-    {
-      _id: '3',
-      name: 'Emily Rodriguez',
-      email: 'emily.rodriguez@email.com',
-      job_role: 'Full Stack Developer',
-      avatar:
-        'https://readdy.ai/api/search-image?query=professional%20female%20software%20developer%20headshot%2C%20confident%20tech%20professional%2C%20modern%20corporate%20portrait%2C%20clean%20background%2C%20business%20casual%20attire%2C%20friendly%20smile%2C%20professional%20photography&width=100&height=100&seq=candidate-interview-003&orientation=squarish',
-      test_score: 92,
-    },
-  ];
-
   // Time slots (unchanged)
   const timeSlots = [
-    '09:00 AM',
-    '09:30 AM',
-    '10:00 AM',
-    '10:30 AM',
-    '11:00 AM',
-    '11:30 AM',
-    '02:00 PM',
-    '02:30 PM',
-    '03:00 PM',
-    '03:30 PM',
-    '04:00 PM',
-    '04:30 PM',
+    "09:00 AM",
+    "09:30 AM",
+    "10:00 AM",
+    "10:30 AM",
+    "11:00 AM",
+    "11:30 AM",
+    "02:00 PM",
+    "02:30 PM",
+    "03:00 PM",
+    "03:30 PM",
+    "04:00 PM",
+    "04:30 PM",
   ];
 
   /** ========================
    *  Effects
    *  ======================== */
 
-  // Load only candidates who have taken a test (for non-prefilled flow)
+  // Load only candidates who have taken a test (non-prefilled flow)
   useEffect(() => {
     if (prefilled?.candidateId) return; // list isn't needed if prefilled
     (async () => {
+      setLoadingList(true);
+      setLoadError(null);
       try {
-        // 🔧 FIX: point to backend-mounted path under /candidate
-        const res = await fetch(`${API_BASE}/candidate/candidates/with-tests`, { headers: authHeaders() });
-        if (!res.ok) throw new Error('err');
-        const data = await res.json().catch(() => ({}));
-        const list: CandidateDoc[] = Array.isArray(data?.candidates) ? data.candidates : [];
-        if (list.length) setCandidates(list);
-        else setCandidates(fallbackCandidates); // fallback when empty
-      } catch {
-        setCandidates(fallbackCandidates); // fallback when API fails
-        setLoadError('Showing demo candidates (backend list unavailable).');
+        const res = await fetch(`${API_BASE}/candidate/candidates/with-tests`, {
+          headers: authHeaders(),
+        });
+        const data = await safeJson(res);
+        if (!res.ok) {
+          const msg =
+            (data as any)?.detail ||
+            friendlyHttpMessage(res.status) ||
+            "Unable to load candidates.";
+          throw new Error(msg);
+        }
+        const list: CandidateDoc[] = Array.isArray((data as any)?.candidates)
+          ? (data as any).candidates
+          : [];
+        setCandidates(list);
+        if (list.length === 0) {
+          setLoadError(
+            "No candidates with completed tests found. Send tests first from the Test page."
+          );
+        }
+      } catch (e: any) {
+        setLoadError(
+          typeof e?.message === "string"
+            ? e.message
+            : "Unable to load candidates right now."
+        );
+        setCandidates([]);
+      } finally {
+        setLoadingList(false);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,10 +247,16 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
           fetch(`${API_BASE}/candidate/${cid}`, { headers: authHeaders() }),
           fetch(`${API_BASE}/tests/history/${cid}`, { headers: authHeaders() }),
         ]);
-        const cDoc = (await cRes.json().catch(() => ({}))) as CandidateDoc;
-        const hist = await hRes.json().catch(() => ({}));
+        const cDoc = (await safeJson<CandidateDoc>(cRes)) as CandidateDoc;
+        const hist = await safeJson<any>(hRes);
+        if (!cRes.ok) {
+          throw new Error(
+            (hist as any)?.detail ||
+              friendlyHttpMessage(cRes.status) ||
+              "Failed to load candidate profile."
+          );
+        }
         const attempts: Attempt[] = Array.isArray(hist?.attempts) ? hist.attempts : [];
-        // pick latest by created_at/submitted_at
         attempts.sort((a, b) => {
           const ta = new Date(a.created_at || a.submitted_at || 0).getTime();
           const tb = new Date(b.created_at || b.submitted_at || 0).getTime();
@@ -223,31 +268,76 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
           job_role: cDoc?.job_role || prefilled?.role,
         });
         setLatestAttempt(attempts[0] || null);
-      } catch {
-        // keep silent; UI will still show prefilled email/role
+      } catch (e: any) {
         setPrefilledCandidate({
           _id: cid,
           email: prefilled?.email,
           job_role: prefilled?.role,
         });
+        setLatestAttempt(null);
       }
     })();
   }, [prefilled?.candidateId, prefilled?.email, prefilled?.role]);
 
-  /** ========================
-   *  Derived state
-   *  ======================== */
+  // When user selects a candidate from dropdown, verify they have at least one submitted attempt
+  useEffect(() => {
+    if (!selectedCandidate) {
+      setSelectedLatestAttempt(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setCheckingSelectedGate(true);
+      try {
+        const res = await fetch(`${API_BASE}/tests/history/${selectedCandidate}`, {
+          headers: authHeaders(),
+        });
+        const hist = await safeJson<any>(res);
+        const attempts: Attempt[] = Array.isArray(hist?.attempts) ? hist.attempts : [];
+        attempts.sort((a, b) => {
+          const ta = new Date(a.created_at || a.submitted_at || 0).getTime();
+          const tb = new Date(b.created_at || b.submitted_at || 0).getTime();
+          return tb - ta;
+        });
+        if (!cancelled) {
+          setSelectedLatestAttempt(attempts[0] || null);
+        }
+      } catch {
+        if (!cancelled) setSelectedLatestAttempt(null);
+      } finally {
+        if (!cancelled) setCheckingSelectedGate(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCandidate]);
 
+  /** ========================
+   *  Derived state & gating (Req 8.1)
+   *  ======================== */
   const selectedCandidateData = useMemo(() => {
     if (prefilled?.candidateId) return null; // handled separately
     return candidates.find((c) => c._id === selectedCandidate);
   }, [prefilled?.candidateId, candidates, selectedCandidate]);
 
+  // Gate: meetings cannot be scheduled until a test is completed
+  const prefilledGateBlocked =
+    !!prefilled?.candidateId && !latestAttempt?.submitted_at;
+
+  const dropdownGateBlocked =
+    !prefilled?.candidateId &&
+    !!selectedCandidate &&
+    !checkingSelectedGate &&
+    !selectedLatestAttempt?.submitted_at;
+
   const scheduleDisabled =
     (prefilled?.candidateId ? false : !selectedCandidate) ||
     !selectedDate ||
     !selectedTime ||
-    isScheduling;
+    isScheduling ||
+    prefilledGateBlocked ||
+    dropdownGateBlocked;
 
   /** ========================
    *  Actions
@@ -272,7 +362,7 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
         candidateId: payload.candidateId,
         candidateEmail: payload.email,
         candidateName: payload.candidate_name,
-        role: payload.title?.replace(/^Interview\s*[-–]\s*/i, '') || payload.title,
+        role: payload.title?.replace(/^Interview\s*[-–]\s*/i, "") || payload.title,
         when: payload.startsAt,
         timezone: payload.timezone,
         durationMins: payload.durationMins,
@@ -280,31 +370,52 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
         notes: payload.notes,
       };
       const res = await fetch(`${API_BASE}/interviews/schedule`, {
-        method: 'POST',
+        method: "POST",
         headers: authHeaders(),
         body: JSON.stringify(unified),
       });
-      const data = (await res.json().catch(() => ({}))) as ScheduleResponse;
+      const data = (await safeJson<ScheduleResponse>(res)) as ScheduleResponse;
       if (res.ok) return data;
-      // else fall through
+      const msg =
+        (data as any)?.detail ||
+        friendlyHttpMessage(res.status) ||
+        "Failed to schedule interview.";
+      // fall through to legacy endpoint on known server-side errors
+      if (res.status >= 500 || res.status === 404) {
+        // try fallback
+      } else {
+        throw new Error(msg);
+      }
     } catch {
       // fall through
     }
 
     // Fallback 2: candidate-scoped endpoint accepts the original payload
     const res2 = await fetch(`${API_BASE}/candidate/${payload.candidateId}/schedule`, {
-      method: 'POST',
+      method: "POST",
       headers: authHeaders(),
       body: JSON.stringify(payload),
     });
-    const data2 = (await res2.json().catch(() => ({}))) as ScheduleResponse;
+    const data2 = (await safeJson<ScheduleResponse>(res2)) as ScheduleResponse;
     if (!res2.ok) {
-      throw new Error((data2 as any)?.detail || 'Failed to schedule interview');
+      throw new Error(
+        (data2 as any)?.detail ||
+          friendlyHttpMessage(res2.status) ||
+          "Failed to schedule interview."
+      );
     }
     return data2;
   };
 
   const handleSchedule = async () => {
+    // Guard: show a nice dialog-like toast if blocked
+    if (prefilledGateBlocked || dropdownGateBlocked) {
+      emitToast(
+        "Meetings aren’t allowed until the candidate has completed a test."
+      );
+      return;
+    }
+
     setIsScheduling(true);
     try {
       // Resolve candidate & identity
@@ -314,7 +425,7 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
       const email = c?.email || c?.resume?.email;
       if (!cid || !email) {
         setIsScheduling(false);
-        showToast('Candidate email required to schedule.');
+        emitToast("Candidate email required to schedule.");
         return;
       }
 
@@ -322,14 +433,14 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
       const iso = toISOFromDateAnd12h(selectedDate, selectedTime);
       if (!iso) {
         setIsScheduling(false);
-        showToast('Please choose a valid date and time.');
+        emitToast("Please choose a valid date and time.");
         return;
       }
 
       // Reasonable defaults for missing fields
-      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const durationMins = 45;
-      const role = c?.job_role || prefilled?.role || 'Interview';
+      const role = c?.job_role || prefilled?.role || "Interview";
       const title = `Interview – ${role}`;
 
       const payload = {
@@ -346,9 +457,11 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
       const resp = await scheduleInterview(payload);
       setMeetingUrl(pickMeetingUrl(resp));
       setShowConfirmation(true);
-      showToast('Interview invite sent');
+      emitToast("Interview invite sent");
     } catch (e: any) {
-      showToast(typeof e?.message === 'string' ? e.message : 'Could not schedule interview');
+      emitError(
+        typeof e?.message === "string" ? e.message : "Could not schedule interview"
+      );
     } finally {
       setIsScheduling(false);
     }
@@ -363,51 +476,53 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
     return (
       <div className="bg-card text-foreground backdrop-blur-sm rounded-2xl shadow-xl border border-border p-8">
         <div className="text-center">
-          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 bg-emerald-100">
-            <i className="ri-check-line text-3xl text-emerald-600" />
+          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary/15">
+            <i className="ri-check-line text-3xl text-primary" />
           </div>
-          <h2 className="text-2xl font-bold mb-2">Interview Scheduled Successfully!</h2>
-          <p className="text-muted-foreground mb-6">All participants have been notified</p>
+          <h2 className="mb-2 text-2xl font-bold">Interview Scheduled Successfully!</h2>
+          <p className="mb-6 text-muted-foreground">All participants have been notified</p>
 
-          <div className="rounded-xl p-6 border border-border mb-6 bg-gradient-to-r from-muted to-muted/60">
-            <div className="grid md:grid-cols-3 gap-4">
+          <div className="mb-6 rounded-xl border border-border bg-muted/40 p-6">
+            <div className="grid gap-4 md:grid-cols-3">
               <div className="text-center">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-2 bg-primary">
+                <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
                   <i className="ri-video-line text-primary-foreground" />
                 </div>
                 <p className="text-sm font-medium">Video invite generated</p>
               </div>
               <div className="text-center">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-2 bg-blue-600">
-                  <i className="ri-mail-line text-white" />
+                <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-secondary">
+                  <i className="ri-mail-line text-secondary-foreground" />
                 </div>
                 <p className="text-sm font-medium">Email sent to candidate</p>
               </div>
               <div className="text-center">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-2 bg-violet-600">
-                  <i className="ri-dashboard-line text-white" />
+                <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-lg bg-accent">
+                  <i className="ri-dashboard-line text-accent-foreground" />
                 </div>
                 <p className="text-sm font-medium">Dashboard updated</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl p-4 mb-6 bg-muted">
+          <div className="mb-6 rounded-xl bg-muted p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {ConfCandidate?.avatar ? (
                   <img
                     src={ConfCandidate.avatar}
-                    alt={ConfCandidate?.name || ConfCandidate?.email || 'Candidate'}
-                    className="w-10 h-10 rounded-full object-cover"
+                    alt={ConfCandidate?.name || ConfCandidate?.email || "Candidate"}
+                    className="h-10 w-10 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-background/60 border border-border flex items-center justify-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background/60">
                     <i className="ri-user-line text-muted-foreground" />
                   </div>
                 )}
                 <div className="text-left">
-                  <p className="font-medium">{ConfCandidate?.name || ConfCandidate?.email}</p>
+                  <p className="font-medium">
+                    {ConfCandidate?.name || ConfCandidate?.email}
+                  </p>
                   <p className="text-sm text-muted-foreground">
                     {selectedDate} at {selectedTime}
                   </p>
@@ -418,7 +533,7 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
                   href={meetingUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <i className="ri-video-line" />
                   <span>Join Meeting</span>
@@ -427,7 +542,7 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
                 <button
                   type="button"
                   disabled
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted text-foreground/70"
+                  className="flex items-center gap-2 rounded-lg bg-muted px-4 py-2 text-sm text-foreground/70"
                   title="Meeting link not available"
                 >
                   <i className="ri-video-line" />
@@ -437,18 +552,18 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
             </div>
           </div>
 
-          <div className="flex gap-3 justify-center">
+          <div className="flex justify-center gap-3">
             <button
               onClick={() => setShowConfirmation(false)}
               type="button"
-              className="px-6 py-2 rounded-lg border border-input text-foreground hover:bg-muted/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-lg border border-input px-6 py-2 text-sm text-foreground transition-colors hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Schedule Another
             </button>
             <button
-              onClick={() => router.push('/dashboard')}
+              onClick={() => router.push("/dashboard")}
               type="button"
-              className="px-6 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-lg bg-primary px-6 py-2 text-sm font-medium text-primary-foreground transition-all hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               View Dashboard
             </button>
@@ -466,12 +581,14 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
   const showDropdown = !prefilled?.candidateId;
 
   const emailBox = prefilled?.candidateId
-    ? (prefilledCandidate?.email || prefilled?.email || '—')
-    : (selectedCandidateData?.email || selectedCandidateData?.resume?.email || '—');
+    ? prefilledCandidate?.email || prefilled?.email || "—"
+    : selectedCandidateData?.email ||
+      selectedCandidateData?.resume?.email ||
+      "—";
 
   const roleBox = prefilled?.candidateId
-    ? (prefilledCandidate?.job_role || prefilled?.role || '—')
-    : (selectedCandidateData?.job_role || '—');
+    ? prefilledCandidate?.job_role || prefilled?.role || "—"
+    : selectedCandidateData?.job_role || "—";
 
   // Helpful link to view the candidate's test before scheduling
   const testLink =
@@ -481,41 +598,68 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
       ? `/candidate/${selectedCandidate}`
       : null;
 
+  // Gate banners
+  const showPrefilledGateBanner = prefilledGateBlocked;
+  const showDropdownGateBanner =
+    dropdownGateBlocked && !!selectedCandidate && !checkingSelectedGate;
+
   return (
     <div className="bg-card text-foreground backdrop-blur-sm rounded-2xl shadow-xl border border-border p-6">
-      <div className="flex items-center mb-6">
-        <i className="ri-calendar-event-line text-2xl text-foreground/80 mr-3" />
+      <div className="mb-6 flex items-center">
+        <i className="ri-calendar-event-line mr-3 text-2xl text-foreground/80" />
         <h2 className="text-xl font-bold">Schedule Interview</h2>
       </div>
 
+      {/* Gating banners */}
+      {showPrefilledGateBanner && (
+        <div
+          className="mb-4 rounded-xl border border-border bg-destructive/10 p-3 text-sm text-[hsl(var(--destructive))]"
+          role="alert"
+          aria-live="assertive"
+        >
+          <i className="ri-error-warning-line mr-2" />
+          Meetings are not allowed until the candidate has completed a test.
+        </div>
+      )}
+      {showDropdownGateBanner && (
+        <div
+          className="mb-4 rounded-xl border border-border bg-destructive/10 p-3 text-sm text-[hsl(var(--destructive))]"
+          role="alert"
+          aria-live="assertive"
+        >
+          <i className="ri-error-warning-line mr-2" />
+          This candidate hasn’t completed a test yet. Please send a test first.
+        </div>
+      )}
+
       {/* Prefilled context boxes */}
       {prefilled?.candidateId && (
-        <div className="grid md:grid-cols-3 gap-4 mb-6">
-          <div className="p-4 rounded-xl border border-border bg-muted/50">
-            <div className="text-xs text-muted-foreground mb-1">Email</div>
+        <div className="mb-6 grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl border border-border bg-muted/50 p-4">
+            <div className="mb-1 text-xs text-muted-foreground">Email</div>
             <div className="font-medium">{emailBox}</div>
           </div>
-          <div className="p-4 rounded-xl border border-border bg-muted/50">
-            <div className="text-xs text-muted-foreground mb-1">Role</div>
+          <div className="rounded-xl border border-border bg-muted/50 p-4">
+            <div className="mb-1 text-xs text-muted-foreground">Role</div>
             <div className="font-medium">{roleBox}</div>
           </div>
-          <div className="p-4 rounded-xl border border-border bg-muted/50">
+          <div className="rounded-xl border border-border bg-muted/50 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs text-muted-foreground mb-1">Latest Test</div>
+                <div className="mb-1 text-xs text-muted-foreground">Latest Test</div>
                 <div className="text-sm">
                   {latestAttempt ? (
                     <>
-                      Type: {latestAttempt.type} · Score: {latestAttempt.score ?? '—'}
+                      Type: {latestAttempt.type} · Score: {latestAttempt.score ?? "—"}
                     </>
                   ) : (
-                    '—'
+                    "—"
                   )}
                 </div>
               </div>
               {prefilled?.candidateId && (
                 <a
-                  className="text-xs underline ml-3"
+                  className="ml-3 text-xs underline"
                   href={`/candidate/${prefilled.candidateId}`}
                   target="_blank"
                   rel="noreferrer"
@@ -528,25 +672,28 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
         </div>
       )}
 
-      <div className="grid md:grid-cols-2 gap-6">
+      <div className="grid gap-6 md:grid-cols-2">
         {/* Candidate Selection / Prefilled card */}
         <div className="space-y-4">
           {showDropdown ? (
             <>
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">
+                <label className="mb-2 block text-sm font-medium text-muted-foreground">
                   Select Candidate
                 </label>
                 <select
                   value={selectedCandidate}
                   onChange={(e) => setSelectedCandidate(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-background border border-input text-foreground pr-8 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full rounded-xl border border-input bg-background p-3 text-foreground pr-8 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="Select candidate"
+                  disabled={loadingList}
                 >
-                  <option value="">Choose a candidate...</option>
+                  <option value="">
+                    {loadingList ? "Loading candidates…" : "Choose a candidate..."}
+                  </option>
                   {candidates.map((c) => (
                     <option key={c._id} value={c._id}>
-                      {(c.name || c.email) ?? c._id} — {c.job_role || '—'}
+                      {(c.name || c.email) ?? c._id} — {c.job_role || "—"}
                     </option>
                   ))}
                 </select>
@@ -556,16 +703,20 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
               </div>
 
               {selectedCandidateData && (
-                <div className="p-4 rounded-xl border border-border bg-muted/50">
+                <div className="rounded-xl border border-border bg-muted/50 p-4">
                   <div className="flex items-center gap-3">
                     {selectedCandidateData.avatar ? (
                       <img
                         src={selectedCandidateData.avatar}
-                        alt={selectedCandidateData.name || selectedCandidateData.email || 'Candidate'}
-                        className="w-12 h-12 rounded-full object-cover"
+                        alt={
+                          selectedCandidateData.name ||
+                          selectedCandidateData.email ||
+                          "Candidate"
+                        }
+                        className="h-12 w-12 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-background/60 border border-border flex items-center justify-center">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-background/60">
                         <i className="ri-user-line text-muted-foreground" />
                       </div>
                     )}
@@ -574,9 +725,12 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
                         {selectedCandidateData.name || selectedCandidateData.email}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {selectedCandidateData.email || selectedCandidateData.resume?.email}
+                        {selectedCandidateData.email ||
+                          selectedCandidateData.resume?.email}
                       </p>
-                      <p className="text-sm">{selectedCandidateData.job_role || '—'}</p>
+                      <p className="text-sm">
+                        {selectedCandidateData.job_role || "—"}
+                      </p>
                     </div>
                     {testLink && (
                       <a
@@ -590,6 +744,11 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
                       </a>
                     )}
                   </div>
+                  {checkingSelectedGate && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      Checking test completion…
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -597,15 +756,15 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
 
           {/* Interview Date */}
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-2">
+            <label className="mb-2 block text-sm font-medium text-muted-foreground">
               Interview Date
             </label>
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-full p-3 rounded-xl bg-background border border-input text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              min={new Date().toISOString().split('T')[0]}
+              className="w-full rounded-xl border border-input bg-background p-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              min={new Date().toISOString().split("T")[0]}
             />
           </div>
         </div>
@@ -613,10 +772,10 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
         {/* Time Selection + Notes */}
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-2">
+            <label className="mb-2 block text-sm font-medium text-muted-foreground">
               Available Time Slots
             </label>
-            <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+            <div className="grid max-h-64 grid-cols-2 gap-2 overflow-y-auto">
               {timeSlots.map((time) => {
                 const isActive = selectedTime === time;
                 return (
@@ -624,10 +783,10 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
                     key={time}
                     onClick={() => setSelectedTime(time)}
                     type="button"
-                    className={`p-3 rounded-lg text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    className={`rounded-lg p-3 text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                       isActive
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'bg-muted text-foreground hover:bg-muted/70 border border-border'
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "border border-border bg-muted text-foreground hover:bg-muted/70"
                     }`}
                     aria-pressed={isActive}
                   >
@@ -639,14 +798,14 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-2">
+            <label className="mb-2 block text-sm font-medium text-muted-foreground">
               Interview Notes (Optional)
             </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add any specific topics or requirements for the interview..."
-              className="w-full p-3 rounded-xl bg-background border border-input text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+              className="w-full resize-none rounded-xl border border-input bg-background p-3 text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               rows={4}
             />
           </div>
@@ -654,7 +813,7 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
       </div>
 
       {/* Schedule Button */}
-      <div className="mt-6 flex justify-between items-center">
+      <div className="mt-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2">
             <input type="checkbox" className="rounded" />
@@ -668,17 +827,19 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
           onClick={handleSchedule}
           disabled={scheduleDisabled}
           type="button"
-          className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-medium text-primary-foreground transition-all duration-200 hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           aria-busy={isScheduling}
           title={
             scheduleDisabled
-              ? 'Please select candidate (if required), date and time'
+              ? prefilledGateBlocked || dropdownGateBlocked
+                ? "A completed test is required before scheduling."
+                : "Please select candidate (if required), date and time"
               : undefined
           }
         >
           {isScheduling ? (
             <>
-              <div className="w-4 h-4 border-2 border-primary-foreground/70 border-t-transparent rounded-full animate-spin" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground/70 border-t-transparent" />
               <span>Scheduling...</span>
             </>
           ) : (
@@ -696,13 +857,15 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
           <div
             role="status"
             aria-live="polite"
-            className="panel glass shadow-lux px-4 py-3 min-w-[260px]"
+            className="panel glass shadow-lux min-w-[260px] px-4 py-3"
           >
             <div className="flex items-start gap-3">
               <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[hsl(var(--success))]" />
               <div className="flex-1 text-sm">
-                <div className="font-medium">Success</div>
-                <div className="mt-0.5 text-[hsl(var(--muted-foreground))]">{toast}</div>
+                <div className="font-medium">Notice</div>
+                <div className="mt-0.5 text-[hsl(var(--muted-foreground))]">
+                  {toast}
+                </div>
               </div>
               <button
                 type="button"

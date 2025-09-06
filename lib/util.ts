@@ -6,6 +6,8 @@
  * - Tailwind-friendly class merging
  * - A11y/DOM helpers (focus trap, scroll lock, in-view)
  * - Hotkeys, timing, formatters, storage, clipboard, etc.
+ * - Global UI + Theme helpers for the “Neon Eclipse” design system
+ * - Unified API helpers (auth headers, safe JSON, timeouts) for consistent loaders
  * --------------------------------------------------------------------- */
 
 import type React from "react";
@@ -463,7 +465,7 @@ export function isHotkey(e: KeyboardEvent, combo: string): boolean {
 }
 
 /* =========================================
-   Feature Flags & Preferences
+   Feature Flags & Preferences (Theme)
 ========================================= */
 export function prefersReducedMotion(): boolean {
   if (!isBrowser || !window.matchMedia) return false;
@@ -513,19 +515,222 @@ export function createEmitter<T = void>() {
 }
 
 /* =========================================
-   Example: Theme Preference
+   Theme Preference (Global UI: “Neon Eclipse”)
+   - One unified theme flag stored globally
+   - Ensures <html data-theme="neon-eclipse"> and dark/light class
+   - No component-level overrides required
 ========================================= */
 const THEME_KEY = "theme";
 export type ThemeMode = "light" | "dark";
 
+/** Public theme name (for root data-theme attr) */
+export const THEME_NAME = "neon-eclipse";
+
+/** Optional palette tokens for runtime overrides/fallbacks (globals.css is the source of truth). */
+export const NEON_ECLIPSE_PALETTE = {
+  light: {
+    "--background": "0 0% 100%",
+    "--foreground": "222 47% 11%",
+    "--card": "0 0% 100%",
+    "--card-foreground": "222 47% 11%",
+    "--muted": "220 14% 96%",
+    "--muted-foreground": "220 10% 46%",
+    "--primary": "268 95% 62%",
+    "--primary-foreground": "0 0% 100%",
+    "--secondary": "199 89% 48%",
+    "--secondary-foreground": "0 0% 100%",
+    "--accent": "226 100% 61%",
+    "--accent-foreground": "0 0% 100%",
+    "--success": "142 71% 45%",
+    "--warning": "38 92% 50%",
+    "--destructive": "0 84% 60%",
+    "--border": "220 13% 91%",
+    "--ring": "268 95% 62%",
+    "--input": "220 13% 91%",
+  },
+  dark: {
+    "--background": "222 47% 7%",
+    "--foreground": "0 0% 100%",
+    "--card": "222 47% 9%",
+    "--card-foreground": "0 0% 100%",
+    "--muted": "222 15% 14%",
+    "--muted-foreground": "220 8% 70%",
+    "--primary": "268 95% 62%",
+    "--primary-foreground": "0 0% 100%",
+    "--secondary": "199 89% 48%",
+    "--secondary-foreground": "0 0% 100%",
+    "--accent": "226 100% 61%",
+    "--accent-foreground": "0 0% 100%",
+    "--success": "142 71% 45%",
+    "--warning": "38 92% 58%",
+    "--destructive": "0 80% 66%",
+    "--border": "222 15% 18%",
+    "--ring": "268 95% 62%",
+    "--input": "222 15% 18%",
+  },
+};
+
+/** Read persisted theme mode, if any. */
 export function getStoredTheme(): ThemeMode | null {
   return storage.get(THEME_KEY) as ThemeMode | null;
 }
+
+/** Persist theme mode. */
 export function setStoredTheme(mode: ThemeMode) {
   storage.set(THEME_KEY, mode);
 }
+
+/** Resolve initial theme: stored -> system preference. */
 export function resolveInitialTheme(): ThemeMode {
   const stored = getStoredTheme();
   if (stored) return stored;
   return prefersLight() ? "light" : "dark";
+}
+
+/** Apply theme to <html>, set data-theme to Neon Eclipse, and sync CSS custom properties. */
+export function applyTheme(mode: ThemeMode) {
+  if (!isBrowser) return;
+  const root = document.documentElement;
+  root.setAttribute("data-theme", THEME_NAME);
+  root.classList.toggle("dark", mode === "dark");
+  root.classList.toggle("light", mode === "light");
+
+  // Sync CSS vars in case a page had conflicting local overrides
+  const palette = NEON_ECLIPSE_PALETTE[mode];
+  Object.entries(palette).forEach(([k, v]) => root.style.setProperty(k, v));
+}
+
+/** Initialize theme ASAP on the client (call once in app/layout.tsx). Prevents FOUC. */
+export function initThemeOnce() {
+  if (!isBrowser) return;
+  const mode = resolveInitialTheme();
+  applyTheme(mode);
+}
+
+/** Toggle theme and persist. */
+export function toggleTheme() {
+  const next: ThemeMode = getStoredTheme() === "dark" ? "light" : "dark";
+  setStoredTheme(next);
+  applyTheme(next);
+}
+
+/** Minimal UI token helpers to keep styles global & consistent (optional use). */
+export const uiTokens = {
+  buttonBase:
+    "inline-flex items-center justify-center rounded-lg font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors",
+  buttonPrimary:
+    "bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed",
+  buttonGhost:
+    "border border-input text-foreground hover:bg-muted/60",
+  input:
+    "w-full rounded-xl bg-background border border-input text-foreground px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+  panel:
+    "bg-card text-foreground rounded-2xl shadow-xl border border-border",
+  badge:
+    "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs",
+};
+
+/* =========================================
+   Auth & API helpers (Global, to avoid duplication & stuck loaders)
+   - Provides consistent auth headers
+   - Safe JSON parsing
+   - Abort timeouts to prevent infinite loaders
+========================================= */
+
+/** Unified API base (env or localhost). */
+export const API_BASE =
+  (process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_BASE ||
+    "http://localhost:10000").replace(/\/$/, "");
+
+/** Read bearer token from storage (names harmonized across the app). */
+export function getAuthToken(): string | null {
+  return (
+    (isBrowser &&
+      (localStorage.getItem("token") ||
+        localStorage.getItem("authToken") ||
+        localStorage.getItem("access_token") ||
+        localStorage.getItem("AUTH_TOKEN"))) ||
+    null
+  );
+}
+
+/** Build auth headers. If json=true, include Content-Type application/json. */
+export function authHeaders(json = true): Record<string, string> {
+  const h: Record<string, string> = json ? { "Content-Type": "application/json" } : {};
+  const t = getAuthToken();
+  if (t) h.Authorization = `Bearer ${t}`;
+  return h;
+}
+
+/** Abort helper with timeout. */
+export function withAbortTimeout(ms: number): { signal: AbortSignal; cancel: () => void } {
+  const ctrl = new AbortController();
+  const id = setTimeout(() => ctrl.abort(), ms);
+  return { signal: ctrl.signal, cancel: () => clearTimeout(id) };
+}
+
+/** Safe JSON parse from Response, falling back to raw text. */
+export async function safeJson<T = any>(res: Response): Promise<T> {
+  const txt = await res.text();
+  try {
+    return JSON.parse(txt) as T;
+  } catch {
+    return (txt as unknown) as T;
+  }
+}
+
+/** Throw a friendly Error for non-2xx responses. */
+export function assertOk(res: Response, body?: any) {
+  if (!res.ok) {
+    const msg =
+      (body && (body.detail || body.error || body.message)) ||
+      `Request failed with status ${res.status}`;
+    const err = new Error(msg);
+    // @ts-expect-error attach status for callers
+    (err.status = res.status);
+    throw err;
+  }
+}
+
+/**
+ * Fetch JSON with timeout, auth headers, and consistent error handling.
+ * Prevents loaders from hanging forever (crucial for filters/chatbot).
+ */
+export async function fetchJson<T = any>(
+  url: string,
+  init: RequestInit & { timeoutMs?: number; json?: boolean } = {}
+): Promise<T> {
+  const { timeoutMs = 20000, json: jsonHeader = true, headers, ...rest } = init;
+  const { signal, cancel } = withAbortTimeout(timeoutMs);
+  try {
+    const res = await fetch(url, {
+      headers: { ...authHeaders(jsonHeader), ...(headers || {}) },
+      signal,
+      ...rest,
+    });
+    const data = await safeJson<T>(res);
+    assertOk(res, data);
+    return data;
+  } finally {
+    cancel();
+  }
+}
+
+/** Convenience wrapper: automatically flip loading boolean around an async fn. */
+export async function withLoading<T>(
+  setLoading: (v: boolean) => void,
+  fn: () => Promise<T>
+): Promise<T> {
+  setLoading(true);
+  try {
+    return await fn();
+  } finally {
+    setLoading(false);
+  }
+}
+
+/** Quick check: user appears authenticated if a token is present. */
+export function isAuthenticated(): boolean {
+  return !!getAuthToken();
 }

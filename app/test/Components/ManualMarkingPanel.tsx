@@ -124,6 +124,10 @@ export default function ManualMarkingPanel({
   const [grades, setGrades] = useState<Record<string, number>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
+  // auto-grade progress
+  const [autoGrading, setAutoGrading] = useState<boolean>(false);
+  const [autoProgress, setAutoProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
+
   // toasts
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (msg: string) => {
@@ -210,12 +214,85 @@ export default function ManualMarkingPanel({
     }
   };
 
+  /** 🔄 Attempt to auto-grade a custom attempt (MCQ / AI-check).
+   *  Backend should grade MCQs immediately and can AI-check text answers.
+   *  Falls back gracefully if endpoint is unavailable. */
+  const autoGradeAttempt = async (attemptId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/tests/grade/auto/${attemptId}`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({}), // payload optional; kept empty for compatibility
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data && (data.detail || data.error)) || `Auto-grade failed (${res.status})`);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleAutoGradeAll = async () => {
+    if (autoGrading) return;
+    const pending = attempts.filter(needsManualMarking);
+    if (pending.length === 0) {
+      showToast("Nothing to auto-grade.");
+      return;
+    }
+
+    setAutoGrading(true);
+    setAutoProgress({ done: 0, total: pending.length });
+
+    let successCount = 0;
+    for (let i = 0; i < pending.length; i++) {
+      // eslint-disable-next-line no-await-in-loop
+      const ok = await autoGradeAttempt(pending[i]._id);
+      if (ok) successCount += 1;
+      setAutoProgress({ done: i + 1, total: pending.length });
+    }
+
+    setAutoGrading(false);
+    if (successCount > 0) {
+      showToast(`Auto-graded ${successCount}/${pending.length} attempt${pending.length === 1 ? "" : "s"}.`);
+      if (!attemptsProp) {
+        await fetchNeedsMarking();
+      }
+      onAfterSave?.();
+    } else {
+      setErr("Auto-grade was not available for these attempts.");
+    }
+  };
+
   return (
     <div className="bg-card text-foreground rounded-2xl shadow-xl border border-border p-4 md:p-5">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 gap-3">
         <div className="font-medium">{title}</div>
-        <div className="text-xs text-muted-foreground">
-          {attempts.length} to review
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-muted-foreground hidden sm:block">
+            {attempts.length} to review
+          </div>
+          <button
+            type="button"
+            onClick={handleAutoGradeAll}
+            disabled={autoGrading || attempts.length === 0}
+            aria-busy={autoGrading}
+            className="btn btn-outline whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+            title="Auto-grade MCQs and AI-check text where supported"
+          >
+            {autoGrading ? (
+              <span className="inline-flex items-center">
+                <span className="w-4 h-4 mr-2 inline-block border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" />
+                {autoProgress.done}/{autoProgress.total}
+              </span>
+            ) : (
+              <>
+                <i className="ri-magic-line mr-1" />
+                Auto-grade all
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -226,15 +303,17 @@ export default function ManualMarkingPanel({
         </div>
       )}
       {err && !loading && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive mb-3">
+        <div
+          className="rounded-xl border border-[hsl(var(--destructive)/0.25)] bg-[hsl(var(--destructive)/0.1)] p-3 text-sm text-[hsl(var(--destructive))] mb-3"
+          role="alert"
+          aria-live="assertive"
+        >
           {err}
         </div>
       )}
 
       {!loading && attempts.length === 0 && (
-        <div className="text-sm text-muted-foreground">
-          No custom tests awaiting marking.
-        </div>
+        <div className="text-sm text-muted-foreground">No custom tests awaiting marking.</div>
       )}
 
       {!loading && attempts.length > 0 && (
@@ -248,15 +327,13 @@ export default function ManualMarkingPanel({
               <div
                 key={a._id}
                 className={[
-                  "rounded-xl border border-border p-3 md:p-4 bg-muted/20",
-                  highlighted ? "ring-2 ring-primary/60" : "",
+                  "rounded-xl border border-border p-3 md:p-4 bg-card/60 backdrop-blur-sm transition-colors",
+                  highlighted ? "ring-2 ring-[hsl(var(--primary)/.6)]" : "",
                 ].join(" ")}
               >
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex-1 min-w-[220px]">
-                    <div className="text-sm font-medium">
-                      {getCandName(a)}
-                    </div>
+                    <div className="text-sm font-medium">{getCandName(a)}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
                       Submitted: {fmtDate(a.submitted_at || a.created_at)}
                     </div>
@@ -277,19 +354,52 @@ export default function ManualMarkingPanel({
                         }))
                       }
                     />
+
+                    {/* Save (manual) */}
                     <button
                       type="button"
                       onClick={() => onSaveGrade(a._id)}
                       disabled={savingId === a._id}
-                      className="px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                      aria-busy={savingId === a._id}
+                      className="btn btn-primary whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      {savingId === a._id ? "Saving…" : "Save"}
+                      {savingId === a._id ? (
+                        <span className="inline-flex items-center">
+                          <span className="w-4 h-4 mr-2 inline-block border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
+                          Saving…
+                        </span>
+                      ) : (
+                        <>
+                          <i className="ri-save-3-line mr-1" />
+                          Save
+                        </>
+                      )}
+                    </button>
+
+                    {/* Auto-grade single attempt */}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const ok = await autoGradeAttempt(a._id);
+                        if (ok) {
+                          showToast("Auto-graded.");
+                          if (!attemptsProp) await fetchNeedsMarking();
+                          onAfterSave?.();
+                        } else {
+                          setErr("Auto-grade not available for this attempt.");
+                        }
+                      }}
+                      className="btn btn-ghost whitespace-nowrap"
+                      title="Auto-grade this attempt"
+                    >
+                      <i className="ri-sparkling-line mr-1" />
+                      Auto
                     </button>
 
                     {cid && (
                       <a
                         href={`/candidate/${cid}`}
-                        className="px-3 py-2 rounded-lg border border-input text-foreground hover:bg-muted/60 text-sm"
+                        className="btn btn-outline text-sm"
                         target="_blank"
                         rel="noreferrer"
                       >
@@ -300,7 +410,7 @@ export default function ManualMarkingPanel({
                     {pdfHref && (
                       <a
                         href={pdfHref}
-                        className="px-3 py-2 rounded-lg border border-input text-foreground hover:bg-muted/60 text-sm"
+                        className="btn btn-outline text-sm"
                         target="_blank"
                         rel="noreferrer"
                         title="Open PDF report"
@@ -329,9 +439,7 @@ export default function ManualMarkingPanel({
               <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[hsl(var(--success))]" />
               <div className="flex-1 text-sm">
                 <div className="font-medium">Success</div>
-                <div className="mt-0.5 text-[hsl(var(--muted-foreground))]">
-                  {toast}
-                </div>
+                <div className="mt-0.5 text-[hsl(var(--muted-foreground))]">{toast}</div>
               </div>
               <button
                 type="button"

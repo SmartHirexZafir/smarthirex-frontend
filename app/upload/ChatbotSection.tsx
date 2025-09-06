@@ -331,7 +331,10 @@ export default function ChatbotSection({
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+
+  // Flyout-style filters panel (History-style)
   const [menuOpen, setMenuOpen] = useState(false);
+
   const [selected, setSelected] = useState<FilterKey[]>([]); // preserves order of selection
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -356,6 +359,14 @@ export default function ChatbotSection({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Close flyout on ESC
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
 
   // checkbox change (preserve selection order; remove on uncheck)
   const toggleFilter = (k: FilterKey) => {
@@ -541,6 +552,15 @@ export default function ChatbotSection({
     setIsTyping(false);
   };
 
+  // Build a synthetic prompt from selected filters when the user hasn't typed anything
+  const buildPromptFromSelected = () => {
+    const labels = selected
+      .map((k) => FILTERS.find((f) => f.key === k)?.label)
+      .filter(Boolean)
+      .join(', ');
+    return labels ? `Filter by: ${labels}` : 'Find best matching candidates';
+  };
+
   return (
     <section className="card-glass relative overflow-hidden animate-rise-in" aria-labelledby="ai-assistant-title">
       {/* Ambient overlays */}
@@ -565,13 +585,14 @@ export default function ChatbotSection({
               </div>
             </div>
 
-            {/* Filter dropdown */}
+            {/* Filters trigger */}
             <div className="relative">
               <button
-                onClick={() => setMenuOpen((v) => !v)}
-                className="surface glass border border-border rounded-xl px-4 py-2 text-sm flex items-center gap-2 hover:shadow-glow"
-                aria-haspopup="menu"
+                onClick={() => setMenuOpen(true)}
+                className="btn btn-soft px-4 py-2 text-sm flex items-center gap-2"
+                aria-haspopup="dialog"
                 aria-expanded={menuOpen}
+                aria-controls="filters-flyout"
               >
                 <i className="ri-filter-3-line" />
                 Filters
@@ -581,56 +602,6 @@ export default function ChatbotSection({
                   </span>
                 )}
               </button>
-
-              {menuOpen && (
-                <div
-                  role="menu"
-                  className="absolute right-0 mt-2 w-64 rounded-2xl border border-border surface glass shadow-xl p-2 z-50 max-h-[70vh] flex flex-col"
-                >
-                  <div className="p-2 text-xs text-[hsl(var(--muted-foreground))]">Select one or more categories</div>
-
-                  {/* Scrollable list area */}
-                  <div
-                    className="divide-y divide-border/60 overflow-y-scroll flex-1 pr-1 scrollable-menu"
-                    style={{ scrollbarGutter: 'stable' }}
-                  >
-                    {FILTERS.map((f) => {
-                      const checked = selected.includes(f.key);
-                      return (
-                        <label
-                          key={f.key}
-                          className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-[hsl(var(--muted)/.35)] rounded-xl"
-                        >
-                          {/* custom checkbox */}
-                          <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleFilter(f.key)} />
-                          <span
-                            className={[
-                              'h-5 w-5 rounded-md border flex items-center justify-center transition',
-                              checked
-                                ? 'bg-[hsl(var(--primary))] border-[hsl(var(--primary))] text-white shadow-glow'
-                                : 'bg-transparent border-border text-transparent',
-                            ].join(' ')}
-                            aria-hidden="true"
-                          >
-                            <i className="ri-check-line text-[14px]" />
-                          </span>
-                          <i className={`${f.icon} text-[hsl(var(--muted-foreground))]`} />
-                          <span className="text-sm text-foreground">{f.label}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex items-center justify-between px-3 pt-2">
-                    <button onClick={() => setSelected([])} className="text-xs text-[hsl(var(--muted-foreground))] hover:text-foreground">
-                      Clear all
-                    </button>
-                    <button onClick={() => setMenuOpen(false)} className="btn btn-primary btn-sm">
-                      Done
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </header>
@@ -732,11 +703,121 @@ export default function ChatbotSection({
         </div>
       </div>
 
+      {/* Flyout Filters Panel (History-style) */}
+      {menuOpen && (
+        <div
+          id="filters-flyout"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="filters-title"
+          className="fixed inset-0 z-[1100]"
+        >
+          {/* Scrim */}
+          <div
+            className="absolute inset-0 bg-[hsl(var(--background)/.6)] backdrop-blur-sm"
+            onClick={() => setMenuOpen(false)}
+            aria-hidden="true"
+          />
+          {/* Panel */}
+          <aside className="absolute right-0 top-0 h-full w-full max-w-md card-glass border-l border-border shadow-soft">
+            <div className="h-full flex flex-col">
+              <header className="px-5 py-4 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <i className="ri-filter-3-line text-lg" />
+                  <h4 id="filters-title" className="text-base font-semibold">
+                    Filters
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="Close"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <i className="ri-close-line text-xl" />
+                </button>
+              </header>
+
+              {/* Scrollable content */}
+              <div
+                className="flex-1 overflow-y-auto p-2 scrollable-menu"
+                style={{ scrollbarGutter: 'stable' }}
+              >
+                <div className="grid gap-1">
+                  {FILTERS.map((f) => {
+                    const checked = selected.includes(f.key);
+                    return (
+                      <label
+                        key={f.key}
+                        className="flex items-center gap-3 px-3 py-3 rounded-xl surface glass border border-border hover:shadow-glow cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={checked}
+                          onChange={() => toggleFilter(f.key)}
+                        />
+                        <span
+                          className={[
+                            'h-5 w-5 rounded-md border flex items-center justify-center transition',
+                            checked
+                              ? 'bg-[hsl(var(--primary))] border-[hsl(var(--primary))] text-white shadow-glow'
+                              : 'bg-transparent border-border text-transparent',
+                          ].join(' ')}
+                          aria-hidden="true"
+                        >
+                          <i className="ri-check-line text-[14px]" />
+                        </span>
+                        <i className={`${f.icon} text-[hsl(var(--muted-foreground))]`} />
+                        <span className="text-sm text-foreground">{f.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Footer actions */}
+              <footer className="px-5 py-4 border-t border-border flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setSelected([])}
+                  className="btn btn-ghost text-sm"
+                >
+                  Clear all
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen(false)}
+                    className="btn btn-outline text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary text-sm"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      const promptToRun = inputValue.trim() || buildPromptFromSelected();
+                      // Start the search immediately when user clicks Done (spec)
+                      handleSubmit(promptToRun);
+                    }}
+                    disabled={isProcessing}
+                  >
+                    Done
+                  </button>
+                </div>
+              </footer>
+            </div>
+          </aside>
+        </div>
+      )}
+
       {/* Toast (auto-hide in ~3.2s) */}
       {toast.show && (
         <div
           className={[
-            'fixed bottom-6 right-6 z-50 rounded-xl px-5 py-4 shadow-xl border text-base font-medium',
+            'fixed bottom-6 right-6 z-[1200] rounded-xl px-5 py-4 shadow-xl border text-base font-medium',
             toast.tone === 'success'
               ? 'bg-[hsl(var(--success))] text-white border-transparent'
               : toast.tone === 'warning'
@@ -765,7 +846,7 @@ export default function ChatbotSection({
         </div>
       )}
 
-      {/* Local scrollbar styles (menu only) */}
+      {/* Local scrollbar styles (panel only) */}
       <style jsx>{`
         .scrollable-menu {
           scrollbar-width: thin; /* Firefox */

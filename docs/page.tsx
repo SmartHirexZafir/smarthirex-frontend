@@ -18,12 +18,24 @@ const API_BASE = (
 /* =========================
  * Types
  * ========================= */
+type GalleryImage = {
+  src: string;
+  alt?: string;
+  width?: number;
+  height?: number;
+  caption?: string;
+};
+
 type DocsData = {
   overview?: string;
   features?: string[];
   flows?: Array<{ name: string; steps: string[] }>;
   faq?: Array<{ q: string; a: string }>;
   notes?: string[];
+  // Optional images support (to satisfy “include images” requirement)
+  gallery?: GalleryImage[];
+  // Fallback alias if backend uses "images"
+  images?: GalleryImage[];
 };
 
 type Section =
@@ -35,7 +47,8 @@ type Section =
   | "data"
   | "auth"
   | "ui-theming"
-  | "faq";
+  | "faq"
+  | "gallery";
 
 /* =========================
  * Fallback content (from spec)
@@ -60,7 +73,7 @@ const DEFAULT_DOCS: DocsData = {
     "MongoDB as source of truth: no hardcoded values; fix nulls and normalization",
     "Scores: Prompt Matching Score and ML Confidence Score displayed where relevant",
     "History: Inline View Results (no jumping), correct Matching Score from Mongo; Send Test / Schedule Interview navigate directly",
-    "Candidate Profile: accurate data, open resume in browser, open tests from history",
+    "Candidate Profile: accurate data, open resume in browser, and test history links open",
     "Tests: score updates; one test type per candidate; randomized generation; custom tests instantly graded (MCQs) and LLM-graded for freeform",
     "Meetings: cannot schedule before test; fix 500 error; keep countdown & UI",
     "Dashboard: Accept/Reject flows, acceptance email, export, live stats (SSE ready)",
@@ -159,6 +172,8 @@ async function loadDocsData(): Promise<DocsData> {
     const res = await fetch(`${API_BASE}/static/usage_guide.json`, { cache: "no-store" });
     if (res.ok) {
       const json = (await res.json()) as DocsData;
+      // Normalize possible "images" alias to "gallery"
+      if (!json.gallery && Array.isArray(json.images)) json.gallery = json.images;
       return json || DEFAULT_DOCS;
     }
   } catch {
@@ -170,6 +185,7 @@ async function loadDocsData(): Promise<DocsData> {
     const res = await fetch(`${API_BASE}/docs/usage`, { cache: "no-store" });
     if (res.ok) {
       const json = (await res.json()) as DocsData;
+      if (!json.gallery && Array.isArray(json.images)) json.gallery = json.images;
       return json || DEFAULT_DOCS;
     }
   } catch {
@@ -182,7 +198,7 @@ async function loadDocsData(): Promise<DocsData> {
 /* =========================
  * Small UI helpers
  * ========================= */
-const SECTIONS: Array<{ id: Section; label: string; icon: string }> = [
+const BASE_SECTIONS: Array<{ id: Exclude<Section, "gallery">; label: string; icon: string }> = [
   { id: "overview", label: "Overview", icon: "ri-compass-3-line" },
   { id: "getting-started", label: "Getting Started", icon: "ri-rocket-2-line" },
   { id: "features", label: "Features", icon: "ri-list-check-2" },
@@ -247,6 +263,16 @@ export default function DocsPage() {
     return all.filter((f) => f.toLowerCase().includes(term));
   }, [docs.features, q]);
 
+  const hasGallery = Array.isArray(docs.gallery) && docs.gallery.length > 0;
+  const navSections = useMemo(() => {
+    return hasGallery
+      ? [
+          ...BASE_SECTIONS,
+          { id: "gallery" as const, label: "Gallery", icon: "ri-image-2-line" },
+        ]
+      : BASE_SECTIONS;
+  }, [hasGallery]);
+
   return (
     <div className="min-h-screen bg-background page-aurora">
       {/* Header */}
@@ -306,7 +332,7 @@ export default function DocsPage() {
             <div className="rounded-xl border border-border bg-card p-4 shadow-xl">
               <div className="text-sm font-semibold mb-3">On this page</div>
               <nav className="space-y-1">
-                {SECTIONS.map((s) => (
+                {navSections.map((s) => (
                   <a
                     key={s.id}
                     href={`#${s.id}`}
@@ -394,7 +420,7 @@ export default function DocsPage() {
                   key={f}
                   className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3"
                 >
-                  <i className="ri-checkbox-circle-line text-emerald-600 mt-0.5" />
+                  <i className="ri-checkbox-circle-line text-success mt-0.5" />
                   <span className="text-sm">{f}</span>
                 </div>
               ))}
@@ -543,6 +569,38 @@ if (!isPublicPath && !hasAuthCookie) {
               </div>
             )}
           </section>
+
+          {/* Gallery (images) */}
+          {hasGallery && (
+            <section className="rounded-2xl border border-border bg-card p-6 shadow-xl">
+              <Anchor id="gallery">Gallery</Anchor>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {docs.gallery!.map((img, i) => {
+                  const w = img.width || 1200;
+                  const h = img.height || 720;
+                  return (
+                    <figure
+                      key={`${img.src}-${i}`}
+                      className="overflow-hidden rounded-xl border border-border bg-background"
+                    >
+                      <Image
+                        src={img.src}
+                        alt={img.alt || "Documentation image"}
+                        width={w}
+                        height={h}
+                        className="h-auto w-full object-cover"
+                      />
+                      {img.caption && (
+                        <figcaption className="p-3 text-xs text-muted-foreground">
+                          {img.caption}
+                        </figcaption>
+                      )}
+                    </figure>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {/* API Examples (bonus) */}
           <section className="rounded-2xl border border-border bg-card p-6 shadow-xl">

@@ -86,9 +86,9 @@ function safeTotal(c: CandidateDoc): number | null {
 function statusPill(status?: string): string {
   switch ((status || '').toLowerCase()) {
     case 'accepted':
-      return 'bg-emerald-100 text-emerald-800';
+      return 'bg-success/15 text-success';
     case 'rejected':
-      return 'bg-red-100 text-red-800';
+      return 'bg-destructive/15 text-destructive';
     default:
       return 'bg-muted text-foreground';
   }
@@ -580,7 +580,7 @@ export default function StatusDashboard() {
                     {typeof c.score === 'number' ? (
                       <div className="flex items-center space-x-2">
                         <span className="text-lg font-semibold">{c.score}%</span>
-                        <i className="ri-star-line text-amber-500" />
+                        <i className="ri-star-line text-warning" />
                       </div>
                     ) : (
                       <span className="text-muted-foreground">—</span>
@@ -589,8 +589,8 @@ export default function StatusDashboard() {
                   <td className="px-4 py-4">
                     {typeof c.test_score === 'number' ? (
                       <div className="flex items-center space-x-2">
-                        <span className="text-lg font-semibold text-emerald-600">{c.test_score}%</span>
-                        <i className="ri-star-fill text-emerald-500" />
+                        <span className="text-lg font-semibold text-success">{c.test_score}%</span>
+                        <i className="ri-star-fill text-success" />
                       </div>
                     ) : (
                       <span className="text-muted-foreground">—</span>
@@ -635,7 +635,7 @@ export default function StatusDashboard() {
                         <button
                           type="button"
                           onClick={() => markStatus(c._id, 'accepted', true /* send acceptance email */)}
-                          className="rounded-lg p-2 text-emerald-700 transition-colors hover:bg-emerald-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="rounded-lg p-2 text-success transition-colors hover:bg-success/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           title="Accept (send acceptance email)"
                         >
                           <i className="ri-check-line" />
@@ -645,7 +645,7 @@ export default function StatusDashboard() {
                         <button
                           type="button"
                           onClick={() => markStatus(c._id, 'rejected')}
-                          className="rounded-lg p-2 text-red-700 transition-colors hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="rounded-lg p-2 text-destructive transition-colors hover:bg-destructive/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           title="Reject"
                         >
                           <i className="ri-close-line" />

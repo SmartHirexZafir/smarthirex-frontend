@@ -28,7 +28,7 @@ const PLANS: Plan[] = [
     tagline: "Get going with CV uploads and quick filtering.",
     monthly: 19,
     yearly: 15, // billed yearly (~20% off)
-    cta: { href: "/signup?plan=starter", label: "Get Started" , secondary: { href: "/login", label: "Sign in" } },
+    cta: { href: "/signup?plan=starter", label: "Get Started" },
     features: [
       "CV Upload & Parsing",
       "Prompt Matching Score",
@@ -44,7 +44,7 @@ const PLANS: Plan[] = [
     tagline: "Deeper search, tests, and better collaboration.",
     monthly: 49,
     yearly: 39,
-    cta: { href: "/signup?plan=pro", label: "Start Pro", secondary: { href: "/login", label: "Sign in" } },
+    cta: { href: "/signup?plan=pro", label: "Start Pro" },
     features: [
       "All Starter features",
       "Advanced Filters (Education, Skills, Projects, CV Phrasing)",
@@ -63,7 +63,7 @@ const PLANS: Plan[] = [
     tagline: "Scale up with automation and dashboards.",
     monthly: 129,
     yearly: 99,
-    cta: { href: "/signup?plan=business", label: "Start Business", secondary: { href: "/login", label: "Sign in" } },
+    cta: { href: "/signup?plan=business", label: "Start Business" },
     features: [
       "All Pro features",
       "Real-time Dashboard & Exports",
@@ -252,7 +252,7 @@ export default function PricingPage() {
                   <ul className="mt-2 space-y-2">
                     {plan.features.map((f) => (
                       <li key={f} className="flex items-start gap-2 text-sm">
-                        <i className="ri-checkbox-circle-line mt-0.5 text-emerald-600" />
+                        <i className="ri-checkbox-circle-line mt-0.5 text-success" />
                         <span className="text-foreground/90">{f}</span>
                       </li>
                     ))}
@@ -298,7 +298,7 @@ export default function PricingPage() {
                       return (
                         <td key={p.id} className="py-3 px-4">
                           {included ? (
-                            <span className="inline-flex items-center text-emerald-600">
+                            <span className="inline-flex items-center text-success">
                               <i className="ri-checkbox-circle-line mr-1" />
                               <span className="sr-only">Included</span>
                             </span>

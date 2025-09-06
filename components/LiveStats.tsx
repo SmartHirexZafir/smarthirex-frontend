@@ -135,29 +135,29 @@ export default function LiveStats() {
             isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
-          <div className="inline-flex items-center px-4 py-2 rounded-full ring-1 ring-border bg-white/10 text-white/90 text-sm font-medium mb-6 gap-2">
+          <div className="inline-flex items-center px-4 py-2 rounded-full ring-1 ring-border bg-[hsl(var(--muted)/.5)] text-foreground text-sm font-medium mb-6 gap-2">
             <i className="ri-pulse-line" aria-hidden="true"></i>
             <span>Live Activity Dashboard</span>
           </div>
 
-          <h2 className="text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">
+          <h2 className="text-4xl md:text-5xl font-extrabold text-foreground mb-4 tracking-tight">
             Real-Time <span className="gradient-text">Hiring Analytics</span>
           </h2>
 
-          <p className="text-lg md:text-xl text-white/80 max-w-3xl mx-auto">
+          <p className="text-lg md:text-xl text-[hsl(var(--muted-foreground))] max-w-3xl mx-auto">
             Watch our AI platform work in real time as companies worldwide discover their perfect candidates.
           </p>
         </div>
 
-        {/* Stats Boxes (use global panel primitives; no local custom classes) */}
+        {/* Stats Boxes (use global panel primitives; theme-safe in light/dark) */}
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8">
           {items.map((item, idx) => (
             <div
               key={idx}
               className={`
                 panel rounded-2xl p-7 text-center ring-1 ring-border shadow-soft
-                bg-white/10 backdrop-blur-md
-                transform transition-all duration-1000 hover:scale-[1.025] hover:bg-white/15
+                bg-[hsl(var(--card)/.85)] dark:bg-white/10 backdrop-blur-md
+                transform transition-all duration-1000 hover:scale-[1.025] hover:bg-[hsl(var(--card))]
                 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
               `}
               style={{ transitionDelay: item.delay }}
@@ -171,14 +171,14 @@ export default function LiveStats() {
                 <i className={`${item.icon} text-2xl ${toneFg[item.tone]}`} />
               </div>
 
-              <div className="text-4xl font-bold text-white mb-1" aria-live="polite">
+              <div className="text-4xl font-bold text-foreground mb-1" aria-live="polite">
                 <AnimatedCounter value={item.value} />
               </div>
-              <div className="text-white/80 text-xs uppercase tracking-wider">{item.label}</div>
+              <div className="text-[hsl(var(--muted-foreground))] text-xs uppercase tracking-wider">{item.label}</div>
 
               <div className="mt-4 flex items-center justify-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[hsl(var(--success))] animate-pulse" aria-hidden="true" />
-                <span className="text-white/80 text-xs">Live</span>
+                <span className="text-[hsl(var(--muted-foreground))] text-xs">Live</span>
               </div>
             </div>
           ))}
@@ -188,7 +188,7 @@ export default function LiveStats() {
         <div
           className={`
             mt-16 panel rounded-2xl p-6 md:p-8 ring-1 ring-border shadow-soft
-            bg-white/10 backdrop-blur-md
+            bg-[hsl(var(--card)/.85)] dark:bg-white/10 backdrop-blur-md
             transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
           `}
           style={{ transitionDelay: '0.5s' }}
@@ -196,26 +196,26 @@ export default function LiveStats() {
           aria-label="Live activity feed"
         >
           <div className="text-center mb-6">
-            <h3 className="text-2xl font-bold text-white mb-1">Live Activity Feed</h3>
-            <p className="text-white/80">Real-time updates from the Smart HireX platform</p>
+            <h3 className="text-2xl font-bold text-foreground mb-1">Live Activity Feed</h3>
+            <p className="text-[hsl(var(--muted-foreground))]">Real-time updates from the Smart HireX platform</p>
           </div>
 
           <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
             {feed.map((row, index) => (
               <div
                 key={index}
-                className="flex items-center gap-4 p-4 rounded-xl bg-white/10 hover:bg-white/15 transition-colors"
+                className="flex items-center gap-4 p-4 rounded-xl bg-[hsl(var(--muted)/.35)] hover:bg-[hsl(var(--muted)/.5)] transition-colors"
               >
                 <div className={`w-10 h-10 rounded-full grid place-items-center ${toneBg[row.tone]}`}>
                   <i className={`${row.icon} ${toneFg[row.tone]} text-lg`} aria-hidden="true" />
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <div className="text-white font-medium truncate">{row.action}</div>
-                  <div className="text-white/80 text-sm truncate">{row.company}</div>
+                  <div className="text-foreground font-medium truncate">{row.action}</div>
+                  <div className="text-[hsl(var(--muted-foreground))] text-sm truncate">{row.company}</div>
                 </div>
 
-                <div className="text-white/80 text-sm shrink-0">{row.time}</div>
+                <div className="text-[hsl(var(--muted-foreground))] text-sm shrink-0">{row.time}</div>
               </div>
             ))}
           </div>

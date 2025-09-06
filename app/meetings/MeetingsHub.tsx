@@ -292,7 +292,7 @@ export default function MeetingsHub() {
                 </>
               ) : (
                 <>
-                  <i className="ri-check-line mr-1 text-emerald-600" />
+                  <i className="ri-check-line mr-1 text-success" />
                   Candidate{" "}
                   <span className="font-medium text-foreground">{candidateId}</span>{" "}
                   is eligible for scheduling.

@@ -19,7 +19,7 @@ const PROTECTED_PREFIXES = [
   "/upload",
   "/history",
   "/candidate",
-  "/test",
+  "/test",        // Note: token links (/test/[token]) are carved out below as public
   "/meetings",
   "/dashboard",
   "/profile",
@@ -31,6 +31,12 @@ const AUTH_COOKIE_CANDIDATES = ["AUTH_TOKEN", "token", "authToken", "access_toke
 /** Global theme name for Neon Eclipse (data-theme). */
 const THEME_NAME = "neon-eclipse";
 
+/** Recognize the public test token route: /test/<token> (single slug) */
+function isTestTokenPath(pathname: string): boolean {
+  // exactly "/test/<something>" with no further segments
+  return /^\/test\/[^/]+$/.test(pathname);
+}
+
 /** Returns true if URL path is public. */
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_ROUTES.has(pathname)) return true;
@@ -38,11 +44,15 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/docs/")) return true;
   if (pathname.startsWith("/features/")) return true;
   if (pathname.startsWith("/pricing/")) return true;
+  // Allow emailed test links without requiring app auth
+  if (isTestTokenPath(pathname)) return true;
   return false;
 }
 
 /** Returns true if URL path matches a protected prefix. */
 function isProtectedPath(pathname: string): boolean {
+  // /test/<token> is public; other /test routes remain protected
+  if (isTestTokenPath(pathname)) return false;
   return PROTECTED_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
 }
 

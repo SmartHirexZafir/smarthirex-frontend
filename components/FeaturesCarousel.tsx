@@ -44,38 +44,43 @@ export default function FeaturesCarousel() {
     },
   ];
 
+  // Map feature title -> local /public image path (provided)
+  const localImgMap: Record<string, string> = {
+    'AI Resume Screening': '/resume_screening.png',
+    'Smart Candidate Matching': '/candidate_matching.png',
+    'Automated Interview Scheduling': '/scheduling.png',
+    'Intelligent Test Generation': '/intelligent_test_generation.png',
+    // You specified the same image for Real-time Analytics
+    'Real-time Analytics': '/analysis.png',
+  };
+
   // Map tone -> gradient + soft background using design tokens
   const toneStyles: Record<
     string,
     { grad: string; soft: string; iconFg: string }
   > = {
     info: {
-      grad:
-        'from-[hsl(var(--info))] to-[hsl(var(--primary))]',
+      grad: 'from-[hsl(var(--info))] to-[hsl(var(--primary))]',
       soft: 'bg-[hsl(var(--info)/0.08)]',
       iconFg: 'text-[hsl(var(--info))]',
     },
     accent: {
-      grad:
-        'from-[hsl(var(--accent))] to-[hsl(var(--primary))]',
+      grad: 'from-[hsl(var(--accent))] to-[hsl(var(--primary))]',
       soft: 'bg-[hsl(var(--accent)/0.08)]',
       iconFg: 'text-[hsl(var(--accent))]',
     },
     success: {
-      grad:
-        'from-[hsl(var(--success))] to-[hsl(var(--primary))]',
+      grad: 'from-[hsl(var(--success))] to-[hsl(var(--primary))]',
       soft: 'bg-[hsl(var(--success)/0.08)]',
       iconFg: 'text-[hsl(var(--success))]',
     },
     warning: {
-      grad:
-        'from-[hsl(var(--warning))] to-[hsl(var(--accent))]',
+      grad: 'from-[hsl(var(--warning))] to-[hsl(var(--accent))]',
       soft: 'bg-[hsl(var(--warning)/0.10)]',
       iconFg: 'text-[hsl(var(--warning))]',
     },
     secondary: {
-      grad:
-        'from-[hsl(var(--secondary))] to-[hsl(var(--accent))]',
+      grad: 'from-[hsl(var(--secondary))] to-[hsl(var(--accent))]',
       soft: 'bg-[hsl(var(--secondary)/0.10)]',
       iconFg: 'text-[hsl(var(--secondary))]',
     },
@@ -93,7 +98,7 @@ export default function FeaturesCarousel() {
       <div className="container">
         {/* Section Heading */}
         <div className="text-center mb-16">
-          <div className="inline-flex items-center px-4 py-2 rounded-full glass text-[hsl(var(--muted-foreground))] text-sm font-medium mb-6 gap-2">
+          <div className="inline-flex items-center px-4 py-2 rounded-full bg-[hsl(var(--muted)/.5)] ring-1 ring-border text-foreground text-sm font-medium mb-6 gap-2">
             <i className="ri-magic-line" aria-hidden="true"></i>
             <span>Why Choose SmartHirex?</span>
           </div>
@@ -107,7 +112,7 @@ export default function FeaturesCarousel() {
 
         <div className="relative">
           {/* Main Carousel */}
-          <div className="overflow-hidden rounded-3xl glass-strong ring-1 ring-border shadow-soft">
+          <div className="overflow-hidden rounded-3xl panel ring-1 ring-border shadow-soft">
             <div
               className="flex transition-transform duration-700 ease-lux"
               style={{ transform: `translateX(-${currentSlide * 100}%)` }}
@@ -115,10 +120,7 @@ export default function FeaturesCarousel() {
             >
               {features.map((feature, index) => {
                 const tone = toneStyles[feature.tone];
-                const query = encodeURIComponent(
-                  `modern professional ${feature.title.toLowerCase()} interface dashboard showing AI powered recruitment technology, sleek business software design with charts and data visualization, clean modern workspace with holographic displays, futuristic HR management system interface, professional technology platform with gradient backgrounds, advanced artificial intelligence hiring tools visualization, sophisticated recruitment analytics dashboard`
-                );
-                const imgSrc = `https://readdy.ai/api/search-image?query=${query}&width=600&height=400&seq=feature-carousel-${index}&orientation=landscape`;
+                const imgSrc = localImgMap[feature.title] || '/Hero_section.png';
 
                 return (
                   <div key={index} className={`w-full flex-shrink-0 ${tone.soft} p-10 md:p-14`}>

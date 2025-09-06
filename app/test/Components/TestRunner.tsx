@@ -416,7 +416,7 @@ export default function TestRunner({
       )}
 
       {safeQuestions.length === 0 && (
-        <div className="rounded-lg border border-amber-300/50 bg-amber-100/30 px-3 py-2 text-sm text-foreground">
+        <div className="rounded-lg border border-warning/35 bg-warning/15 px-3 py-2 text-sm text-foreground">
           No questions were generated. You can still submit or go back.
         </div>
       )}

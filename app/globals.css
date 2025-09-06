@@ -177,6 +177,16 @@
     color: hsl(var(--foreground));
   }
 
+  /* Ensure inline SVGs inherit theme color (prevents invisible icons in light mode) */
+  svg:not([data-fixed-color]) { color: currentColor; }
+  svg:not([data-fixed-color]) path[fill]:not([fill="none"]),
+  svg:not([data-fixed-color]) polygon[fill]:not([fill="none"]),
+  svg:not([data-fixed-color]) rect[fill]:not([fill="none"]) { fill: currentColor; }
+  svg:not([data-fixed-color]) path[stroke],
+  svg:not([data-fixed-color]) circle[stroke],
+  svg:not([data-fixed-color]) line[stroke],
+  svg:not([data-fixed-color]) polyline[stroke] { stroke: currentColor; }
+
   /* Form element base styles (keeps appearance consistent when component classes are not used) */
   input, textarea, select {
     color: hsl(var(--foreground));
@@ -249,6 +259,14 @@
 
   /* Scroll-area utility used in filters & any long lists */
   .scroll-area { max-height: var(--scroll-max, 70vh); overflow-y: auto; overscroll-behavior: contain; }
+
+  /* Image helpers for theme contrast (logos/icons that vanish in one theme) */
+  .invert-on-dark { filter: none; }
+  .light .invert-on-dark { filter: none; } /* visible on light */
+  :root:not(.light) .invert-on-dark { filter: invert(1) hue-rotate(180deg) saturate(1.2); }
+
+  .invert-on-light { filter: none; }
+  .light .invert-on-light { filter: invert(1) hue-rotate(180deg) saturate(1.2); }
 }
 
 /* ---------------- Components (global-only UI primitives) ---------------- */
@@ -277,13 +295,36 @@
   .btn-ghost   { @apply btn bg-transparent text-foreground hover:bg-muted/30; }
   .btn-soft    { @apply btn bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted)/.85)]; }
 
-  /* OAuth: Google button (brand colors) */
+  /* OAuth: Google button (brand-friendly, prettier) */
   .btn-google {
-    @apply btn text-white;
+    @apply btn;
+    /* Dual-layer background: solid fill + rainbow border ring */
     background:
-      conic-gradient(from 220deg, #4285F4, #DB4437, #F4B400, #0F9D58, #4285F4);
+      linear-gradient(#ffffff, #ffffff) padding-box,
+      conic-gradient(from 220deg, #4285F4, #DB4437, #F4B400, #0F9D58, #4285F4) border-box;
+    border: 2px solid transparent;
+    color: #1f1f1f; /* readable on white */
+    box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 6px 16px rgba(0,0,0,.10);
   }
-  .btn-google:hover { filter: saturate(1.1); }
+  .btn-google:hover {
+    transform: translateY(-1px);
+    background:
+      linear-gradient(#ffffff, #f7f7f7) padding-box,
+      conic-gradient(from 220deg, #4285F4, #DB4437, #F4B400, #0F9D58, #4285F4) border-box;
+    box-shadow: 0 4px 24px rgba(0,0,0,.16);
+    filter: none; /* override previous saturate */
+  }
+  .btn-google:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 12px rgba(0,0,0,.14);
+  }
+  /* Dark theme variant: keep the colorful border, use card fill for harmony */
+  .dark .btn-google {
+    background:
+      linear-gradient(hsl(var(--card)), hsl(var(--card))) padding-box,
+      conic-gradient(from 220deg, #4285F4, #DB4437, #F4B400, #0F9D58, #4285F4) border-box;
+    color: hsl(var(--foreground));
+  }
 
   /* Icon button */
   .icon-btn { @apply inline-flex h-10 w-10 items-center justify-center rounded-full btn-outline; }
@@ -320,7 +361,7 @@
   }
 
   /* Nav */
-  .nav { @apply sticky top-0 backdrop-blur-2xl bg-[hsl(var(--background)/.6)] border-b border-white/10; z-index: var(--z-nav); }
+  .nav { @apply sticky top-0 backdrop-blur-2xl bg-[hsl(var(--background)/.6)] border-b border-border; z-index: var(--z-nav); }
   .nav-item { @apply text-sm text-[hsl(var(--muted-foreground))] hover:text-foreground transition-colors; }
 
   /* Tabs */
@@ -330,7 +371,7 @@
 
   /* Footer (single, shared sitewide) */
   .site-footer {
-    @apply border-t border-white/10 bg-[hsl(var(--background)/.6)] backdrop-blur-xl;
+    @apply border-t border-border bg-[hsl(var(--background)/.6)] backdrop-blur-xl;
     color: hsl(var(--muted-foreground));
   }
   .site-footer a { color: hsl(var(--secondary)); }
@@ -338,6 +379,36 @@
 
   /* Container helper for consistent gutters */
   .app-container { @apply mx-auto w-full px-4 sm:px-6 lg:px-8; max-width: 1200px; }
+
+  /* === NEW: Docs/Markdown styling (.prose) for Docs/Features/Pricing pages === */
+  .prose {
+    @apply text-foreground leading-7;
+    max-width: 72ch;
+  }
+  .prose h1 { @apply font-bold mb-4; font-size: var(--step-4); }
+  .prose h2 { @apply font-semibold mt-8 mb-3; font-size: var(--step-3); }
+  .prose h3 { @apply font-semibold mt-6 mb-2; font-size: var(--step-2); }
+  .prose p  { @apply my-4 text-[hsl(var(--foreground))]; }
+  .prose a  { @apply underline; color: hsl(var(--secondary)); }
+  .prose a:hover { color: hsl(var(--primary)); }
+  .prose ul, .prose ol { @apply my-4 pl-6; }
+  .prose li { @apply my-1; }
+  .prose code {
+    @apply rounded-md px-1.5 py-0.5 text-sm;
+    background: hsl(var(--muted));
+    color: hsl(var(--muted-foreground));
+  }
+  .prose pre {
+    @apply p-4 rounded-xl overflow-auto;
+    background: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+    border: 1px solid hsl(var(--border));
+  }
+  .prose img, .prose video {
+    @apply rounded-xl my-4 ring-1 ring-border;
+    max-width: 100%;
+    height: auto;
+  }
 }
 
 /* ===== Extra animations & loaders (used globally) ===== */

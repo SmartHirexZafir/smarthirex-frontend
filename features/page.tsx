@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 /* =========================
  *  Types
@@ -265,13 +266,13 @@ export default function FeaturesPage() {
         <div className="max-w-7xl mx-auto px-6 md:px-8 py-6">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <a
+              <Link
                 href="/"
                 className="p-2 rounded-lg transition-colors text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label="Go home"
               >
                 <i className="ri-arrow-left-line text-xl" />
-              </a>
+              </Link>
               <div>
                 <h1 className="text-2xl font-bold text-foreground flex items-center">
                   <i className="ri-sparkling-2-line mr-3 text-foreground/80" />
@@ -284,20 +285,20 @@ export default function FeaturesPage() {
             </div>
 
             <div className="hidden md:flex items-center gap-2">
-              <a
+              <Link
                 href="/pricing"
                 className="px-4 py-2 rounded-lg border border-input text-foreground hover:bg-muted/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <i className="ri-price-tag-3-line mr-2" />
                 Pricing
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/docs"
                 className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <i className="ri-book-open-line mr-2" />
                 Docs
-              </a>
+              </Link>
             </div>
           </div>
         </div>

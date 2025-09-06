@@ -8,8 +8,9 @@ import Testimonials from '../components/Testimonials';
 
 export default function Home() {
   return (
-    // Single footer is rendered globally in layout.tsx — do not duplicate locally
-    <div className="min-h-screen bg-transparent">
+    // Footer is rendered globally in layout.tsx.
+    // Avoid min-h-screen here so the global footer remains visible without extra scroll.
+    <div className="bg-transparent">
       <Hero />
       <FeaturesCarousel />
       <LiveStats />

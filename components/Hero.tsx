@@ -65,14 +65,6 @@ export default function Hero() {
               </Link>
             </div>
 
-            {/* Login hint lives here (landing keeps no standalone Login button) */}
-            <div className="text-sm text-muted-foreground">
-              Already have an account?{" "}
-              <Link href="/login" className="underline hover:text-foreground">
-                Log in
-              </Link>
-            </div>
-
             {/* Stats */}
             <div className="grid grid-cols-3 gap-6 pt-8 border-t border-border mt-8">
               <div className="text-center">
@@ -110,7 +102,7 @@ export default function Hero() {
               <div className="relative rounded-3xl overflow-hidden gradient-border shadow-soft ring-1 ring-border">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="https://readdy.ai/api/search-image?query=modern%20AI%20recruitment%20dashboard%20with%20holographic%20interface%20displaying%20candidate%20profiles%20and%20analytics%2C%20futuristic%20HR%20technology%20workspace%20with%20floating%20data%20visualizations%2C%20sleek%20professional%20business%20environment%20with%20digital%20screens%20showing%20resume%20analysis%2C%20advanced%20artificial%20intelligence%20hiring%20platform%20interface%2C%20clean%20modern%20office%20setting%20with%20blue%20and%20purple%20ambient%20lighting%2C%20sophisticated%20recruitment%20technology%20visualization%2C%20professional%20AI%20powered%20hiring%20dashboard%2C%20cutting-edge%20HR%20management%20system%20interface&width=800&height=600&seq=hero-redesign-001&orientation=landscape"
+                  src="/Hero_section.png"
                   alt="Smart HireX AI Platform preview"
                   className="relative w-full h-auto rounded-3xl"
                   loading="eager"
@@ -124,30 +116,18 @@ export default function Hero() {
                 className="absolute -top-8 -left-8 rounded-2xl p-5 panel shadow-soft ring-1 ring-border"
                 aria-hidden="true"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full grid place-items-center bg-[hsl(var(--success)/0.16)]">
-                    <i className="ri-check-line text-[hsl(var(--success))]" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">98% Match Found</div>
-                    <div className="text-xs text-[hsl(var(--muted-foreground))]">React Developer</div>
-                  </div>
-                </div>
               </div>
 
               <div
                 className="absolute -bottom-8 -right-8 rounded-2xl p-5 panel shadow-soft ring-1 ring-border"
                 aria-hidden="true"
               >
-                <div className="flex items-center gap-3">
+                {/* <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full grid place-items-center bg-[hsl(var(--info)/0.16)]">
                     <i className="ri-time-line text-[hsl(var(--info))]" />
                   </div>
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">5 Min Saved</div>
-                    <div className="text-xs text-[hsl(var(--muted-foreground))]">Per Resume</div>
-                  </div>
-                </div>
+                
+                </div> */}
               </div>
             </div>
           </div>

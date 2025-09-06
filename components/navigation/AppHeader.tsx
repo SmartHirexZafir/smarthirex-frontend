@@ -40,13 +40,13 @@ export default function AppHeader() {
             aria-label="Primary"
             className="hidden md:flex items-center justify-center gap-8"
           >
-            <Link className="nav-item" href="/features">
+            <Link className="nav-item" href="/features/page">
               Features
             </Link>
-            <Link className="nav-item" href="/pricing">
+            <Link className="nav-item" href="/pricing/page">
               Pricing
             </Link>
-            <Link className="nav-item" href="/docs">
+            <Link className="nav-item" href="/docs/page">
               Docs
             </Link>
           </nav>
@@ -54,9 +54,6 @@ export default function AppHeader() {
           {/* Actions (global-only UI classes; theme toggle stays) */}
           <div className="flex items-center justify-end gap-2">
             <ThemeToggle />
-            <Link className="btn btn-outline hidden sm:inline-flex" href="/login">
-              Log in
-            </Link>
             <Link className="btn btn-primary" href="/signup">
               <span>Get Started</span>
             </Link>
@@ -117,13 +114,6 @@ export default function AppHeader() {
                 Docs
               </Link>
               <div className="h-px my-1 bg-border" />
-              <Link
-                className="px-4 py-3 rounded-xl hover:bg-muted/40"
-                href="/login"
-                onClick={() => setOpen(false)}
-              >
-                Log in
-              </Link>
               <Link
                 className="px-4 py-3 rounded-xl hover:bg-muted/40"
                 href="/signup"

@@ -4,14 +4,19 @@ import Link from 'next/link';
 
 export default function Footer() {
   return (
-    <footer className="relative overflow-hidden text-foreground bg-gradient-to-br from-[hsl(var(--card))] via-[hsl(var(--card))] to-[hsl(var(--card))]">
+    <footer
+      className="site-footer full-bleed relative overflow-hidden text-foreground bg-gradient-to-br from-[hsl(var(--card))] via-[hsl(var(--card))] to-[hsl(var(--card))]"
+      role="contentinfo"
+    >
       {/* Subtle dotted pattern (decorative) */}
-      <div className="absolute inset-0 opacity-[0.06] pointer-events-none" aria-hidden="true">
+      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
         <div
           className="absolute inset-0"
           style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%23ffffff' fill-opacity='0.9'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-            backgroundSize: '60px 60px',
+            /* Use theme-aware grid color so it's visible in both light/dark */
+            backgroundImage:
+              'radial-gradient(circle, hsl(var(--grid) / 0.28) 1px, transparent 1.6px)',
+            backgroundSize: '26px 26px',
           }}
         />
       </div>

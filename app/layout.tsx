@@ -21,6 +21,9 @@ import Toaster from "@/components/system/Toaster";
 import RouteLoader from "@/components/system/RouteLoader";
 import LoaderOverlay from "@/components/system/LoaderOverlay";
 
+// NEW: app-wide error isolation (added because ErrorBoundary.tsx is new)
+import ErrorBoundary from "@/components/system/ErrorBoundary";
+
 import { Suspense } from "react";
 
 /** Google fonts (expose as CSS variables used by Tailwind & globals.css) */
@@ -75,16 +78,25 @@ export const viewport: Viewport = {
   ],
 };
 
-/** No-FOUC theme setter — runs before paint.
- *  Global-only theming: default is Dark (Neon Eclipse); add `light` class to <html> for Light.
+/**
+ * No-FOUC theme setter — runs before paint.
+ * Global-only theming:
+ * - Default is Dark (Neon Eclipse) and we keep the `dark` class for Tailwind `dark:` variants.
+ * - Light adds `light` class and removes `dark` so light-mode contrast is correct.
  */
 const themeScript = `
   try {
     const stored = localStorage.getItem("theme");
     const prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
-    const desired = stored || (prefersLight ? "light" : "dark");
+    const desired = (stored || (prefersLight ? "light" : "dark")).toLowerCase();
     const el = document.documentElement;
-    if (desired === "light") el.classList.add("light"); else el.classList.remove("light");
+    if (desired === "light") {
+      el.classList.add("light");
+      el.classList.remove("dark");
+    } else {
+      el.classList.add("dark");
+      el.classList.remove("light");
+    }
   } catch {}
 `;
 
@@ -93,7 +105,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${plexMono.variable}`}
+      // Keep `dark` by default so legacy `dark:` utilities work; themeScript will flip if needed
+      className={`dark ${inter.variable} ${plexMono.variable}`}
     >
       <head>
         {/* Preconnect for faster font fetch */}
@@ -127,7 +140,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
           {/* Main content area (flex-1 keeps the single Footer stuck to bottom across all pages) */}
           <main id="main" className="flex-1 w-full">
-            <Suspense fallback={<LoaderOverlay fullscreen />}>{children}</Suspense>
+            <ErrorBoundary fallback={<LoaderOverlay fullscreen />}>
+              <Suspense fallback={<LoaderOverlay fullscreen />}>{children}</Suspense>
+            </ErrorBoundary>
           </main>
         </Toaster>
 

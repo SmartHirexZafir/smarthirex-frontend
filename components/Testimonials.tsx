@@ -1,3 +1,4 @@
+// components/Testimonials.tsx
 'use client';
 
 import Link from 'next/link';
@@ -83,7 +84,7 @@ export default function Testimonials() {
         </div>
 
         {/* Stats + CTA banner */}
-        <div className="rounded-2xl p-10 md:p-12 text-center text-white relative overflow-hidden">
+        <div className="rounded-2xl p-10 md:p-12 text-center relative overflow-hidden">
           {/* gradient background */}
           <div
             className="absolute inset-0 -z-10 rounded-2xl bg-gradient-to-r from-[hsl(var(--primary))] to-[hsl(var(--accent))]"
@@ -92,7 +93,7 @@ export default function Testimonials() {
           {/* soft glow */}
           <div className="absolute -inset-6 -z-10 blur-3xl opacity-30 gradient-ink" aria-hidden="true" />
 
-          <h3 className="text-2xl md:text-3xl font-bold mb-8 tracking-tight">
+          <h3 className="text-2xl md:text-3xl font-bold mb-8 tracking-tight text-primary-foreground">
             Join the Future of Recruitment
           </h3>
 
@@ -100,7 +101,7 @@ export default function Testimonials() {
             {stats.map((s, index) => (
               <div key={index} className="text-center">
                 <div className="text-3xl md:text-4xl font-bold mb-1 gradient-text">{s.number}</div>
-                <div className="text-white/80">{s.label}</div>
+                <div className="text-[hsl(var(--primary-foreground)/.8)]">{s.label}</div>
               </div>
             ))}
           </div>

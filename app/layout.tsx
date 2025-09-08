@@ -69,6 +69,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   colorScheme: "dark light",
+  // Align with the Neon Eclipse palette (dark background ≈ hsl(235,28%,7%))
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
     { media: "(prefers-color-scheme: dark)", color: "#050810" },
@@ -100,6 +101,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script id="theme-script" dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
 
+      {/* Global-only UI: rely on globals.css tokens; keep one background source */}
       <body className="min-h-screen flex flex-col page-aurora">
         {/* a11y skip link */}
         <a
@@ -129,7 +131,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </main>
         </Toaster>
 
-        {/* Footer everywhere */}
+        {/* Footer everywhere (single global footer) */}
         <Footer />
       </body>
     </html>

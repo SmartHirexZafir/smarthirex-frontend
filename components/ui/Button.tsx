@@ -1,7 +1,7 @@
 import { ButtonHTMLAttributes, forwardRef } from "react";
 import { cn } from "../../lib/util";
 
-type Variant = "primary" | "secondary" | "outline" | "ghost" | "soft" | "destructive";
+type Variant = "primary" | "secondary" | "outline" | "ghost" | "soft" | "destructive" | "google";
 type Size = "sm" | "md" | "lg" | "icon";
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -18,6 +18,7 @@ const variants: Record<Variant, string> = {
   ghost: "btn-ghost",
   soft: "btn-soft",
   destructive: "btn-destructive",
+  google: "btn-google",
 };
 const sizes: Record<Size, string> = {
   sm: "px-4 py-2 text-sm",

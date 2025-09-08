@@ -569,7 +569,7 @@ export default function ChatbotSection({
             <div className="relative">
               <button
                 onClick={() => setMenuOpen((v) => !v)}
-                className="surface glass border border-border rounded-xl px-4 py-2 text-sm flex items-center gap-2 hover:shadow-glow"
+                className="btn btn-outline flex items-center gap-2"
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
               >
@@ -622,7 +622,7 @@ export default function ChatbotSection({
                   </div>
 
                   <div className="flex items-center justify-between px-3 pt-2">
-                    <button onClick={() => setSelected([])} className="text-xs text-[hsl(var(--muted-foreground))] hover:text-foreground">
+                    <button onClick={() => setSelected([])} className="btn btn-ghost btn-xs">
                       Clear all
                     </button>
                     <button onClick={() => setMenuOpen(false)} className="btn btn-primary btn-sm">
@@ -764,27 +764,6 @@ export default function ChatbotSection({
           </div>
         </div>
       )}
-
-      {/* Local scrollbar styles (menu only) */}
-      <style jsx>{`
-        .scrollable-menu {
-          scrollbar-width: thin; /* Firefox */
-          scrollbar-color: hsl(var(--muted-foreground) / 0.6) transparent; /* Firefox */
-        }
-        .scrollable-menu::-webkit-scrollbar {
-          width: 8px; /* WebKit */
-        }
-        .scrollable-menu::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .scrollable-menu::-webkit-scrollbar-thumb {
-          background: hsl(var(--muted-foreground) / 0.4);
-          border-radius: 9999px;
-        }
-        .scrollable-menu:hover::-webkit-scrollbar-thumb {
-          background: hsl(var(--muted-foreground) / 0.6);
-        }
-      `}</style>
     </section>
   );
 }

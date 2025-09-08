@@ -1,42 +1,21 @@
 'use client';
 
 import Link from 'next/link';
+import Logo from '@/components/ui/Logo';
 
 export default function Footer() {
   return (
-    <footer className="relative overflow-hidden text-foreground bg-gradient-to-br from-[hsl(var(--card))] via-[hsl(var(--card))] to-[hsl(var(--card))]">
-      {/* Subtle dotted pattern (decorative) */}
-      <div className="absolute inset-0 opacity-[0.06] pointer-events-none" aria-hidden="true">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%23ffffff' fill-opacity='0.9'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-            backgroundSize: '60px 60px',
-          }}
-        />
-      </div>
-
-      {/* Soft gradient glows */}
-      <div className="absolute inset-0" aria-hidden="true">
-        <div className="absolute top-0 left-0 w-96 h-96 rounded-full blur-3xl opacity-[0.15] bg-[hsl(var(--primary))] mix-blend-screen" />
-        <div className="absolute bottom-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-[0.15] bg-[hsl(var(--secondary))] mix-blend-screen" />
-      </div>
-
-      <div className="relative container">
+    <footer className="relative text-foreground bg-card">
+      <div className="container">
         {/* Main Footer Content */}
         <div className="py-16 grid md:grid-cols-2 lg:grid-cols-5 gap-10 lg:gap-12">
           {/* Brand Section */}
           <div className="lg:col-span-2">
             <Link href="/" className="inline-flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 rounded-xl grid place-items-center shadow-soft bg-gradient-to-r from-[hsl(var(--primary))] to-[hsl(var(--secondary))] text-white">
-                <i className="ri-brain-line text-xl" />
-              </div>
-              <span className="text-3xl font-bold tracking-tight gradient-text">
-                SmartHirex
-              </span>
+              <Logo />
             </Link>
 
-            <p className="text-[hsl(var(--muted-foreground))] text-base md:text-lg mb-8 max-w-md leading-relaxed">
+            <p className="text-muted-foreground text-base md:text-lg mb-8 max-w-md leading-relaxed">
               Revolutionizing recruitment with AI-powered solutions that help companies find, evaluate,
               and hire the best talent faster than ever before.
             </p>
@@ -45,7 +24,7 @@ export default function Footer() {
             <div className="flex gap-3">
               <a
                 href="#"
-                className="w-11 h-11 rounded-xl grid place-items-center ring-1 ring-border glass hover:bg-background/70 transition-all"
+                className="nav-item w-11 h-11 rounded-xl grid place-items-center ring-1 ring-border hover:bg-muted/40 transition-all"
                 aria-label="Open Twitter"
                 title="Twitter"
               >
@@ -53,7 +32,7 @@ export default function Footer() {
               </a>
               <a
                 href="#"
-                className="w-11 h-11 rounded-xl grid place-items-center ring-1 ring-border glass hover:bg-background/70 transition-all"
+                className="nav-item w-11 h-11 rounded-xl grid place-items-center ring-1 ring-border hover:bg-muted/40 transition-all"
                 aria-label="Open LinkedIn"
                 title="LinkedIn"
               >
@@ -61,7 +40,7 @@ export default function Footer() {
               </a>
               <a
                 href="#"
-                className="w-11 h-11 rounded-xl grid place-items-center ring-1 ring-border glass hover:bg-background/70 transition-all"
+                className="nav-item w-11 h-11 rounded-xl grid place-items-center ring-1 ring-border hover:bg-muted/40 transition-all"
                 aria-label="Open Facebook"
                 title="Facebook"
               >
@@ -69,7 +48,7 @@ export default function Footer() {
               </a>
               <a
                 href="#"
-                className="w-11 h-11 rounded-xl grid place-items-center ring-1 ring-border glass hover:bg-background/70 transition-all"
+                className="nav-item w-11 h-11 rounded-xl grid place-items-center ring-1 ring-border hover:bg-muted/40 transition-all"
                 aria-label="Open YouTube"
                 title="YouTube"
               >
@@ -77,7 +56,7 @@ export default function Footer() {
               </a>
               <a
                 href="#"
-                className="w-11 h-11 rounded-xl grid place-items-center ring-1 ring-border glass hover:bg-background/70 transition-all"
+                className="nav-item w-11 h-11 rounded-xl grid place-items-center ring-1 ring-border hover:bg-muted/40 transition-all"
                 aria-label="Open Instagram"
                 title="Instagram"
               >
@@ -90,11 +69,31 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-lg mb-5 text-foreground">Product</h4>
             <ul className="space-y-3">
-              <li><Link href="/upload" className="footer-link">Resume Upload</Link></li>
-              <li><Link href="/history" className="footer-link">Search History</Link></li>
-              <li><Link href="/meetings" className="footer-link">Meeting Hub</Link></li>
-              <li><Link href="/candidate/1" className="footer-link">Candidate View</Link></li>
-              <li><Link href="/analytics" className="footer-link">Analytics</Link></li>
+              <li>
+                <Link href="/upload" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  Resume Upload
+                </Link>
+              </li>
+              <li>
+                <Link href="/history" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  Search History
+                </Link>
+              </li>
+              <li>
+                <Link href="/meetings" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  Meeting Hub
+                </Link>
+              </li>
+              <li>
+                <Link href="/candidate/1" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  Candidate View
+                </Link>
+              </li>
+              <li>
+                <Link href="/analytics" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  Analytics
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -102,11 +101,31 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-lg mb-5 text-foreground">Company</h4>
             <ul className="space-y-3">
-              <li><Link href="/about" className="footer-link">About Us</Link></li>
-              <li><Link href="/careers" className="footer-link">Careers</Link></li>
-              <li><Link href="/blog" className="footer-link">Blog</Link></li>
-              <li><Link href="/news" className="footer-link">News</Link></li>
-              <li><Link href="/investors" className="footer-link">Investors</Link></li>
+              <li>
+                <Link href="/about" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  About Us
+                </Link>
+              </li>
+              <li>
+                <Link href="/careers" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  Careers
+                </Link>
+              </li>
+              <li>
+                <Link href="/blog" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  Blog
+                </Link>
+              </li>
+              <li>
+                <Link href="/news" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  News
+                </Link>
+              </li>
+              <li>
+                <Link href="/investors" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  Investors
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -114,11 +133,31 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-lg mb-5 text-foreground">Support</h4>
             <ul className="space-y-3">
-              <li><Link href="/help" className="footer-link">Help Center</Link></li>
-              <li><Link href="/contact" className="footer-link">Contact Us</Link></li>
-              <li><Link href="/documentation" className="footer-link">Documentation</Link></li>
-              <li><Link href="/community" className="footer-link">Community</Link></li>
-              <li><Link href="/status" className="footer-link">System Status</Link></li>
+              <li>
+                <Link href="/help" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  Help Center
+                </Link>
+              </li>
+              <li>
+                <Link href="/contact" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  Contact Us
+                </Link>
+              </li>
+              <li>
+                <Link href="/documentation" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  Documentation
+                </Link>
+              </li>
+              <li>
+                <Link href="/community" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  Community
+                </Link>
+              </li>
+              <li>
+                <Link href="/status" className="nav-item transition-transform duration-200 hover:translate-x-1">
+                  System Status
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
@@ -128,21 +167,18 @@ export default function Footer() {
           <div className="grid md:grid-cols-2 gap-8 items-center">
             <div>
               <h3 className="text-2xl font-bold text-foreground mb-2">Stay Updated</h3>
-              <p className="text-[hsl(var(--muted-foreground))]">
-                Get the latest updates on AI recruitment trends and SmartHirex features.
+              <p className="text-muted-foreground">
+                Get the latest updates on AI recruitment trends and Smart HireX features.
               </p>
             </div>
             <form className="flex gap-4" onSubmit={(e) => e.preventDefault()} aria-label="Newsletter signup">
               <input
                 type="email"
                 placeholder="Enter your email"
-                className="flex-1 h-12 px-4 rounded-xl bg-background/60 ring-1 ring-border text-foreground placeholder-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))] transition-colors"
+                className="flex-1 h-12 px-4 rounded-xl bg-background/60 ring-1 ring-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
                 aria-label="Email address"
               />
-              <button
-                type="submit"
-                className="btn btn-primary h-12 px-6 whitespace-nowrap"
-              >
+              <button type="submit" className="btn btn-primary h-12 px-6 whitespace-nowrap">
                 Subscribe
               </button>
             </form>
@@ -152,39 +188,26 @@ export default function Footer() {
         {/* Bottom Footer */}
         <div className="border-t border-border py-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <p className="text-[hsl(var(--muted-foreground))] text-sm">
-              © {new Date().getFullYear()} SmartHirex. All rights reserved. Made with ❤️ for better hiring.
+            <p className="text-muted-foreground text-sm">
+              © {new Date().getFullYear()} Smart HireX. All rights reserved. Made with ❤️ for better hiring.
             </p>
             <div className="flex gap-6">
-              <Link href="/privacy" className="text-[hsl(var(--muted-foreground))] hover:text-foreground text-sm transition-colors">
+              <Link href="/privacy" className="nav-item text-sm">
                 Privacy Policy
               </Link>
-              <Link href="/terms" className="text-[hsl(var(--muted-foreground))] hover:text-foreground text-sm transition-colors">
+              <Link href="/terms" className="nav-item text-sm">
                 Terms of Service
               </Link>
-              <Link href="/security" className="text-[hsl(var(--muted-foreground))] hover:text-foreground text-sm transition-colors">
+              <Link href="/security" className="nav-item text-sm">
                 Security
               </Link>
-              <Link href="/cookies" className="text-[hsl(var(--muted-foreground))] hover:text-foreground text-sm transition-colors">
+              <Link href="/cookies" className="nav-item text-sm">
                 Cookies
               </Link>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Footer link utility (scoped) */}
-      <style jsx>{`
-        .footer-link {
-          display: inline-block;
-          color: hsl(var(--muted-foreground));
-          transition: color .2s ease, transform .2s ease;
-        }
-        .footer-link:hover {
-          color: hsl(var(--foreground));
-          transform: translateX(4px);
-        }
-      `}</style>
     </footer>
   );
 }

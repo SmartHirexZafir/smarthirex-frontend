@@ -1,3 +1,5 @@
+// app/signup/page.tsx
+
 'use client';
 
 import Link from 'next/link';
@@ -153,14 +155,12 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] grid lg:grid-cols-2 gap-8 py-10 px-4 sm:px-8">
-      {/* Left: Brand / Hero (same visuals) */}
+      {/* Left: Brand / Hero (neutral panel; no page-specific backgrounds) */}
       <section className="relative hidden lg:flex panel overflow-hidden items-center justify-center">
-        <div className="absolute inset-0 bg-luxe-radial opacity-70 pointer-events-none" />
-        <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full blur-3xl opacity-20 gradient-ink" />
         <div className="relative z-10 p-12 max-w-xl">
           <Link href="/" className="inline-flex items-center gap-3 mb-10 group">
             <span className="h-14 w-14 rounded-2xl grid place-items-center gradient-ink shadow-glow">
-              <i className="ri-brain-line text-white text-2xl" />
+              <i className="ri-brain-line text-[hsl(var(--primary-foreground))] text-2xl" />
             </span>
             <span className="text-4xl font-bold gradient-text font-pacifico group-hover:opacity-90 transition">
               SmartHirex
@@ -221,7 +221,7 @@ export default function SignupPage() {
               <button
                 type="button"
                 onClick={clearSuccessAndShowForm}
-                className="mt-6 btn-outline px-4 py-2 rounded-xl text-sm"
+                className="mt-6 btn btn-outline"
                 title="Use a different email"
               >
                 Use a different email
@@ -231,7 +231,7 @@ export default function SignupPage() {
             <div className="card p-8 sm:p-10">
               <div className="text-center mb-6">
                 <div className="inline-flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-2xl grid place-items-center gradient-ink text-white shadow-soft">
+                  <div className="h-12 w-12 rounded-2xl grid place-items-center gradient-ink text-[hsl(var(--primary-foreground))] shadow-soft">
                     <i className="ri-user-add-line text-xl" />
                   </div>
                   <div className="text-left">
@@ -436,7 +436,7 @@ export default function SignupPage() {
                 >
                   {isLoading ? (
                     <span className="inline-flex items-center gap-2">
-                      <span className="animate-spin rounded-full h-4 w-4 border-2 border-white/70 border-b-transparent" />
+                      <span className="animate-spin rounded-full h-4 w-4 border-2 border-[hsl(var(--primary-foreground))/0.7] border-b-transparent" />
                       Creating account...
                     </span>
                   ) : (
@@ -466,22 +466,21 @@ export default function SignupPage() {
             <>
               <div className="mt-6 text-center text-sm text-muted-foreground">
                 Already have an account?{' '}
-                <span className="opacity-80">Login is only possible via the verification email.</span>
+                <Link href="/login" className="link">Log in</Link>
               </div>
 
-              {/* === Added Google at the END of signup page === */}
+              {/* Google SSO */}
               <div className="mt-8 text-center">
                 <div className="text-sm text-muted-foreground mb-2">Prefer single sign-on?</div>
                 <button
                   type="button"
                   onClick={handleGoogleLogin}
-                  className="btn-outline"
+                  className="btn btn-google"
                   aria-label="Login with Google"
                 >
                   <i className="ri-google-fill" /> Login with Google
                 </button>
               </div>
-              {/* ============================================== */}
             </>
           )}
 

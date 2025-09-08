@@ -279,7 +279,7 @@ export default function TestAssignment() {
                 onChange={(e) => update(i, { question: e.target.value })}
               />
               <button
-                className="px-3 py-2 rounded-lg border border-input hover:bg-muted/60"
+                className="btn btn-ghost btn-sm"
                 onClick={() => remove(i)}
                 type="button"
                 aria-label="Remove question"
@@ -342,7 +342,7 @@ export default function TestAssignment() {
           </div>
         ))}
         <button
-          className="px-3 py-2 rounded-lg border border-input hover:bg-muted/60"
+          className="btn btn-outline btn-sm"
           type="button"
           onClick={add}
         >
@@ -436,7 +436,7 @@ export default function TestAssignment() {
                 }
               />
               <button
-                className="px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90"
+                className="btn btn-primary btn-sm"
                 onClick={() => onGrade(a._id, Number(local[a._id] ?? 0))}
               >
                 Save
@@ -536,7 +536,7 @@ export default function TestAssignment() {
                   onClick={sendInvite}
                   type="button"
                   disabled={!candidateId || isSending}
-                  className="flex items-center space-x-2 px-6 py-3 rounded-xl font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn btn-primary"
                   aria-busy={isSending}
                 >
                   {isSending ? (

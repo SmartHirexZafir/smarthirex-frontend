@@ -11,7 +11,7 @@ export default function Hero() {
             </p>
             <h1 className="font-extrabold leading-tight">
               Build world-class experiences with
-              <span className="gradient-text"> Nebula Luxe Pro</span>
+              <span className="gradient-text"></span>
             </h1>
             <p className="text-[.98rem] text-muted-foreground max-w-[60ch]">
               A complete design system and component kit engineered for speed, scale, and beauty.

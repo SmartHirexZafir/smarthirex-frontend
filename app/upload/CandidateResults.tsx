@@ -175,7 +175,7 @@ export default function CandidateResults({
       .map((s) => s[0]?.toUpperCase())
       .join('');
     return (
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-white shadow-glow text-sm font-bold">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-[hsl(var(--primary-foreground))] shadow-glow text-sm font-bold">
         {initials || 'CN'}
       </div>
     );
@@ -263,7 +263,7 @@ export default function CandidateResults({
           ) : cleanedCandidates.length === 0 ? (
             // Empty state
             <div className="py-14 max-w-2xl mx-auto text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-white shadow-glow">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-[hsl(var(--primary-foreground))] shadow-glow">
                 <i className="ri-filter-3-line text-2xl" />
               </div>
               <h4 className="text-xl font-semibold text-foreground">No results</h4>
@@ -447,7 +447,7 @@ export default function CandidateResults({
                   <button
                     onClick={prevPage}
                     disabled={page === 1}
-                    className="surface rounded-lg px-4 py-2 text-foreground hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    className="btn btn-outline disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <i className="ri-arrow-left-line mr-2" />
                     Previous
@@ -458,9 +458,7 @@ export default function CandidateResults({
                       <button
                         key={p}
                         onClick={() => setCurrentPage(p)}
-                        className={`h-10 w-10 rounded-lg text-sm font-medium transition ${
-                          page === p ? 'btn btn-primary' : 'surface text-foreground hover:shadow-glow'
-                        }`}
+                        className={page === p ? 'btn btn-primary h-10 w-10' : 'btn btn-outline h-10 w-10'}
                       >
                         {p}
                       </button>
@@ -470,7 +468,7 @@ export default function CandidateResults({
                   <button
                     onClick={nextPage}
                     disabled={page === totalPages}
-                    className="surface rounded-lg px-4 py-2 text-foreground hover:shadow-glow disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    className="btn btn-outline disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Next
                     <i className="ri-arrow-right-line ml-2" />

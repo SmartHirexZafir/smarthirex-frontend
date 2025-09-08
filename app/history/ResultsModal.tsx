@@ -150,9 +150,11 @@ export default function ResultsModal({ history, onClose }: Props) {
   if (!results) return null;
 
   return (
-    /* ✅ Removed black, semi-transparent overlay & blur per requirement #6 */
-    <div className="fixed inset-0 z-50 p-4 flex items-center justify-center">
-      <div className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border">
+    <div className="fixed inset-0 z-overlay p-4 flex items-center justify-center">
+      {/* Themed backdrop */}
+      <div className="absolute inset-0 bg-[hsl(var(--background)/.7)]" />
+
+      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border">
         {/* Header */}
         <div className="relative p-6">
           <div className="absolute inset-0 -z-10 opacity-[.22] bg-[radial-gradient(900px_400px_at_-10%_-20%,hsl(var(--g1)/.6),transparent_60%),radial-gradient(800px_500px_at_120%_-20%,hsl(var(--g2)/.5),transparent_55%),radial-gradient(700px_700px_at_80%_120%,hsl(var(--g3)/.45),transparent_60%)]" />
@@ -167,7 +169,7 @@ export default function ResultsModal({ history, onClose }: Props) {
             </div>
             <button
               onClick={onClose}
-              className="btn-ghost rounded-full h-10 w-10 shrink-0"
+              className="btn btn-ghost rounded-full h-10 w-10 shrink-0"
               aria-label="Close results modal"
             >
               <i className="ri-close-line text-lg" />
@@ -181,8 +183,6 @@ export default function ResultsModal({ history, onClose }: Props) {
             <h3 className="text-lg font-semibold">
               {results.totalMatches} Candidates Found
             </h3>
-
-            {/* ❌ Removed Export Results & Bulk Email per requirement #1 */}
           </div>
 
           <div className="space-y-4">
@@ -212,7 +212,7 @@ export default function ResultsModal({ history, onClose }: Props) {
               return (
                 <div
                   key={cid}
-                  className={`rounded-xl p-4 border transition-all duration-200 bg-card/60 backdrop-blur-sm ${
+                  className={`rounded-xl p-4 border transition-all duration-200 bg-card ${
                     selectedCandidates.has(cid)
                       ? 'border-[hsl(var(--primary)/.45)] ring-1 ring-[hsl(var(--primary)/.25)] shadow-glow'
                       : 'border-border hover:border-[hsl(var(--border)/.9)]'
@@ -249,23 +249,20 @@ export default function ResultsModal({ history, onClose }: Props) {
                         </div>
                       </div>
 
-                      {/* ❌ Removed "Match reasons" block per requirement #2 */}
-
                       {/* Actions */}
                       <div className="flex items-center gap-2">
                         <Link
                           href={`/candidate/${cid}`}
-                          className="btn-primary text-sm whitespace-nowrap"
+                          className="btn btn-primary text-sm whitespace-nowrap"
                           aria-label={`View ${candidate.name}`}
                         >
                           <i className="ri-eye-line mr-1" />
                           View Candidate
                         </Link>
 
-                        {/* ✅ Exactly same behavior as profile flow by deep-linking with action */}
                         <button
                           onClick={() => goSendTest(candidate)}
-                          className="btn-primary text-sm whitespace-nowrap"
+                          className="btn btn-primary text-sm whitespace-nowrap"
                           aria-label={`Send Test to ${candidate.name}`}
                         >
                           <i className="ri-file-list-line mr-1" />
@@ -273,7 +270,7 @@ export default function ResultsModal({ history, onClose }: Props) {
                         </button>
                         <button
                           onClick={() => goScheduleInterview(candidate)}
-                          className="btn-primary text-sm whitespace-nowrap"
+                          className="btn btn-primary text-sm whitespace-nowrap"
                           aria-label={`Schedule Interview with ${candidate.name}`}
                         >
                           <i className="ri-calendar-event-line mr-1" />
@@ -289,7 +286,7 @@ export default function ResultsModal({ history, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border bg-card/70 backdrop-blur-sm">
+        <div className="px-6 py-4 border-t border-border bg-card">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               {selectedCandidates.size} of {results.candidates.length} candidates selected
@@ -297,11 +294,11 @@ export default function ResultsModal({ history, onClose }: Props) {
             <div className="flex items-center gap-2">
               <button
                 onClick={onClose}
-                className="btn-outline text-sm"
+                className="btn btn-outline text-sm"
               >
                 Close
               </button>
-              <button className="btn-primary text-sm">
+              <button className="btn btn-primary text-sm">
                 Save Selection
               </button>
             </div>

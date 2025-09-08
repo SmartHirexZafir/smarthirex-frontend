@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import Logo from './ui/Logo';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -13,13 +14,7 @@ export default function Header() {
           {/* Brand */}
           <div className="flex items-center">
             <Link href="/" className="flex items-center gap-3 group" aria-label="SmartHirex Home">
-              <div className="w-10 h-10 rounded-2xl grid place-items-center gradient-border glow
-                              bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g2))] text-white">
-                <i className="ri-brain-line text-xl"></i>
-              </div>
-              <span className="text-2xl md:text-[1.6rem] font-bold tracking-tight gradient-text">
-                SmartHirex
-              </span>
+              <Logo />
             </Link>
           </div>
 

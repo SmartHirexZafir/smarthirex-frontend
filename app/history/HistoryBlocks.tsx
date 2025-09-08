@@ -99,10 +99,10 @@ export default function HistoryBlocks({
                         className="w-12 h-12 rounded-full flex items-center justify-center shadow-glow gradient-border"
                         style={{
                           backgroundImage:
-                            'linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)), linear-gradient(135deg, hsl(var(--g1)) 0%, hsl(var(--g2)) 45%, hsl(var(--g3)) 100%)',
+                            'linear-gradient(180deg, hsl(var(--foreground)/0.10), hsl(var(--foreground)/0.04)), linear-gradient(135deg, hsl(var(--g1)) 0%, hsl(var(--g2)) 45%, hsl(var(--g3)) 100%)',
                         }}
                       >
-                        <i className="ri-brain-line text-white text-xl"></i>
+                        <i className="ri-brain-line text-[hsl(var(--primary-foreground))] text-xl"></i>
                       </div>
                       <div className="min-w-0">
                         <h3 className="text-xl font-bold truncate">{history.prompt}</h3>
@@ -129,7 +129,7 @@ export default function HistoryBlocks({
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => onViewResults(history)}
-                    className="btn-primary flex-1 whitespace-nowrap"
+                    className="btn btn-primary flex-1 whitespace-nowrap"
                   >
                     <i className="ri-eye-line"></i>
                     <span>View Results</span>
@@ -138,7 +138,7 @@ export default function HistoryBlocks({
                   <button
                     onClick={() => handleRerun(history)}
                     disabled={rerunningId === history.id}
-                    className="btn-outline whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed shadow-soft"
+                    className="btn btn-outline whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed shadow-soft"
                     aria-label={`Re-run prompt for "${history.prompt}"`}
                   >
                     {rerunningId === history.id ? (
@@ -165,7 +165,7 @@ export default function HistoryBlocks({
           <button
             onClick={prevPage}
             disabled={currentPage === 1}
-            className="btn-outline shadow-soft disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn btn-outline shadow-soft disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <i className="ri-arrow-left-line"></i>
             <span className="font-medium">Previous</span>
@@ -177,7 +177,7 @@ export default function HistoryBlocks({
                 key={page}
                 onClick={() => setCurrentPage(page)}
                 className={`h-12 min-w-12 px-3 rounded-xl text-sm font-semibold transition-transform duration-200 ${
-                  currentPage === page ? 'btn-primary' : 'btn-outline'
+                  currentPage === page ? 'btn btn-primary' : 'btn btn-outline'
                 }`}
               >
                 {page}
@@ -188,7 +188,7 @@ export default function HistoryBlocks({
           <button
             onClick={nextPage}
             disabled={currentPage === totalPages}
-            className="btn-outline shadow-soft disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn btn-outline shadow-soft disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className="font-medium">Next</span>
             <i className="ri-arrow-right-line"></i>

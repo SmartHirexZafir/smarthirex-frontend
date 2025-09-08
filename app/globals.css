@@ -10,27 +10,34 @@
 @tailwind utilities;
 
 /* ==========================================================
-   NEBULA • LUXE • PRO — baseline tokens
+   NEON • ECLIPSE — baseline tokens (global, dark-first)
+   (renamed from “Nebula • Luxe • Pro”)
 ========================================================== */
 
 :root {
-  --background: 230 35% 6%;
-  --foreground: 210 48% 98%;
-  --card: 230 32% 10%;
-  --card-foreground: 210 44% 98%;
-  --popover: 232 28% 11%;
-  --popover-foreground: 210 44% 98%;
-  --muted: 226 20% 16%;
+  /* Core surfaces */
+  --background: 235 28% 7%;
+  --foreground: 210 100% 98%;
+  --card: 235 22% 10%;
+  --card-foreground: 210 100% 98%;
+  --popover: 235 22% 10%;
+  --popover-foreground: 210 100% 98%;
+
+  /* Muted / lines */
+  --muted: 230 18% 15%;
   --muted-foreground: 220 12% 74%;
   --border: 228 22% 22%;
   --input: 228 22% 22%;
-  --ring: 210 90% 62%;
-  --primary: 222 90% 60%;
+
+  /* Neon accents */
+  --primary: 265 100% 60%;           /* Electric Violet (neon violet/cyan blend family) */
   --primary-foreground: 0 0% 100%;
-  --secondary: 195 90% 58%;
-  --secondary-foreground: 230 35% 6%;
-  --accent: 260 80% 66%;
-  --accent-foreground: 230 35% 6%;
+  --secondary: 190 95% 56%;          /* Electric Cyan */
+  --secondary-foreground: 235 28% 7%;
+  --accent: 320 92% 60%;             /* Neon Magenta */
+  --accent-foreground: 235 28% 7%;
+
+  /* Feedback */
   --destructive: 0 78% 54%;
   --destructive-foreground: 0 0% 100%;
   --success: 155 78% 45%;
@@ -40,13 +47,24 @@
   --info: 205 92% 62%;
   --info-foreground: 210 100% 10%;
 
+  /* Ring */
+  --ring: var(--primary);
+
+  /* Gradient stops (consumed by utilities/components) */
   --g1: var(--primary);
   --g2: var(--secondary);
-  --g3: var(--secondary);
+  --g3: var(--accent);
 
+  /* Radii */
   --r-md: .9rem;
   --r-lg: 1.25rem;
   --r-xl: 1.75rem;
+
+  /* Z-index tokens (global overlay scale) */
+  --z-nav: 50;
+  --z-overlay: 60;   /* backdrops, route loaders */
+  --z-modal: 70;     /* modal panel */
+  --z-toast: 80;     /* toasts / highest lightweight layer */
 
   /* Fluid type */
   --step--1: clamp(.78rem, .70rem + .20vw, .88rem);
@@ -70,20 +88,25 @@
   --muted-foreground: 228 10% 32%;
   --border: 220 16% 88%;
   --input: 220 16% 88%;
-  --ring: 210 90% 58%;
-  --primary: 222 88% 56%;
+
+  /* Keep vivid but balanced in light */
+  --primary: 265 90% 56%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 195 88% 52%;
+  --secondary: 190 90% 50%;
   --secondary-foreground: 0 0% 100%;
-  --accent: 260 78% 58%;
+  --accent: 320 88% 56%;
   --accent-foreground: 0 0% 100%;
+
   --destructive: 0 78% 50%;
   --success: 155 74% 42%;
   --warning: 44 94% 52%;
   --info: 205 90% 54%;
+
+  --ring: var(--primary);
+
   --g1: var(--primary);
   --g2: var(--secondary);
-  --g3: var(--secondary);
+  --g3: var(--accent);
 }
 
 /* ---------------- Base & a11y ---------------- */
@@ -99,6 +122,22 @@
     font-size: var(--step-0);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+  }
+
+  /* Global scrollbars (Firefox + WebKit) — theme tokens only */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / .4) transparent;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, hsl(var(--g1) / .6), hsl(var(--g2) / .6));
+    border-radius: 9999px;
+    border: 2px solid hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, hsl(var(--g1) / .75), hsl(var(--g2) / .75));
   }
 
   /* Icon font clarity */
@@ -118,7 +157,7 @@
 
 /* ---------------- Utilities ---------------- */
 @layer utilities {
-  /* Tailwind-driven aurora; paired with fallback below for guaranteed visuals */
+  /* Tailwind-driven background image; fallback below guarantees visuals */
   .page-aurora {
     background-image: theme("backgroundImage.luxe-aurora");
     background-attachment: fixed;
@@ -147,7 +186,7 @@
     -webkit-mask-composite: xor; mask-composite: exclude;
   }
 
-  .shadow-glow { box-shadow: 0 0 0 1px hsl(var(--border)/.7), 0 0 22px hsl(var(--primary)/.2); }
+  .shadow-glow { box-shadow: 0 0 0 1px hsl(var(--border) / .7), 0 0 22px hsl(var(--primary) / .22); }
 
   /* Corrected skeleton (alpha fixed) */
   .skeleton {
@@ -159,6 +198,10 @@
 
   /* Focus ring utility */
   .focus-ring { @apply ring-2 ring-ring ring-offset-2 ring-offset-background outline-0; }
+
+  /* Overlay z-index utilities (guarantee on top) */
+  .z-overlay { z-index: 1000; }
+  .z-max { z-index: 10000; }
 }
 
 /* ---------------- Components ---------------- */
@@ -175,7 +218,7 @@
     background-image:
       linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04)),
       linear-gradient(135deg, hsl(var(--g1)) 0%, hsl(var(--g2)) 45%, hsl(var(--g3)) 100%);
-    box-shadow: 0 0 24px hsl(var(--primary)/.4);
+    box-shadow: 0 0 24px hsl(var(--primary) / .4);
   }
   .btn-primary:hover { transform: translateY(-1px) scale(1.02); }
   .btn-primary:active { transform: translateY(0) scale(.99); }
@@ -183,9 +226,39 @@
   .btn-secondary {
     @apply btn text-secondary-foreground bg-[hsl(var(--secondary)/.12)] text-[hsl(var(--secondary))] gradient-border;
   }
+
   .btn-outline { @apply btn border border-input bg-transparent text-foreground hover:bg-muted/40; }
   .btn-ghost   { @apply btn bg-transparent text-foreground hover:bg-muted/30; }
   .btn-soft    { @apply btn bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted)/.85)]; }
+
+  .btn-destructive {
+    @apply btn text-[hsl(var(--destructive-foreground))] bg-[hsl(var(--destructive))];
+    box-shadow: 0 0 18px hsl(var(--destructive) / .35);
+  }
+  .btn-destructive:hover { filter: brightness(1.05); transform: translateY(-1px); }
+  .btn-destructive:active { transform: translateY(0); }
+
+  /* Multicolor Google button (for Login/Signup) */
+  .btn-google {
+    @apply btn bg-white text-black border border-input;
+    position: relative;
+  }
+  .btn-google::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    border-top-left-radius: 9999px;
+    border-top-right-radius: 9999px;
+    background: linear-gradient(90deg,
+      #4285F4 0%,
+      #34A853 25%,
+      #FBBC05 50%,
+      #EA4335 75%,
+      #4285F4 100%);
+  }
+  .btn-google:hover { filter: saturate(1.05); transform: translateY(-1px); }
+  .btn-google:active { transform: translateY(0) scale(.99); }
 
   /* Icon button */
   .icon-btn { @apply inline-flex h-10 w-10 items-center justify-center rounded-full btn-outline; }
@@ -202,7 +275,7 @@
   .textarea { @apply input min-h-[120px]; }
   .select   { @apply input pr-9; }
 
-  /* NEW: Pills used on Candidate page */
+  /* Pills / Badges */
   .chip  { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs
                    bg-[hsl(var(--muted)/.5)] text-[hsl(var(--muted-foreground))] ring-1 ring-border; }
   .badge { @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs
@@ -214,15 +287,22 @@
   .panel { @apply rounded-3xl ring-1 ring-border bg-gradient-to-br from-[hsl(var(--card))] to-[hsl(var(--card)/.85)]; }
 
   /* Modal (raised above sticky navbar) */
-  .modal-backdrop { @apply fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in z-[60]; }
+  .modal-backdrop {
+    @apply fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in;
+    z-index: var(--z-overlay);
+  }
   .modal {
     @apply fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-           card p-6 shadow-lux max-w-lg w-[92vw] animate-rise-in z-[70];
+           card p-6 shadow-lux max-w-lg w-[92vw] animate-rise-in;
+    z-index: var(--z-modal);
   }
 
-  /* Nav */
-  .nav { @apply sticky top-0 z-50 backdrop-blur-2xl bg-[hsl(var(--background)/.6)] border-b border-white/10; }
-  .nav-item { @apply text-sm text-[hsl(var(--muted-foreground))] hover:text-foreground transition-colors; }
+  /* Nav (slightly heavier font per requirement) */
+  .nav {
+    @apply sticky top-0 backdrop-blur-2xl bg-[hsl(var(--background)/.6)] border-b border-white/10;
+    z-index: var(--z-nav);
+  }
+  .nav-item { @apply text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-foreground transition-colors; }
 
   /* Tabs */
   .tabs { @apply inline-flex gap-1 p-1 rounded-full bg-[hsl(var(--muted)/.6)] gradient-border; }
@@ -267,14 +347,14 @@
   }
 }
 
-/* ======= Plain CSS fallback (guaranteed visible aurora) ======= */
+/* ======= Plain CSS fallback (guaranteed visible “Neon Eclipse” glow) ======= */
 /* Agar kisi wajah se Tailwind ki bg-image util apply na ho, yeh fallback phir bhi background dikha dega */
 body.page-aurora {
   background-color: hsl(var(--background));
   background-image:
-    radial-gradient(1000px 700px at 15% -10%, hsl(var(--g1) / .16), transparent 60%),
-    radial-gradient(900px 600px at 110% -10%, hsl(var(--g2) / .14), transparent 55%),
-    radial-gradient(1000px 900px at 85% 110%, hsl(var(--g3) / .12), transparent 60%);
+    radial-gradient(1000px 700px at 15% -10%, hsl(var(--g1) / .18), transparent 60%),
+    radial-gradient(900px 600px at 110% -10%, hsl(var(--g2) / .16), transparent 55%),
+    radial-gradient(1000px 900px at 85% 110%, hsl(var(--g3) / .14), transparent 60%);
   background-repeat: no-repeat;
   background-size: cover;
   background-attachment: fixed;

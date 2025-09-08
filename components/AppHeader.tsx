@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ThemeToggle from "./ui/ThemeToogle"; // same path/style as before
+import Logo from "@/components/ui/Logo";
 
 type User = {
   name: string;
@@ -122,7 +122,6 @@ function useCurrentUser(propUser?: User) {
 export default function AppHeader({ user }: { user?: User }) {
   const [open, setOpen] = useState(false); // mobile nav
   const [menuOpen, setMenuOpen] = useState(false); // user dropdown
-  const [logoError, setLogoError] = useState(false); // final fallback state
   const menuRef = useRef<HTMLDivElement>(null);
 
   // resolve current user (prop or storage)
@@ -155,27 +154,6 @@ export default function AppHeader({ user }: { user?: User }) {
   const displayName = currentUser?.name || (loading ? "Loading…" : "User");
   const displayRole = currentUser?.role || (loading ? "Please wait" : "User");
 
-  // ---- logo: try multiple public paths (no spaces preferred) ----
-  // Put your logo file in /public as either:
-  //   /public/web-logo.png  (recommended)
-  // or keep your folder with spaces:
-  //   /public/Smart HireX Logos/web logo 25 by 25.png
-  const LOGO_CANDIDATES = [
-    "/web-logo.png",
-    "/web%20logo%2025%20by%2025.png",
-    "/Smart%20HireX%20Logos/web%20logo%2025%20by%2025.png",
-    "/logo.png",
-  ];
-  const [logoIdx, setLogoIdx] = useState(0);
-  const logoSrc = LOGO_CANDIDATES[Math.min(logoIdx, LOGO_CANDIDATES.length - 1)];
-  const advanceLogo = () => {
-    if (logoIdx < LOGO_CANDIDATES.length - 1) {
-      setLogoIdx((i) => i + 1);
-    } else {
-      setLogoError(true);
-    }
-  };
-
   return (
     <header className="nav full-bleed">
       <div className="container max-w-[1600px] py-4 md:py-5">
@@ -183,37 +161,7 @@ export default function AppHeader({ user }: { user?: User }) {
           {/* Brand */}
           <div className="flex items-center gap-3">
             <Link href="/dashboard" aria-label="Smart HireX" className="flex items-center gap-3">
-              {/* Logo (prefer /public/web-logo.png; fallbacks included) */}
-              {!logoError ? (
-                <Image
-                  key={logoSrc}                // force reload when src changes
-                  src={logoSrc}
-                  alt="Smart HireX logo"
-                  width={32}
-                  height={32}
-                  className="rounded-lg ring-1 ring-border object-cover"
-                  priority
-                  onError={advanceLogo}
-                />
-              ) : (
-                // SVG fallback if logo ultimately fails
-                <span className="h-8 w-8 rounded-lg ring-1 ring-border grid place-items-center bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]">
-                  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-                    <path
-                      d="M4 12a8 8 0 1116 0 8 8 0 01-16 0zm5.5-.5l2.5 3 3.5-5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-              )}
-
-              <span className="text-[26px] md:text-[28px] font-extrabold gradient-text leading-none">
-                Smart HireX
-              </span>
+              <Logo />
             </Link>
           </div>
 
@@ -221,7 +169,7 @@ export default function AppHeader({ user }: { user?: User }) {
           <nav aria-label="Primary" className="hidden md:flex items-center justify-center gap-6">
             <Link className="nav-item" href="/upload">Upload</Link>
             <Link className="nav-item" href="/history">History</Link>
-            <Link className="nav-item" href="/test"> Test</Link>
+            <Link className="nav-item" href="/test">Test</Link>
             <Link className="nav-item" href="/meetings">Meetings</Link>
             <Link className="nav-item" href="/dashboard">Dashboard</Link>
           </nav>
@@ -296,7 +244,7 @@ export default function AppHeader({ user }: { user?: User }) {
                   <Link
                     href="/profile"
                     role="menuitem"
-                    className="block px-3 py-2 rounded-xl hover:bg-muted/40"
+                    className="nav-item block px-3 py-2 rounded-xl hover:bg-muted/40"
                     onClick={() => setMenuOpen(false)}
                   >
                     Profile
@@ -304,7 +252,7 @@ export default function AppHeader({ user }: { user?: User }) {
                   <Link
                     href="/settings"
                     role="menuitem"
-                    className="block px-3 py-2 rounded-xl hover:bg-muted/40"
+                    className="nav-item block px-3 py-2 rounded-xl hover:bg-muted/40"
                     onClick={() => setMenuOpen(false)}
                   >
                     Settings
@@ -341,11 +289,11 @@ export default function AppHeader({ user }: { user?: User }) {
             className="mt-3 md:hidden overflow-hidden rounded-2xl ring-1 ring-border bg-card p-2 animate-rise-in"
           >
             <div className="flex flex-col">
-              <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/upload" onClick={() => setOpen(false)}>Upload</Link>
-              <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/history" onClick={() => setOpen(false)}>History</Link>
-              <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/test" onClick={() => setOpen(false)}>Assign Test</Link>
-              <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/meetings" onClick={() => setOpen(false)}>Meetings</Link>
-              <Link className="px-4 py-3 rounded-xl hover:bg-muted/40" href="/dashboard" onClick={() => setOpen(false)}>Dashboard</Link>
+              <Link className="nav-item px-4 py-3 rounded-xl hover:bg-muted/40" href="/upload" onClick={() => setOpen(false)}>Upload</Link>
+              <Link className="nav-item px-4 py-3 rounded-xl hover:bg-muted/40" href="/history" onClick={() => setOpen(false)}>History</Link>
+              <Link className="nav-item px-4 py-3 rounded-xl hover:bg-muted/40" href="/test" onClick={() => setOpen(false)}>Assign Test</Link>
+              <Link className="nav-item px-4 py-3 rounded-xl hover:bg-muted/40" href="/meetings" onClick={() => setOpen(false)}>Meetings</Link>
+              <Link className="nav-item px-4 py-3 rounded-xl hover:bg-muted/40" href="/dashboard" onClick={() => setOpen(false)}>Dashboard</Link>
 
               <div className="px-2 pt-2 pb-1">
                 {/* Theme toggle in mobile too */}

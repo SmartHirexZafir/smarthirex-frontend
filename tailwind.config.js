@@ -46,7 +46,6 @@ module.exports = {
         "elev-2": "0 18px 50px rgba(0,0,0,0.55)",
       },
       transitionTimingFunction: {
-        // fixed decimals:
         lux: "cubic-bezier(.21,.86,.24,.99)",
         spring: "cubic-bezier(.16,1,.3,1)",
       },
@@ -63,10 +62,46 @@ module.exports = {
         "rise-in": "rise-in .6s lux both",
       },
       backgroundImage: {
+        // Existing key used by globals.css
         "luxe-aurora":
           "radial-gradient(1200px 800px at 15% -10%, hsl(var(--g1)/.12), transparent 60%), radial-gradient(1000px 700px at 110% -10%, hsl(var(--g2)/.10), transparent 55%), radial-gradient(1000px 900px at 85% 110%, hsl(var(--g3)/.10), transparent 60%)",
+        // Alias for the new theme name so both utilities work if used
+        "neon-eclipse":
+          "radial-gradient(1200px 800px at 15% -10%, hsl(var(--g1)/.12), transparent 60%), radial-gradient(1000px 700px at 110% -10%, hsl(var(--g2)/.10), transparent 55%), radial-gradient(1000px 900px at 85% 110%, hsl(var(--g3)/.10), transparent 60%)",
       },
+      // Make @tailwindcss/typography respect our CSS variable tokens in both themes
+      typography: (theme) => ({
+        DEFAULT: {
+          css: {
+            color: theme("colors.foreground"),
+            a: { color: theme("colors.primary.DEFAULT"), textDecoration: "none", "&:hover": { opacity: .9 } },
+            h1: { color: theme("colors.foreground"), fontWeight: "700" },
+            h2: { color: theme("colors.foreground"), fontWeight: "700" },
+            h3: { color: theme("colors.foreground"), fontWeight: "600" },
+            strong: { color: theme("colors.foreground") },
+            code: { color: theme("colors.accent.DEFAULT") },
+            blockquote: { color: theme("colors.muted.foreground"), borderLeftColor: theme("colors.border") },
+            hr: { borderColor: theme("colors.border") },
+          },
+        },
+        invert: {
+          css: {
+            color: theme("colors.foreground"),
+            a: { color: theme("colors.primary.DEFAULT") },
+            h1: { color: theme("colors.foreground") },
+            h2: { color: theme("colors.foreground") },
+            h3: { color: theme("colors.foreground") },
+            strong: { color: theme("colors.foreground") },
+            code: { color: theme("colors.accent.DEFAULT") },
+            blockquote: { color: theme("colors.muted.foreground"), borderLeftColor: theme("colors.border") },
+            hr: { borderColor: theme("colors.border") },
+          },
+        },
+      }),
     },
   },
-  plugins: [require("@tailwindcss/forms"), require("@tailwindcss/typography")],
+  plugins: [
+    require("@tailwindcss/forms")({ strategy: "class" }), // prevent default form styles from overriding global .input/.select
+    require("@tailwindcss/typography"),
+  ],
 };

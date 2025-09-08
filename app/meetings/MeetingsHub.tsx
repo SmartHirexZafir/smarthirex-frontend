@@ -22,7 +22,7 @@ export default function MeetingsHub() {
   };
 
   return (
-    <div className="min-h-screen bg-background page-aurora">
+    <div className="min-h-screen">
       {/* Header */}
       <div className="bg-card/90 backdrop-blur-sm shadow-lg border-b border-border sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-6 md:px-8 py-5 md:py-6">
@@ -30,7 +30,7 @@ export default function MeetingsHub() {
             <div className="flex items-center gap-4">
               <Link
                 href="/upload"
-                className="p-2 rounded-lg transition-colors text-foreground hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="icon-btn"
                 aria-label="Go back"
               >
                 <i className="ri-arrow-left-line text-xl" />

@@ -1,3 +1,4 @@
+// components/LiveStats.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -135,16 +136,16 @@ export default function LiveStats() {
             isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
           }`}
         >
-          <div className="inline-flex items-center px-4 py-2 rounded-full glass text-white/90 text-sm font-medium mb-6 gap-2">
+          <div className="inline-flex items-center px-4 py-2 rounded-full glass text-[hsl(var(--primary-foreground)/.9)] text-sm font-medium mb-6 gap-2">
             <i className="ri-pulse-line" aria-hidden="true"></i>
             <span>Live Activity Dashboard</span>
           </div>
 
-          <h2 className="text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight">
+          <h2 className="text-4xl md:text-5xl font-extrabold text-primary-foreground mb-4 tracking-tight">
             Real-Time <span className="gradient-text">Hiring Analytics</span>
           </h2>
 
-          <p className="text-lg md:text-xl text-white/80 max-w-3xl mx-auto">
+          <p className="text-lg md:text-xl text-[hsl(var(--primary-foreground)/.8)] max-w-3xl mx-auto">
             Watch our AI platform work in real time as companies worldwide discover their perfect candidates.
           </p>
         </div>
@@ -156,7 +157,7 @@ export default function LiveStats() {
               key={idx}
               className={`
                 glass-strong rounded-2xl p-7 text-center ring-1 ring-border shadow-soft
-                transform transition-all duration-1000 hover:scale-[1.025] hover:bg-white/15
+                transform transition-all duration-1000 hover:scale-[1.025] hover:bg-[hsl(var(--background)/.15)]
                 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}
               `}
               style={{ transitionDelay: item.delay }}
@@ -170,14 +171,14 @@ export default function LiveStats() {
                 <i className={`${item.icon} text-2xl ${toneFg[item.tone]}`} />
               </div>
 
-              <div className="text-4xl font-bold text-white mb-1" aria-live="polite">
+              <div className="text-4xl font-bold text-primary-foreground mb-1" aria-live="polite">
                 <AnimatedCounter value={item.value} />
               </div>
-              <div className="text-white/70 text-xs uppercase tracking-wider">{item.label}</div>
+              <div className="text-[hsl(var(--primary-foreground)/.7)] text-xs uppercase tracking-wider">{item.label}</div>
 
               <div className="mt-4 flex items-center justify-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[hsl(var(--success))] animate-pulse" aria-hidden="true" />
-                <span className="text-white/80 text-xs">Live</span>
+                <span className="text-[hsl(var(--primary-foreground)/.8)] text-xs">Live</span>
               </div>
             </div>
           ))}
@@ -194,26 +195,26 @@ export default function LiveStats() {
           aria-label="Live activity feed"
         >
           <div className="text-center mb-6">
-            <h3 className="text-2xl font-bold text-white mb-1">Live Activity Feed</h3>
-            <p className="text-white/70">Real-time updates from the SmartHirex platform</p>
+            <h3 className="text-2xl font-bold text-primary-foreground mb-1">Live Activity Feed</h3>
+            <p className="text-[hsl(var(--primary-foreground)/.7)]">Real-time updates from the SmartHirex platform</p>
           </div>
 
           <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
             {feed.map((row, index) => (
               <div
                 key={index}
-                className="flex items-center gap-4 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+                className="flex items-center gap-4 p-4 rounded-xl bg-[hsl(var(--background)/.08)] hover:bg-[hsl(var(--background)/.16)] transition-colors"
               >
                 <div className={`w-10 h-10 rounded-full grid place-items-center ${toneBg[row.tone]}`}>
                   <i className={`${row.icon} ${toneFg[row.tone]} text-lg`} aria-hidden="true" />
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <div className="text-white font-medium truncate">{row.action}</div>
-                  <div className="text-white/70 text-sm truncate">{row.company}</div>
+                  <div className="text-primary-foreground font-medium truncate">{row.action}</div>
+                  <div className="text-[hsl(var(--primary-foreground)/.7)] text-sm truncate">{row.company}</div>
                 </div>
 
-                <div className="text-white/70 text-sm shrink-0">{row.time}</div>
+                <div className="text-[hsl(var(--primary-foreground)/.7)] text-sm shrink-0">{row.time}</div>
               </div>
             ))}
           </div>

@@ -1,3 +1,4 @@
+// components/FeatureGrid.tsx
 'use client';
 
 import { useState } from 'react';
@@ -151,7 +152,7 @@ export default function FeatureGrid() {
                     role="img"
                     aria-label={`${f.title} icon`}
                   >
-                    <i className={`${f.icon} text-2xl text-white`} />
+                    <i className={`${f.icon} text-2xl text-[hsl(var(--primary-foreground))]`} />
                   </div>
 
                   <h3 className="text-xl font-bold text-foreground mb-3">{f.title}</h3>
@@ -181,7 +182,7 @@ export default function FeatureGrid() {
         </div>
 
         {/* CTA Section */}
-        <div className="relative overflow-hidden rounded-3xl p-10 md:p-12 text-center text-white ring-1 ring-border shadow-soft">
+        <div className="relative overflow-hidden rounded-3xl p-10 md:p-12 text-center text-primary-foreground ring-1 ring-border shadow-soft">
           {/* Gradient BG + glow */}
           <div
             className="absolute inset-0 -z-10 rounded-3xl bg-gradient-to-r from-[hsl(var(--primary))] to-[hsl(var(--accent))]"
@@ -192,7 +193,7 @@ export default function FeatureGrid() {
           <h3 className="text-3xl font-bold mb-3 tracking-tight">
             Ready to Transform Your Hiring Process?
           </h3>
-          <p className="text-lg md:text-xl mb-8 text-white/90">
+          <p className="text-lg md:text-xl mb-8 text-[hsl(var(--primary-foreground)/.9)]">
             Join thousands of companies already using SmartHirex to find exceptional talent.
           </p>
 
@@ -202,7 +203,7 @@ export default function FeatureGrid() {
               Start Free Trial
             </Link>
             <button
-              className="btn btn-outline text-white border-white hover:bg-white hover:text-[hsl(var(--primary))]"
+              className="btn btn-outline text-[hsl(var(--primary-foreground))] border-[hsl(var(--primary-foreground))] hover:bg-[hsl(var(--primary-foreground))] hover:text-[hsl(var(--primary))]"
               type="button"
             >
               <i className="ri-calendar-line mr-2" aria-hidden="true"></i>

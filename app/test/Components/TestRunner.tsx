@@ -301,9 +301,9 @@ export default function TestRunner({
 
     return (
       <div className="mb-2">
-        <label className="text-xs text-gray-600">Language</label>
+        <label className="text-xs text-[hsl(var(--muted-foreground))]">Language</label>
         <select
-          className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+          className="mt-1 w-full rounded-md border border-input px-2 py-1 text-sm bg-background text-foreground"
           value={current}
           onChange={(e) => updateCodeLang(idx, e.target.value)}
         >
@@ -326,7 +326,7 @@ export default function TestRunner({
     const words = (answers[idx] || "").trim() ? (answers[idx] || "").trim().split(/\s+/).length : 0;
     const over = words > maxWords;
     return (
-      <div className={`mt-1 text-xs ${over ? "text-red-600" : "text-gray-500"}`}>
+      <div className={`mt-1 text-xs ${over ? "text-destructive" : "text-[hsl(var(--muted-foreground))]"}`}>
         {words}/{maxWords} words
       </div>
     );
@@ -334,7 +334,7 @@ export default function TestRunner({
 
   return (
     <form
-      className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm select-none"
+      className="space-y-6 rounded-2xl border border-border bg-card text-foreground p-6 shadow-sm select-none"
       onSubmit={handleSubmit}
       // double safety nets (browser won’t always obey all):
       onCopy={(e) => {
@@ -361,13 +361,13 @@ export default function TestRunner({
       <h2 className="text-lg font-medium">Answer the questions</h2>
 
       {err && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {err}
         </div>
       )}
 
       {safeQuestions.length === 0 && (
-        <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
+        <div className="rounded-lg border border-[hsl(var(--warning))]/30 bg-[hsl(var(--warning))]/10 px-3 py-2 text-sm text-foreground">
           No questions were generated. You can still submit or go back.
         </div>
       )}
@@ -386,10 +386,10 @@ export default function TestRunner({
           (isCode ? "Write your solution here…" : isScenario ? "Describe your approach…" : "");
 
         return (
-          <div key={idx} className="rounded-xl border border-gray-200 p-4">
+          <div key={idx} className="rounded-xl border border-border p-4">
             <div className="mb-2 text-sm font-medium">
               Q{idx + 1}.{" "}
-              <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-normal uppercase tracking-wide text-gray-700">
+              <span className="rounded bg-muted px-2 py-0.5 text-xs font-normal uppercase tracking-wide text-foreground/80">
                 {t}
               </span>
             </div>
@@ -411,8 +411,8 @@ export default function TestRunner({
                       className={
                         "flex items-center gap-3 rounded-lg border px-3 py-2 text-sm transition " +
                         (selected
-                          ? "border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50"
-                          : "border-gray-300 hover:bg-gray-50")
+                          ? "border-[hsl(var(--primary))] ring-2 ring-[hsl(var(--ring))] bg-[hsl(var(--primary)/.08)]"
+                          : "border-input hover:bg-muted")
                       }
                     >
                       <input
@@ -436,7 +436,7 @@ export default function TestRunner({
                 <textarea
                   value={answers[idx] ?? (isCode && q.starter_code ? q.starter_code : "")}
                   onChange={(e) => updateAnswer(idx, e.target.value, isScenario ? q.max_words : undefined)}
-                  className="h-44 w-full rounded-lg border border-gray-300 px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="h-44 w-full rounded-lg border border-input bg-background text-foreground px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   placeholder={placeholder}
                   spellCheck={false}
                 />
@@ -445,12 +445,12 @@ export default function TestRunner({
 
                 {/* Small hints that align with backend behavior but don't enforce hard rules */}
                 {isCode && (
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
                     Your code will be evaluated on the backend. Choose a language and submit your solution.
                   </p>
                 )}
                 {isScenario && (
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
                     Provide a clear, structured response. It may be graded using a rubric.
                   </p>
                 )}
@@ -464,7 +464,7 @@ export default function TestRunner({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+          className="btn btn-outline"
           disabled={loading}
         >
           Cancel
@@ -472,7 +472,7 @@ export default function TestRunner({
         <button
           type="submit"
           disabled={loading}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+          className="btn btn-primary"
         >
           {loading ? "Submitting…" : "Submit"}
         </button>
@@ -480,7 +480,7 @@ export default function TestRunner({
 
       {/* tiny toast */}
       {toast && (
-        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900/90 px-4 py-2 text-xs text-white shadow-lg">
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[hsl(var(--muted))] px-4 py-2 text-xs text-foreground shadow-lg">
           {toast}
         </div>
       )}

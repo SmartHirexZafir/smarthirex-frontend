@@ -328,7 +328,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
           }
         }}
       >
-        <div className="mx-auto mb-7 flex h-28 w-28 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-white shadow-glow transition-transform duration-300 hover:scale-105">
+        <div className="mx-auto mb-7 flex h-28 w-28 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-[hsl(var(--primary-foreground))] shadow-glow transition-transform duration-300 hover:scale-105">
           <i className="ri-upload-cloud-2-line text-5xl" />
         </div>
         <h3 className="text-2xl md:text-3xl font-semibold text-foreground mb-3">
@@ -336,7 +336,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
         </h3>
         <p className="text-[hsl(var(--muted-foreground))] mb-6">Transform your hiring process with AI-powered resume screening</p>
 
-        <button type="button" className="btn btn-primary shadow-glow px-6 py-3 text-base" onClick={() => fileInputRef.current?.click()}>
+        <button type="button" className="btn-primary shadow-glow px-6 py-3 text-base" onClick={() => fileInputRef.current?.click()}>
           <i className="ri-folder-open-line mr-2" />
           Upload CVs
         </button>
@@ -386,8 +386,8 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
         <div
           className={`fixed bottom-6 right-6 z-50 rounded-xl px-5 py-4 shadow-xl border text-base font-medium ${
             toastType === 'success'
-              ? 'bg-[hsl(var(--success))] text-white border-transparent'
-              : 'bg-[hsl(var(--warning))] text-black border-black/10'
+              ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
+              : 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-border'
           }`}
           role="status"
           aria-live="polite"

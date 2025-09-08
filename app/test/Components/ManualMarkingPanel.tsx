@@ -281,7 +281,7 @@ export default function ManualMarkingPanel({
                       type="button"
                       onClick={() => onSaveGrade(a._id)}
                       disabled={savingId === a._id}
-                      className="px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-60"
+                      className="btn btn-primary btn-sm"
                     >
                       {savingId === a._id ? "Saving…" : "Save"}
                     </button>
@@ -289,7 +289,7 @@ export default function ManualMarkingPanel({
                     {cid && (
                       <a
                         href={`/candidate/${cid}`}
-                        className="px-3 py-2 rounded-lg border border-input text-foreground hover:bg-muted/60 text-sm"
+                        className="btn btn-outline btn-sm"
                         target="_blank"
                         rel="noreferrer"
                       >
@@ -300,7 +300,7 @@ export default function ManualMarkingPanel({
                     {pdfHref && (
                       <a
                         href={pdfHref}
-                        className="px-3 py-2 rounded-lg border border-input text-foreground hover:bg-muted/60 text-sm"
+                        className="btn btn-outline btn-sm"
                         target="_blank"
                         rel="noreferrer"
                         title="Open PDF report"

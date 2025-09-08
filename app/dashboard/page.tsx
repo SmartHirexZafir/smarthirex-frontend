@@ -1,6 +1,8 @@
+// app/dashboard/page.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import  Button  from '../../components/ui/Button';
 
 type TabId = 'accepted' | 'rejected';
 
@@ -125,20 +127,14 @@ export default function StatusDashboard() {
         </div>
 
         <div className="flex items-center space-x-2">
-          <button
-            type="button"
-            className="flex items-center space-x-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <i className="ri-download-line" />
+          <Button variant="primary" size="md" type="button">
+            <i className="ri-download-line mr-2" />
             <span>Export Report</span>
-          </button>
-          <button
-            type="button"
-            className="flex items-center space-x-2 px-4 py-2 rounded-lg border border-input text-foreground hover:bg-muted/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <i className="ri-mail-line" />
+          </Button>
+          <Button variant="outline" size="md" type="button">
+            <i className="ri-mail-line mr-2" />
             <span>Bulk Email</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -277,7 +273,7 @@ export default function StatusDashboard() {
                     <div className="flex items-center space-x-2">
                       <a
                         href={`/candidate/${c._id}`}
-                        className="p-2 text-foreground hover:bg-muted/60 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="icon-btn"
                         aria-label="Open candidate profile"
                         title="Open candidate profile"
                       >
@@ -285,7 +281,7 @@ export default function StatusDashboard() {
                       </a>
                       <a
                         href={`mailto:${emailOf(c)}`}
-                        className="p-2 text-foreground hover:bg-muted/60 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="icon-btn"
                         aria-label="Send email"
                         title="Send email"
                       >
@@ -313,25 +309,15 @@ export default function StatusDashboard() {
           <div className="flex items-center justify-between">
             <p className="text-sm text-foreground/80">{selectedItems.length} item(s) selected</p>
             <div className="flex space-x-2">
-              <button
-                type="button"
-                className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
+              <Button variant="primary" size="md" type="button">
                 Send Reminder
-              </button>
-              <button
-                type="button"
-                className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:opacity-90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
+              </Button>
+              <Button variant="secondary" size="md" type="button">
                 Add Note
-              </button>
-              <button
-                type="button"
-                className="px-4 py-2 rounded-lg bg-muted text-foreground border border-border hover:bg-muted/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => setSelectedItems([])}
-              >
+              </Button>
+              <Button variant="outline" size="md" type="button" onClick={() => setSelectedItems([])}>
                 Clear
-              </button>
+              </Button>
             </div>
           </div>
         </div>

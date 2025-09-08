@@ -1,3 +1,5 @@
+// app/verify/[token]/page.tsx
+
 'use client';
 
 import React, { use, useEffect, useRef, useState } from 'react';
@@ -107,7 +109,6 @@ export default function VerifyPage({
   // ✅ Redirect immediately on success (no timer; not during render)
   useEffect(() => {
     if (status === 'done' && result?.ok) {
-      // small microtask to ensure state settled
       const t = setTimeout(() => router.replace('/login?verified=1'), 0);
       return () => clearTimeout(t);
     }
@@ -118,13 +119,8 @@ export default function VerifyPage({
 
   return (
     <div className="min-h-[calc(100vh-4rem)] grid lg:grid-cols-2 gap-8 py-10 px-4 sm:px-8">
-      {/* Left: Brand / Hero (polished theme) */}
-      <section className="relative hidden lg:flex overflow-hidden items-center justify-center rounded-3xl ring-1 ring-border bg-gradient-to-br from-[hsl(var(--background))] via-[hsl(var(--muted))/0.5] to-transparent">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full blur-3xl opacity-25 gradient-ink" />
-          <div className="absolute -bottom-24 -right-24 h-[28rem] w-[28rem] rounded-full blur-3xl opacity-20 bg-[hsl(var(--primary)/0.35)]" />
-        </div>
-
+      {/* Left: Brand / Hero (neutral panel) */}
+      <section className="relative hidden lg:flex overflow-hidden items-center justify-center rounded-3xl panel">
         <div className="relative z-10 p-12 max-w-xl">
           <Link href="/" className="inline-flex items-center gap-3 mb-10 group">
             <span className="h-14 w-14 rounded-2xl grid place-items-center bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-glow group-hover:scale-105 transition">
@@ -168,7 +164,7 @@ export default function VerifyPage({
         </div>
       </section>
 
-      {/* Right: Verification Card */}
+      {/* Right: Verification Card (neutral, tokenized colors) */}
       <section className="flex items-center">
         <div className="w-full">
           <div className="card p-8 sm:p-10 text-center ring-1 ring-border/70 bg-card/95 backdrop-blur">

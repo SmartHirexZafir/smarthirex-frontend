@@ -248,12 +248,10 @@ export default function RerunPromptModal({ history, onClose }: Props) {
   };
 
   return (
-    /* ✅ Clean popup (no dark overlay) */
     <div className="fixed inset-0 z-50 p-4 flex items-center justify-center">
       <div className="w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border">
         {/* Header */}
         <div className="relative p-6 border-b border-border bg-card/80">
-          <div className="absolute inset-0 -z-10 opacity-[.18] bg-[radial-gradient(900px_400px_at_-10%_-20%,hsl(var(--g1)/.5),transparent_60%),radial-gradient(800px_500px_at_120%_-20%,hsl(var(--g2)/.4),transparent_55%),radial-gradient(700px_700px_at_80%_120%,hsl(var(--g3)/.35),transparent_60%)]" />
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h2 className="text-xl font-bold gradient-text">Re-run Prompt (Scoped)</h2>
@@ -267,10 +265,10 @@ export default function RerunPromptModal({ history, onClose }: Props) {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* 🔘 Filters toggle (matches chatbot affordance) */}
+              {/* 🔘 Filters toggle */}
               <button
                 onClick={() => setShowFilters((s) => !s)}
-                className="btn-ghost rounded-full h-10 px-4 text-sm"
+                className="btn btn-ghost rounded-full h-10 px-4 text-sm"
                 aria-expanded={showFilters}
                 aria-controls="scoped-filters"
               >
@@ -280,7 +278,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
 
               <button
                 onClick={onClose}
-                className="btn-ghost rounded-full h-10 w-10 shrink-0"
+                className="btn btn-ghost rounded-full h-10 w-10 shrink-0"
                 aria-label="Close re-run modal"
               >
                 <i className="ri-close-line text-lg" />
@@ -473,7 +471,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
 
               <div className="mt-3 flex items-center justify-end gap-2">
                 <button
-                  className="btn-ghost text-sm"
+                  className="btn btn-ghost text-sm"
                   onClick={() => {
                     setEnableRole(true);
                     setEnableExperience(true);
@@ -547,7 +545,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                 <button
                   onClick={sendPrompt}
                   disabled={!canSubmit}
-                  className="btn-primary whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="btn btn-primary whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {submitting ? (
                     <span className="inline-flex items-center">
@@ -597,7 +595,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                   return (
                     <div
                       key={id}
-                      className="border rounded-xl p-3 bg-card/60 backdrop-blur-sm hover:border-[hsl(var(--border)/.9)] transition-colors"
+                      className="border rounded-xl p-3 bg-card hover:border-[hsl(var(--border)/.9)] transition-colors"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -622,10 +620,10 @@ export default function RerunPromptModal({ history, onClose }: Props) {
             </div>
 
             <div className="p-3 border-t border-border flex items-center justify-end gap-2">
-              <button onClick={onClose} className="btn-outline text-sm">
+              <button onClick={onClose} className="btn btn-outline text-sm">
                 Close
               </button>
-              <button onClick={onClose} className="btn-primary text-sm">
+              <button onClick={onClose} className="btn btn-primary text-sm">
                 Save &amp; Close
               </button>
             </div>

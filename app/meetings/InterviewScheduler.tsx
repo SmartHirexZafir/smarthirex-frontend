@@ -363,8 +363,8 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
     return (
       <div className="bg-card text-foreground backdrop-blur-sm rounded-2xl shadow-xl border border-border p-8">
         <div className="text-center">
-          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 bg-emerald-100">
-            <i className="ri-check-line text-3xl text-emerald-600" />
+          <div className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 bg-[hsl(var(--success))/0.15] text-[hsl(var(--success))]">
+            <i className="ri-check-line text-3xl" />
           </div>
           <h2 className="text-2xl font-bold mb-2">Interview Scheduled Successfully!</h2>
           <p className="text-muted-foreground mb-6">All participants have been notified</p>
@@ -372,20 +372,20 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
           <div className="rounded-xl p-6 border border-border mb-6 bg-gradient-to-r from-muted to-muted/60">
             <div className="grid md:grid-cols-3 gap-4">
               <div className="text-center">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-2 bg-primary">
-                  <i className="ri-video-line text-primary-foreground" />
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-2 bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]">
+                  <i className="ri-video-line" />
                 </div>
                 <p className="text-sm font-medium">Video invite generated</p>
               </div>
               <div className="text-center">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-2 bg-blue-600">
-                  <i className="ri-mail-line text-white" />
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-2 bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]">
+                  <i className="ri-mail-line" />
                 </div>
                 <p className="text-sm font-medium">Email sent to candidate</p>
               </div>
               <div className="text-center">
-                <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-2 bg-violet-600">
-                  <i className="ri-dashboard-line text-white" />
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-2 bg-[hsl(var(--secondary))] text-[hsl(var(--secondary-foreground))]">
+                  <i className="ri-dashboard-line" />
                 </div>
                 <p className="text-sm font-medium">Dashboard updated</p>
               </div>
@@ -418,7 +418,7 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
                   href={meetingUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="btn-primary inline-flex items-center gap-2"
                 >
                   <i className="ri-video-line" />
                   <span>Join Meeting</span>
@@ -427,7 +427,7 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
                 <button
                   type="button"
                   disabled
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-muted text-foreground/70"
+                  className="btn"
                   title="Meeting link not available"
                 >
                   <i className="ri-video-line" />
@@ -441,14 +441,14 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
             <button
               onClick={() => setShowConfirmation(false)}
               type="button"
-              className="px-6 py-2 rounded-lg border border-input text-foreground hover:bg-muted/60 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="btn-outline"
             >
               Schedule Another
             </button>
             <button
               onClick={() => router.push('/dashboard')}
               type="button"
-              className="px-6 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="btn-primary"
             >
               View Dashboard
             </button>
@@ -624,11 +624,7 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
                     key={time}
                     onClick={() => setSelectedTime(time)}
                     type="button"
-                    className={`p-3 rounded-lg text-sm font-medium transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                      isActive
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'bg-muted text-foreground hover:bg-muted/70 border border-border'
-                    }`}
+                    className={isActive ? 'btn-primary' : 'btn-outline'}
                     aria-pressed={isActive}
                   >
                     {time}
@@ -668,7 +664,7 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
           onClick={handleSchedule}
           disabled={scheduleDisabled}
           type="button"
-          className="flex items-center gap-2 px-6 py-3 rounded-xl font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           aria-busy={isScheduling}
           title={
             scheduleDisabled
@@ -678,7 +674,7 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
         >
           {isScheduling ? (
             <>
-              <div className="w-4 h-4 border-2 border-primary-foreground/70 border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-white/70 border-t-transparent rounded-full animate-spin" />
               <span>Scheduling...</span>
             </>
           ) : (

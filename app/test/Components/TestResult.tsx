@@ -80,11 +80,11 @@ function Badge({
   title?: string;
 }) {
   const map: Record<string, string> = {
-    gray: "bg-gray-100 text-gray-700",
-    green: "bg-green-100 text-green-700",
-    red: "bg-red-100 text-red-700",
-    amber: "bg-amber-100 text-amber-700",
-    indigo: "bg-indigo-100 text-indigo-700",
+    gray: "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]",
+    green: "bg-[hsl(var(--success))] text-white",
+    red: "bg-[hsl(var(--destructive))] text-white",
+    amber: "bg-[hsl(var(--warning))] text-black",
+    indigo: "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]",
   };
   return (
     <div
@@ -106,8 +106,8 @@ function Disclose({
   defaultOpen?: boolean;
 }) {
   return (
-    <details className="mt-3 rounded-lg border border-gray-200" {...(defaultOpen ? { open: true } : {})}>
-      <summary className="cursor-pointer select-none rounded-lg px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">
+    <details className="mt-3 rounded-lg border border-border" {...(defaultOpen ? { open: true } : {})}>
+      <summary className="cursor-pointer select-none rounded-lg px-3 py-2 text-sm font-medium text-foreground hover:bg-muted">
         {summary}
       </summary>
       <div className="px-3 pb-3 pt-1">{children}</div>
@@ -118,8 +118,8 @@ function Disclose({
 function KeyVal({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div className="grid grid-cols-12 gap-2 text-xs">
-      <div className="col-span-4 text-gray-500">{k}</div>
-      <div className="col-span-8 break-words font-medium text-gray-800">{v}</div>
+      <div className="col-span-4 text-[hsl(var(--muted-foreground))]">{k}</div>
+      <div className="col-span-8 break-words font-medium text-foreground">{v}</div>
     </div>
   );
 }
@@ -127,7 +127,7 @@ function KeyVal({ k, v }: { k: string; v: React.ReactNode }) {
 function MonoBlock({ children }: { children?: string }) {
   if (!children) return null;
   return (
-    <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-gray-50 p-2 text-xs text-gray-800">
+    <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-muted p-2 text-xs text-foreground">
       {children}
     </pre>
   );
@@ -177,7 +177,7 @@ export default function TestResult({
     const MARK = "__TEST_RESULT_NO_BACK__";
     try {
       const cur = (history.state || {}) as Record<string, unknown>;
-      if (cur[MARK] !== true) {
+      if ((cur as any)[MARK] !== true) {
         history.replaceState({ ...(cur || {}), [MARK]: true }, "");
       }
       history.pushState({ [MARK]: true }, "");
@@ -249,11 +249,11 @@ export default function TestResult({
     return (
       <Disclose summary={<span>View rubric breakdown</span>}>
         <div className="space-y-2">
-          {crits.length === 0 && <div className="text-xs text-gray-500">No rubric criteria provided.</div>}
+          {crits.length === 0 && <div className="text-xs text-[hsl(var(--muted-foreground))]">No rubric criteria provided.</div>}
           {crits.length > 0 && (
-            <div className="overflow-hidden rounded-md border">
+            <div className="overflow-hidden rounded-md border border-border">
               <table className="min-w-full text-left text-xs">
-                <thead className="bg-gray-50 text-gray-600">
+                <thead className="bg-muted/30 text-[hsl(var(--muted-foreground))]">
                   <tr>
                     <th className="px-3 py-2 font-medium">Criterion</th>
                     <th className="px-3 py-2 font-medium">Weight</th>
@@ -261,21 +261,21 @@ export default function TestResult({
                     <th className="px-3 py-2 font-medium">Comments</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-border">
                   {crits.map((c, idx) => {
                     const wPct =
-                      Number.isFinite(c?.weight) && c!.weight! >= 0
-                        ? `${Math.round((c!.weight! as number) * 100)}%`
+                      Number.isFinite(c?.weight) && (c!.weight as number) >= 0
+                        ? `${Math.round((c!.weight as number) * 100)}%`
                         : "—";
                     const sc = Number.isFinite(c?.score) ? String(c!.score) : "—";
                     return (
                       <tr key={idx} className="align-top">
                         <td className="px-3 py-2">
-                          <div className="font-medium text-gray-800">{c?.description || c?.id || "—"}</div>
+                          <div className="font-medium text-foreground">{c?.description || c?.id || "—"}</div>
                         </td>
-                        <td className="px-3 py-2 text-gray-700">{wPct}</td>
-                        <td className="px-3 py-2 text-gray-700">{sc}</td>
-                        <td className="px-3 py-2 text-gray-600">{c?.comments || "—"}</td>
+                        <td className="px-3 py-2 text-foreground">{wPct}</td>
+                        <td className="px-3 py-2 text-foreground">{sc}</td>
+                        <td className="px-3 py-2 text-[hsl(var(--muted-foreground))]">{c?.comments || "—"}</td>
                       </tr>
                     );
                   })}
@@ -285,9 +285,9 @@ export default function TestResult({
           )}
 
           {(Number.isFinite(total) || Number.isFinite(max)) && (
-            <div className="text-xs text-gray-600">
+            <div className="text-xs text-[hsl(var(--muted-foreground))]">
               Total:{" "}
-              <span className="font-semibold text-gray-800">
+              <span className="font-semibold text-foreground">
                 {Number.isFinite(total) ? total : "—"}
                 {Number.isFinite(max) ? ` / ${max}` : ""}
               </span>
@@ -309,7 +309,7 @@ export default function TestResult({
       <Disclose
         summary={
           <span>
-            View code tests <span className="text-gray-500">({passed}/{total} passed)</span>
+            View code tests <span className="text-[hsl(var(--muted-foreground))]">({passed}/{total} passed)</span>
           </span>
         }
       >
@@ -317,9 +317,9 @@ export default function TestResult({
           {tests.map((t, idx) => {
             const tone = t.ok ? "green" : t.timeout ? "amber" : "red";
             return (
-              <div key={idx} className="rounded-lg border border-gray-200 p-3">
+              <div key={idx} className="rounded-lg border border-border p-3">
                 <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium text-gray-800">{t.name || `Test ${idx + 1}`}</div>
+                  <div className="text-sm font-medium text-foreground">{t.name || `Test ${idx + 1}`}</div>
                   <Badge tone={tone as any}>
                     {t.ok ? "Pass" : t.timeout ? "Timeout" : "Fail"}
                   </Badge>
@@ -361,14 +361,14 @@ export default function TestResult({
   }
 
   return (
-    <div className="space-y-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div className="space-y-6 rounded-2xl border border-border bg-card text-foreground p-6 shadow-sm">
       {/* Header */}
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-medium">{title || "Your result"}</h2>
 
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-[hsl(var(--muted-foreground))]">
           Overall score (MCQs only):{" "}
-          <span className="font-semibold">
+          <span className="font-semibold text-foreground">
             {correctMcq}
             {typeof totalMcq === "number" && totalMcq > 0 ? ` / ${totalMcq}` : ""}{" "}
             {`(${Number.isFinite(percent) ? percent : 0}%)`}
@@ -377,19 +377,19 @@ export default function TestResult({
 
         {/* Optional: show aggregate auto-graded score if backend provided per-question scores */}
         {autoAgg.max > 0 && (
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-[hsl(var(--muted-foreground))]">
             Auto-graded score (free-form/coding):{" "}
-            <span className="font-semibold">
+            <span className="font-semibold text-foreground">
               {autoAgg.sum} / {autoAgg.max} {autoAgg.pct !== null ? `(${autoAgg.pct}%)` : ""}
             </span>
           </div>
         )}
 
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-[hsl(var(--muted-foreground))]">
           Test ID: {result?.test_id || "—"} · Candidate ID: {result?.candidate_id || "—"}
         </div>
-        <div className="text-xs text-gray-500">
-          You can now safely <span className="font-medium">close this tab</span> and return to your email.
+        <div className="text-xs text-[hsl(var(--muted-foreground))]">
+          You can now safely <span className="font-medium text-foreground">close this tab</span> and return to your email.
         </div>
       </div>
 
@@ -400,9 +400,9 @@ export default function TestResult({
           const qType = deriveType(d);
 
           return (
-            <div key={i} className="rounded-xl border border-gray-200 p-4">
+            <div key={i} className="rounded-xl border border-border p-4">
               <div className="mb-1 flex items-center justify-between">
-                <div className="text-[15px] font-medium">
+                <div className="text-[15px] font-medium text-foreground">
                   Q{i + 1}. {d?.question || "—"}
                 </div>
                 <div className="flex items-center">
@@ -413,20 +413,20 @@ export default function TestResult({
 
               <div className="text-sm">
                 <div className="mt-1">
-                  <span className="text-gray-600">Your answer:</span>{" "}
-                  <span className="break-words font-medium">{d?.submitted || "—"}</span>
+                  <span className="text-[hsl(var(--muted-foreground))]">Your answer:</span>{" "}
+                  <span className="break-words font-medium text-foreground">{d?.submitted || "—"}</span>
                 </div>
 
                 {/* Only show the correct answer row if it exists (MCQs) */}
                 {hasCorrect && (
                   <div className="mt-1">
-                    <span className="text-gray-600">Correct answer:</span>{" "}
-                    <span className="break-words font-medium">{d?.correct || "—"}</span>
+                    <span className="text-[hsl(var(--muted-foreground))]">Correct answer:</span>{" "}
+                    <span className="break-words font-medium text-foreground">{d?.correct || "—"}</span>
                   </div>
                 )}
 
                 {d?.explanation && (
-                  <div className="mt-2 text-xs text-gray-500">{d.explanation}</div>
+                  <div className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">{d.explanation}</div>
                 )}
               </div>
 
@@ -443,7 +443,7 @@ export default function TestResult({
         {onRetake && (
           <button
             onClick={onRetake}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+            className="btn btn-outline"
           >
             Retake
           </button>
@@ -452,7 +452,7 @@ export default function TestResult({
         {/* New default: Close tab (do not navigate back to site) */}
         <button
           onClick={tryCloseTab}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+          className="btn btn-primary"
         >
           Close tab
         </button>
@@ -461,7 +461,7 @@ export default function TestResult({
         {allowSiteBack && (
           <button
             onClick={onBack}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
+            className="btn btn-outline"
           >
             Back
           </button>
@@ -470,7 +470,7 @@ export default function TestResult({
 
       {/* Tiny toast */}
       {toast && (
-        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-gray-900/90 px-4 py-2 text-xs text-white shadow-lg">
+        <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-[hsl(var(--muted))] px-4 py-2 text-xs text-foreground shadow-lg">
           {toast}
         </div>
       )}

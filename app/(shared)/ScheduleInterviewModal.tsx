@@ -368,7 +368,7 @@ const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="btn variant-ghost"
+              className="btn btn-outline"
               disabled={loading}
             >
               Close

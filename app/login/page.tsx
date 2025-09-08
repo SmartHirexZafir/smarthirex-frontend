@@ -1,4 +1,4 @@
-// app/(auth)/login/page.tsx (or your LoginPage component file)
+// app/(auth)/login/page.tsx
 
 'use client';
 
@@ -228,29 +228,26 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h[calc(100vh-4rem)] min-h-[calc(100vh-4rem)] grid lg:grid-cols-2 gap-8">
-      {/* Left: Brand / Hero */}
+    <div className="min-h-[calc(100vh-4rem)] grid lg:grid-cols-2 gap-8">
+      {/* Left: Brand / Hero (neutral panel background only) */}
       <section className="relative hidden lg:flex rounded-3xl panel overflow-hidden items-center justify-center">
-        {/* Aurora gradient background using tokens */}
-        <div className="absolute inset-0 bg-luxe-radial opacity-70 pointer-events-none" />
-        <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full blur-3xl opacity-20 gradient-ink" />
-        <div className="relative z-10 p-12 max-w-xl">
-          <Link href="/" className="inline-flex items-center gap-3 mb-10">
+        <div className="relative z-10 p-8 max-w-xl">
+          <Link href="/" className="inline-flex items-center gap-3 mb-8">
             <span className="h-14 w-14 rounded-2xl shadow-glow grid place-items-center gradient-ink">
-              <i className="ri-brain-line text-white text-2xl" />
+              <i className="ri-brain-line text-[hsl(var(--primary-foreground))] text-2xl" />
             </span>
-            <span className="text-4xl font-bold gradient-text font-pacifico">SmartHirex</span>
+            <span className="text-4xl font-bold gradient-text">SmartHirex</span>
           </Link>
 
-          <h1 className="text-4xl font-semibold leading-tight mb-4">
+          <h1 className="text-3xl md:text-4xl font-semibold leading-tight mb-3">
             Welcome back to your <span className="gradient-text">hiring cockpit</span>
           </h1>
-          <p className="text-[hsl(var(--muted-foreground))] mb-8">
+          <p className="text-[hsl(var(--muted-foreground))] mb-6">
             Upload resumes, filter, score & schedule — all in one place. Secure, fast and
             delightful.
           </p>
 
-          <ul className="grid gap-4">
+          <ul className="grid gap-3">
             {[
               { icon: 'ri-sparkling-2-line', text: 'AI-powered shortlisting with explainability' },
               { icon: 'ri-shield-keyhole-line', text: 'Enterprise-grade security & SSO ready' },
@@ -258,17 +255,17 @@ export default function LoginPage() {
             ].map((f, i) => (
               <li
                 key={i}
-                className="flex items-start gap-3 p-3 rounded-2xl bg[hsla(var(--muted)/0.35)] bg-[hsl(var(--muted))/0.35] ring-1 ring-border"
+                className="flex items-start gap-3 p-3 rounded-2xl bg-[hsl(var(--muted))/0.35] ring-1 ring-border"
               >
                 <span className="mt-0.5 h-8 w-8 rounded-xl grid place-items-center bg-[hsl(var(--primary)/0.15)] text-[hsl(var(--primary))]">
-                  <i className={`${f.icon}`} />
+                  <i className={f.icon} />
                 </span>
                 <p className="text-sm">{f.text}</p>
               </li>
             ))}
           </ul>
 
-          <div className="mt-10 flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
+          <div className="mt-8 flex items-center gap-2 text-xs text-[hsl(var(--muted-foreground))]">
             <i className="ri-lock-2-line" />
             <span>We never store your password. Sessions are securely encrypted.</span>
           </div>
@@ -278,11 +275,11 @@ export default function LoginPage() {
       {/* Right: Auth Card */}
       <section className="flex items-center">
         <div className="w-full">
-          <div className="card p-8 shadow-elev-2">
-            <div className="text-center mb-6">
+          <div className="card p-6 sm:p-8 shadow-elev-2">
+            <div className="text-center mb-5">
               <div className="inline-flex items-center gap-3">
                 <div className="h-12 w-12 rounded-2xl gradient-ink grid place-items-center shadow-soft">
-                  <i className="ri-login-circle-line text-white text-xl" />
+                  <i className="ri-login-circle-line text-[hsl(var(--primary-foreground))] text-xl" />
                 </div>
                 <div className="text-left">
                   <h2 className="text-2xl font-semibold">Sign in</h2>
@@ -372,7 +369,7 @@ export default function LoginPage() {
                         type="button"
                         onClick={handleResendVerification}
                         disabled={resendLoading || !email}
-                        className="btn-primary px-3 py-1.5 rounded-xl text-xs"
+                        className="btn btn-outline px-3 py-1.5 rounded-xl text-xs"
                       >
                         {resendLoading ? 'Sending…' : 'Resend verification email'}
                       </button>
@@ -404,7 +401,7 @@ export default function LoginPage() {
               >
                 {isLoading ? (
                   <span className="inline-flex items-center gap-2">
-                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white/70 border-b-transparent" />
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-[hsl(var(--primary-foreground))/0.7] border-b-transparent" />
                     Signing…
                   </span>
                 ) : (
@@ -424,12 +421,12 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Social: Google is now functional */}
+              {/* Social: Google with global btn-google */}
               <div className="mt-6">
                 <button
                   type="button"
                   onClick={handleGoogleLogin}
-                  className="btn-outline w-full"
+                  className="btn btn-google w-full"
                   aria-label="Sign in with Google"
                 >
                   <i className="ri-google-fill" /> Login with Google
@@ -459,7 +456,7 @@ export default function LoginPage() {
           aria-modal="true"
           className="fixed inset-0 z-50 flex items-center justify-center"
         >
-          <div className="absolute inset-0 bg-black/50" />
+          <div className="absolute inset-0 bg-[hsl(var(--background))/0.6]" />
           <div className="relative z-10 w-full max-w-lg card p-6 shadow-elev-3 rounded-3xl">
             <div className="mb-4">
               <h3 className="text-xl font-semibold">Complete your profile</h3>
@@ -525,7 +522,7 @@ export default function LoginPage() {
               >
                 {profileLoading ? (
                   <span className="inline-flex items-center gap-2">
-                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-white/70 border-b-transparent" />
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-[hsl(var(--primary-foreground))/0.7] border-b-transparent" />
                     Saving…
                   </span>
                 ) : (

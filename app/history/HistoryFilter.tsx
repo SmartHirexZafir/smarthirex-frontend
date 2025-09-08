@@ -84,11 +84,8 @@ export default function HistoryFilter({ onFilter }: Props) {
   };
 
   return (
-    <div className="card p-6 mb-8 relative overflow-hidden">
-      {/* Soft aurora wash using theme gradient stops */}
-      <div className="pointer-events-none absolute inset-0 opacity-[.18] bg-[radial-gradient(800px_400px_at_0%_-10%,hsl(var(--g1)/.35),transparent_60%),radial-gradient(700px_500px_at_120%_-10%,hsl(var(--g2)/.30),transparent_55%),radial-gradient(800px_700px_at_85%_110%,hsl(var(--g3)/.25),transparent_60%)]" />
-
-      <div className="relative z-10 space-y-6">
+    <div className="card p-6 mb-8">
+      <div className="space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold tracking-tight">
             <span className="inline-flex items-center gap-2">
@@ -99,7 +96,7 @@ export default function HistoryFilter({ onFilter }: Props) {
 
           <button
             onClick={handleClearFilters}
-            className="btn-ghost text-sm"
+            className="btn btn-ghost text-sm"
             aria-label="Clear all filters"
           >
             <i className="ri-refresh-line" />
@@ -192,7 +189,7 @@ export default function HistoryFilter({ onFilter }: Props) {
             <button
               key={tag}
               onClick={() => handleFilterChange('search', tag)}
-              className="btn-secondary !px-3 !py-1.5 text-xs"
+              className="btn btn-secondary !px-3 !py-1.5 text-xs"
               aria-label={`Quick filter ${tag}`}
             >
               {tag}

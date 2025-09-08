@@ -132,7 +132,7 @@ export default function UploadPage() {
   const showResults = isProcessing || (Array.isArray(candidates) && candidates.length > 0);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen">
       <main id="main" className="pb-8">
         <section className="py-14 md:py-18">
           <div className="container max-w-7xl space-y-12">

@@ -5,7 +5,6 @@ import Hero from '../components/Hero';
 import FeaturesCarousel from '../components/FeaturesCarousel';
 import LiveStats from '../components/LiveStats';
 import Testimonials from '../components/Testimonials';
-import Footer from '@/components/Footer';
 
 export default function Home() {
   return (
@@ -16,7 +15,6 @@ export default function Home() {
       <FeaturesCarousel />
       <LiveStats />
       <Testimonials />
-      <Footer />
     </div>
   );
 }

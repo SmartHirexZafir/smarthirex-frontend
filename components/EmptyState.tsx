@@ -77,7 +77,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
             height="16"
             viewBox="0 0 24 24"
             fill="none"
-            className="text-white"
+            className="text-[hsl(var(--primary-foreground))]"
             aria-hidden="true"
           >
             <path

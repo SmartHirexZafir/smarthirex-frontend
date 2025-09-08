@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 
 export default function FeaturesCarousel() {
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Use theme tones instead of hard-coded Tailwind blues/purples
+  // Use theme tones and map each feature to a local public image
   const features = [
     {
       title: 'AI Resume Screening',
@@ -13,6 +14,7 @@ export default function FeaturesCarousel() {
         'Upload thousands of resumes and let our AI instantly identify the best candidates with 98% accuracy.',
       icon: 'ri-brain-line',
       tone: 'info' as const,
+      img: '/resume_screening.png',
     },
     {
       title: 'Smart Candidate Matching',
@@ -20,6 +22,7 @@ export default function FeaturesCarousel() {
         'Advanced algorithms that understand context and match candidates based on skills, experience, and culture fit.',
       icon: 'ri-user-search-line',
       tone: 'accent' as const,
+      img: '/candidate_matching.png',
     },
     {
       title: 'Automated Interview Scheduling',
@@ -27,6 +30,7 @@ export default function FeaturesCarousel() {
         'Seamlessly schedule interviews with Google Meet integration and AI-powered time slot optimization.',
       icon: 'ri-calendar-check-line',
       tone: 'success' as const,
+      img: '/scheduling.png',
     },
     {
       title: 'Intelligent Test Generation',
@@ -34,6 +38,7 @@ export default function FeaturesCarousel() {
         'Create custom skill assessments and coding challenges tailored to specific roles in seconds.',
       icon: 'ri-code-s-slash-line',
       tone: 'warning' as const,
+      img: '/intelligent_test_generation.png',
     },
     {
       title: 'Real-time Analytics',
@@ -41,43 +46,31 @@ export default function FeaturesCarousel() {
         'Get instant insights into your hiring pipeline with comprehensive analytics and reporting.',
       icon: 'ri-bar-chart-box-line',
       tone: 'secondary' as const,
+      img: '/analysis.png',
     },
   ];
 
-  // Map tone -> gradient + soft background using design tokens
-  const toneStyles: Record<
-    string,
-    { grad: string; soft: string; iconFg: string }
-  > = {
+  // Map tone -> gradient using design tokens
+  const toneStyles: Record<string, { grad: string; iconFg: string }> = {
     info: {
-      grad:
-        'from-[hsl(var(--info))] to-[hsl(var(--primary))]',
-      soft: 'bg-[hsl(var(--info)/0.08)]',
-      iconFg: 'text-[hsl(var(--info))]',
+      grad: 'from-[hsl(var(--info))] to-[hsl(var(--primary))]',
+      iconFg: 'text-[hsl(var(--primary-foreground))]',
     },
     accent: {
-      grad:
-        'from-[hsl(var(--accent))] to-[hsl(var(--primary))]',
-      soft: 'bg-[hsl(var(--accent)/0.08)]',
-      iconFg: 'text-[hsl(var(--accent))]',
+      grad: 'from-[hsl(var(--accent))] to-[hsl(var(--primary))]',
+      iconFg: 'text-[hsl(var(--primary-foreground))]',
     },
     success: {
-      grad:
-        'from-[hsl(var(--success))] to-[hsl(var(--primary))]',
-      soft: 'bg-[hsl(var(--success)/0.08)]',
-      iconFg: 'text-[hsl(var(--success))]',
+      grad: 'from-[hsl(var(--success))] to-[hsl(var(--primary))]',
+      iconFg: 'text-[hsl(var(--primary-foreground))]',
     },
     warning: {
-      grad:
-        'from-[hsl(var(--warning))] to-[hsl(var(--accent))]',
-      soft: 'bg-[hsl(var(--warning)/0.10)]',
-      iconFg: 'text-[hsl(var(--warning))]',
+      grad: 'from-[hsl(var(--warning))] to-[hsl(var(--accent))]',
+      iconFg: 'text-[hsl(var(--primary-foreground))]',
     },
     secondary: {
-      grad:
-        'from-[hsl(var(--secondary))] to-[hsl(var(--accent))]',
-      soft: 'bg-[hsl(var(--secondary)/0.10)]',
-      iconFg: 'text-[hsl(var(--secondary))]',
+      grad: 'from-[hsl(var(--secondary))] to-[hsl(var(--accent))]',
+      iconFg: 'text-[hsl(var(--primary-foreground))]',
     },
   };
 
@@ -89,11 +82,11 @@ export default function FeaturesCarousel() {
   }, [features.length]);
 
   return (
-    <section className="py-24 bg-background">
+    <section className="py-24 bg-transparent">
       <div className="container">
         {/* Section Heading */}
         <div className="text-center mb-16">
-          <div className="inline-flex items-center px-4 py-2 rounded-full glass text-[hsl(var(--muted-foreground))] text-sm font-medium mb-6 gap-2">
+          <div className="inline-flex items-center px-4 py-2 rounded-full glass text-muted-foreground text-sm font-medium mb-6 gap-2">
             <i className="ri-magic-line" aria-hidden="true"></i>
             <span>Why Choose SmartHirex?</span>
           </div>
@@ -107,7 +100,7 @@ export default function FeaturesCarousel() {
 
         <div className="relative">
           {/* Main Carousel */}
-          <div className="overflow-hidden rounded-3xl glass-strong ring-1 ring-border shadow-soft">
+          <div className="overflow-hidden rounded-3xl card shadow-soft">
             <div
               className="flex transition-transform duration-700 ease-lux"
               style={{ transform: `translateX(-${currentSlide * 100}%)` }}
@@ -115,13 +108,8 @@ export default function FeaturesCarousel() {
             >
               {features.map((feature, index) => {
                 const tone = toneStyles[feature.tone];
-                const query = encodeURIComponent(
-                  `modern professional ${feature.title.toLowerCase()} interface dashboard showing AI powered recruitment technology, sleek business software design with charts and data visualization, clean modern workspace with holographic displays, futuristic HR management system interface, professional technology platform with gradient backgrounds, advanced artificial intelligence hiring tools visualization, sophisticated recruitment analytics dashboard`
-                );
-                const imgSrc = `https://readdy.ai/api/search-image?query=${query}&width=600&height=400&seq=feature-carousel-${index}&orientation=landscape`;
-
                 return (
-                  <div key={index} className={`w-full flex-shrink-0 ${tone.soft} p-10 md:p-14`}>
+                  <div key={index} className="w-full flex-shrink-0 p-10 md:p-14 panel">
                     <div className="grid md:grid-cols-2 gap-10 items-center max-w-6xl mx-auto">
                       {/* Text */}
                       <div className="text-center md:text-left">
@@ -130,7 +118,7 @@ export default function FeaturesCarousel() {
                           role="img"
                           aria-label={`${feature.title} icon`}
                         >
-                          <i className={`${feature.icon} text-2xl md:text-3xl text-white`} />
+                          <i className={`${feature.icon} text-2xl md:text-3xl ${tone.iconFg}`} />
                         </div>
                         <h3 className="text-2xl md:text-4xl font-bold text-foreground mb-4 md:mb-6">
                           {feature.title}
@@ -138,9 +126,7 @@ export default function FeaturesCarousel() {
                         <p className="text-base md:text-lg text-[hsl(var(--muted-foreground))] leading-relaxed mb-6 md:mb-8">
                           {feature.description}
                         </p>
-                        <button className="btn btn-outline">
-                          Learn More
-                        </button>
+                        <button className="btn btn-outline">Learn More</button>
                       </div>
 
                       {/* Image */}
@@ -149,12 +135,13 @@ export default function FeaturesCarousel() {
                           className={`absolute -inset-4 rounded-3xl blur opacity-25 bg-gradient-to-r ${tone.grad}`}
                           aria-hidden="true"
                         />
-                        <img
-                          src={imgSrc}
+                        <Image
+                          src={feature.img}
                           alt={feature.title}
+                          width={600}
+                          height={400}
                           className="relative w-full h-72 md:h-80 object-cover rounded-2xl ring-1 ring-border shadow-soft"
-                          loading={index === currentSlide ? 'eager' : 'lazy'}
-                          decoding="async"
+                          priority={index === currentSlide}
                         />
                       </div>
                     </div>
@@ -164,16 +151,16 @@ export default function FeaturesCarousel() {
             </div>
           </div>
 
-          {/* Navigation Dots (a11y improved) */}
+          {/* Navigation Dots */}
           <div className="flex justify-center mt-8 space-x-3" role="tablist" aria-label="Feature slides">
             {features.map((f, index) => (
               <button
                 key={index}
                 type="button"
                 onClick={() => setCurrentSlide(index)}
-                className={`w-3.5 h-3.5 rounded-full ring-1 ring-border transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]
-                  ${index === currentSlide ? 'bg-[hsl(var(--primary))] scale-110' : 'bg-muted hover:bg-muted/80'}
-                `}
+                className={`w-3.5 h-3.5 rounded-full ring-1 ring-border transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-ring ${
+                  index === currentSlide ? 'bg-[hsl(var(--primary))] scale-110' : 'bg-muted hover:bg-muted/80'
+                }`}
                 role="tab"
                 aria-selected={index === currentSlide}
                 aria-label={`Go to slide ${index + 1}: ${f.title}`}

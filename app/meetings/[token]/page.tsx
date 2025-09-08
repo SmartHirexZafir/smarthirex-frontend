@@ -174,10 +174,10 @@ export default function MeetingGatePage() {
   // UI blocks
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="rounded-xl border border-border bg-card px-6 py-4 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="h-3 w-3 animate-pulse rounded-full bg-primary" />
+            <div className="h-3 w-3 animate-pulse rounded-full bg-[hsl(var(--primary))]" />
             <span className="text-sm text-muted-foreground">Loading meeting…</span>
           </div>
         </div>
@@ -187,13 +187,13 @@ export default function MeetingGatePage() {
 
   if (error || !meeting) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
-          <div className="mb-2 text-2xl font-semibold text-foreground">404</div>
+          <div className="mb-2 text-2xl font-semibold">404</div>
           <div className="text-muted-foreground">{error || "Meeting not found."}</div>
           <button
             onClick={() => router.push("/")}
-            className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+            className="btn-primary mt-4"
           >
             Go home
           </button>
@@ -206,27 +206,27 @@ export default function MeetingGatePage() {
   const { days, hours, minutes, seconds } = msToParts(remainingMs ?? 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10 flex items-center justify-center p-6">
+    <div className="min-h-screen flex items-center justify-center p-6">
       <div className="w-full max-w-xl rounded-2xl bg-card shadow-xl border border-border p-6">
         <div className="mb-4">
-          <h1 className="text-xl font-semibold text-foreground">
+          <h1 className="text-xl font-semibold">
             {meeting.title || "Interview Meeting"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             When:{" "}
-            <span className="font-medium text-foreground">{localWhen}</span>{" "}
+            <span className="font-medium">{localWhen}</span>{" "}
             <span className="text-muted-foreground">({meeting.timezone})</span>
           </p>
           <p className="text-sm text-muted-foreground">
-            Duration: <span className="font-medium text-foreground">{meeting.duration_mins} min</span>
+            Duration: <span className="font-medium">{meeting.duration_mins} min</span>
           </p>
         </div>
 
         {!isTimeReached ? (
           <>
-            <div className="mt-4 rounded-xl border border-info/30 bg-info/10 px-4 py-3 text-center">
-              <div className="text-sm text-info-foreground/80">Starts in</div>
-              <div className="mt-1 text-3xl font-bold tracking-wider text-info-foreground">
+            <div className="mt-4 rounded-xl border border-[hsl(var(--info))/0.3] bg-[hsl(var(--info))/0.1] px-4 py-3 text-center">
+              <div className="text-sm text-[hsl(var(--info-foreground))/0.8]">Starts in</div>
+              <div className="mt-1 text-3xl font-bold tracking-wider text-[hsl(var(--info-foreground))]">
                 {days > 0 && <span className="mr-2">{String(days)}d</span>}
                 {String(hours).padStart(2, "0")}:
                 {String(minutes).padStart(2, "0")}:
@@ -236,7 +236,7 @@ export default function MeetingGatePage() {
 
             <button
               disabled
-              className="mt-6 w-full cursor-not-allowed rounded-lg bg-muted px-4 py-3 text-sm font-medium text-muted-foreground"
+              className="btn-outline mt-6 w-full disabled:opacity-50 disabled:cursor-not-allowed"
               title="Join will be enabled at the scheduled time"
               aria-disabled="true"
             >
@@ -248,16 +248,16 @@ export default function MeetingGatePage() {
                 The Google Meet link will open automatically when the meeting starts.
               </p>
             ) : (
-              <p className="mt-2 text-center text-xs text-destructive">
+              <p className="mt-2 text-center text-xs text-[hsl(var(--destructive))]">
                 Join link is missing. Please contact the organizer.
               </p>
             )}
           </>
         ) : (
           <>
-            <div className="mt-4 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-center">
-              <div className="text-sm text-success-foreground/90">It’s time!</div>
-              <div className="mt-1 text-lg font-semibold text-success-foreground">
+            <div className="mt-4 rounded-xl border border-[hsl(var(--success))/0.3] bg-[hsl(var(--success))/0.1] px-4 py-3 text-center">
+              <div className="text-sm text-[hsl(var(--success-foreground))/0.9]">It’s time!</div>
+              <div className="mt-1 text-lg font-semibold text-[hsl(var(--success-foreground))]">
                 Redirecting you to the meeting…
               </div>
             </div>
@@ -265,14 +265,14 @@ export default function MeetingGatePage() {
             {joinHref ? (
               <a
                 href={joinHref}
-                className="mt-6 block w-full rounded-lg bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground hover:opacity-95"
+                className="btn-primary mt-6 block w-full text-center"
               >
                 Open Google Meet
               </a>
             ) : (
               <button
                 disabled
-                className="mt-6 w-full cursor-not-allowed rounded-lg bg-muted px-4 py-3 text-sm font-medium text-muted-foreground"
+                className="btn-outline mt-6 w-full disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Join link not available
               </button>
@@ -282,7 +282,7 @@ export default function MeetingGatePage() {
 
         {meeting.notes ? (
           <div className="mt-6 rounded-lg border border-border bg-muted/20 px-4 py-3">
-            <div className="text-sm font-medium text-foreground">Notes</div>
+            <div className="text-sm font-medium">Notes</div>
             <div className="mt-1 text-sm text-muted-foreground">{meeting.notes}</div>
           </div>
         ) : null}

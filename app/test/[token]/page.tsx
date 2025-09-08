@@ -62,12 +62,12 @@ export default function TestTokenPage() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <h1 className="text-xl font-semibold">SmartHirex Assessment</h1>
-        {testId && <span className="text-xs text-gray-500">Test ID: {testId}</span>}
+        {testId && <span className="text-xs text-muted-foreground">Test ID: {testId}</span>}
       </div>
 
       {/* Error banner */}
       {apiError && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {apiError}
         </div>
       )}

@@ -183,31 +183,14 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
     router.push(`/meetings?candidateId=${candidate._id}`);
   };
 
-  // ---- Unified visual style for ALL four action buttons ----
-  const baseBtn = "btn btn-soft w-full hover:translate-y-[-1px]"; // same shape/background
-  const shortlistBtnCls = [
-    baseBtn,
-    isShortlisted
-      ? "ring-2 ring-[hsl(var(--success))] bg-[hsl(var(--success)/.15)] text-[hsl(var(--success))]"
-      : "text-[hsl(var(--success))]",
-    loading ? "opacity-80 cursor-not-allowed" : "",
-  ].join(" ");
-
-  const rejectBtnCls = [
-    baseBtn,
-    isRejected
-      ? "ring-2 ring-[hsl(var(--destructive))] bg-[hsl(var(--destructive)/.15)] text-[hsl(var(--destructive))]"
-      : "text-[hsl(var(--destructive))]",
-    loading ? "opacity-80 cursor-not-allowed" : "",
-  ].join(" ");
-
-  const sendTestBtnCls = [baseBtn, "text-[hsl(var(--info))]"].join(" ");
+  // ---- Unified visual style for ALL four action buttons (convert to .btn variants) ----
+  const baseBtn = "btn btn-outline w-full";
+  const shortlistBtnCls = [baseBtn].join(" ");
+  const rejectBtnCls = [baseBtn].join(" ");
+  const sendTestBtnCls = [baseBtn].join(" ");
   const scheduleBtnCls = [
     baseBtn,
-    scheduleHardDisabled || scheduleSoftBlocked
-      ? "opacity-60" // visually disabled when missing email or awaiting test
-      : "text-[hsl(var(--primary))]",
-    scheduleHardDisabled ? "cursor-not-allowed" : "",
+    scheduleHardDisabled || scheduleSoftBlocked ? "opacity-60" : "",
   ].join(" ");
 
   return (

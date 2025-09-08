@@ -31,7 +31,7 @@ export default function RouteLoader() {
       <div className="absolute inset-0 opacity-20 bg-foreground" />
       {/* indeterminate bar */}
       <div
-        className="absolute left-0 top-0 h-full w-1/3 animate-pulse"
+        className="absolute left-0 top-0 h-full w-1/3 animate-pulse bg-[hsl(var(--primary))]"
         style={{ transform: "translateX(200%)" }}
       />
     </div>

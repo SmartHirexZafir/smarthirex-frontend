@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  // Light/Dark is driven globally by toggling the `light` class on <html>
   darkMode: ["class"],
   content: [
     "./app/**/*.{ts,tsx,js,jsx,mdx}",
@@ -14,12 +15,17 @@ module.exports = {
       screens: { "2xl": "1440px", "3xl": "1680px", "4xl": "1920px" },
     },
     extend: {
+      // Responsive breakpoints used project-wide
       screens: { sm: "480px", xl: "1280px", "3xl": "1680px", "4xl": "1920px" },
+
+      /* Global fonts map to CSS variables set in globals.css */
       fontFamily: {
         sans: ["var(--font-inter)", "ui-sans-serif", "system-ui"],
         display: ["var(--font-inter)", "ui-sans-serif", "system-ui"],
         mono: ["var(--font-ibm-plex-mono)", "ui-monospace", "SFMono-Regular"],
       },
+
+      /* Color tokens pull from CSS variables (Neon Eclipse) */
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -37,7 +43,11 @@ module.exports = {
         warning: { DEFAULT: "hsl(var(--warning))", foreground: "hsl(var(--warning-foreground))" },
         info: { DEFAULT: "hsl(var(--info))", foreground: "hsl(var(--info-foreground))" },
       },
+
+      /* Radii that match the global CSS variables */
       borderRadius: { lg: "0.9rem", xl: "1.25rem", "2xl": "1.75rem", "3xl": "2.25rem" },
+
+      /* Shadows used by global primitives (card, modal, etc.) */
       boxShadow: {
         soft: "0 10px 30px rgba(0,0,0,0.25)",
         lux: "0 1px 0 rgba(255,255,255,0.06) inset, 0 24px 60px rgba(0,0,0,0.05)",
@@ -45,10 +55,14 @@ module.exports = {
         "elev-1": "0 2px 10px rgba(0,0,0,0.35)",
         "elev-2": "0 18px 50px rgba(0,0,0,0.55)",
       },
+
+      /* Custom easing functions for unified transitions */
       transitionTimingFunction: {
         lux: "cubic-bezier(.21,.86,.24,.99)",
         spring: "cubic-bezier(.16,1,.3,1)",
       },
+
+      /* Keyframes used in globals.css (keep names in sync) */
       keyframes: {
         "subtle-float": { "0%,100%": { transform: "translateY(0)" }, "50%": { transform: "translateY(-4px)" } },
         shimmer: { "0%": { backgroundPosition: "-200% 0" }, "100%": { backgroundPosition: "200% 0" } },
@@ -61,47 +75,22 @@ module.exports = {
         "fade-in": "fade-in .5s ease-out both",
         "rise-in": "rise-in .6s lux both",
       },
+
+      /* Backgrounds used by the global aurora + grid utilities */
       backgroundImage: {
-        // Existing key used by globals.css
+        // New global aurora for the **Neon Eclipse** theme
+        "neon-eclipse":
+          "radial-gradient(1200px 800px at 15% -10%, hsl(var(--g1)/.16), transparent 60%), radial-gradient(1000px 700px at 110% -10%, hsl(var(--g2)/.14), transparent 55%), radial-gradient(1000px 900px at 85% 110%, hsl(var(--g3)/.12), transparent 60%)",
+
+        // Alias for backward compatibility (old class names)
         "luxe-aurora":
           "radial-gradient(1200px 800px at 15% -10%, hsl(var(--g1)/.12), transparent 60%), radial-gradient(1000px 700px at 110% -10%, hsl(var(--g2)/.10), transparent 55%), radial-gradient(1000px 900px at 85% 110%, hsl(var(--g3)/.10), transparent 60%)",
-        // Alias for the new theme name so both utilities work if used
-        "neon-eclipse":
-          "radial-gradient(1200px 800px at 15% -10%, hsl(var(--g1)/.12), transparent 60%), radial-gradient(1000px 700px at 110% -10%, hsl(var(--g2)/.10), transparent 55%), radial-gradient(1000px 900px at 85% 110%, hsl(var(--g3)/.10), transparent 60%)",
+
+        // Subtle grid used by filters/history panels
+        "neon-grid":
+          "linear-gradient(to right, hsl(var(--grid)/.18) 1px, transparent 1px), linear-gradient(to bottom, hsl(var(--grid)/.18) 1px, transparent 1px)",
       },
-      // Make @tailwindcss/typography respect our CSS variable tokens in both themes
-      typography: (theme) => ({
-        DEFAULT: {
-          css: {
-            color: theme("colors.foreground"),
-            a: { color: theme("colors.primary.DEFAULT"), textDecoration: "none", "&:hover": { opacity: .9 } },
-            h1: { color: theme("colors.foreground"), fontWeight: "700" },
-            h2: { color: theme("colors.foreground"), fontWeight: "700" },
-            h3: { color: theme("colors.foreground"), fontWeight: "600" },
-            strong: { color: theme("colors.foreground") },
-            code: { color: theme("colors.accent.DEFAULT") },
-            blockquote: { color: theme("colors.muted.foreground"), borderLeftColor: theme("colors.border") },
-            hr: { borderColor: theme("colors.border") },
-          },
-        },
-        invert: {
-          css: {
-            color: theme("colors.foreground"),
-            a: { color: theme("colors.primary.DEFAULT") },
-            h1: { color: theme("colors.foreground") },
-            h2: { color: theme("colors.foreground") },
-            h3: { color: theme("colors.foreground") },
-            strong: { color: theme("colors.foreground") },
-            code: { color: theme("colors.accent.DEFAULT") },
-            blockquote: { color: theme("colors.muted.foreground"), borderLeftColor: theme("colors.border") },
-            hr: { borderColor: theme("colors.border") },
-          },
-        },
-      }),
     },
   },
-  plugins: [
-    require("@tailwindcss/forms")({ strategy: "class" }), // prevent default form styles from overriding global .input/.select
-    require("@tailwindcss/typography"),
-  ],
+  plugins: [require("@tailwindcss/forms"), require("@tailwindcss/typography")],
 };

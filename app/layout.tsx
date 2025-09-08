@@ -22,6 +22,7 @@ import RouteLoader from "@/components/system/RouteLoader";
 import LoaderOverlay from "@/components/system/LoaderOverlay";
 
 import { Suspense } from "react";
+import GlobalLoadingProvider from "@/components/system/GlobalLoadingProvider"; // client provider
 
 /** Google fonts */
 const inter = Inter({
@@ -111,28 +112,31 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
 
-        {/* App wrappers */}
-        <Toaster>
-          <RouteLoader />
+        {/* Global loader provider — uses its own default excludes (no RegExp props passed) */}
+        <GlobalLoadingProvider>
+          {/* App wrappers */}
+          <Toaster>
+            <RouteLoader />
 
-          {/* Headers via gates */}
-          <MarketingHeaderGate>
-            <MarketingHeader />
-          </MarketingHeaderGate>
-          <AppHeaderGate>
-            <AppHeader />
-          </AppHeaderGate>
+            {/* Headers via gates */}
+            <MarketingHeaderGate>
+              <MarketingHeader />
+            </MarketingHeaderGate>
+            <AppHeaderGate>
+              <AppHeader />
+            </AppHeaderGate>
 
-          {/* Page content */}
-          <main id="main" className="flex-1 w-full">
-            <Suspense fallback={<LoaderOverlay fullscreen />}>
-              {children}
-            </Suspense>
-          </main>
-        </Toaster>
+            {/* Page content */}
+            <main id="main" className="flex-1 w-full">
+              <Suspense fallback={<LoaderOverlay fullscreen />}>
+                {children}
+              </Suspense>
+            </main>
+          </Toaster>
 
-        {/* Footer everywhere (single global footer) */}
-        <Footer />
+          {/* Footer everywhere (single global footer) */}
+          <Footer />
+        </GlobalLoadingProvider>
       </body>
     </html>
   );

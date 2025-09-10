@@ -205,6 +205,13 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
     }
   };
 
+  const fullPdfUrl = (pdfUrl?: string) => {
+    if (!pdfUrl) return undefined;
+    return pdfUrl.startsWith("http")
+      ? pdfUrl
+      : `${API_BASE}${pdfUrl.startsWith("/") ? pdfUrl : `/${pdfUrl}`}`;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -248,13 +255,6 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
     } catch {
       return iso;
     }
-  };
-
-  const fullPdfUrl = (pdfUrl?: string) => {
-    if (!pdfUrl) return undefined;
-    return pdfUrl.startsWith("http")
-      ? pdfUrl
-      : `${API_BASE}${pdfUrl.startsWith("/") ? pdfUrl : `/${pdfUrl}`}`;
   };
 
   return (
@@ -402,6 +402,20 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                               <span className="badge">
                                 Score: {typeof a.score === "number" ? `${a.score}%` : "N/A"}
                               </span>
+
+                              {/* ✅ Ensure each item has a working link: View in Tests (app route) */}
+                              <Link
+                                href={`/test?attemptId=${encodeURIComponent(a.id)}&candidateId=${encodeURIComponent(
+                                  candidateId
+                                )}`}
+                                className="btn btn-outline text-xs px-3 py-1.5"
+                                title="Open in Tests"
+                              >
+                                <i className="ri-external-link-line mr-1" />
+                                Open
+                              </Link>
+
+                              {/* ✅ PDF report (absolute URL-safe) if available */}
                               {pdf ? (
                                 <a
                                   href={pdf}

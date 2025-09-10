@@ -30,8 +30,14 @@ export default function GlobalLoadingProvider({ children }: { children: React.Re
   const navInFlight = useRef(false);
   const navTimeout = useRef<NodeJS.Timeout | null>(null);
 
-  const inc = () => setCount((c) => c + 1);
-  const dec = () => setCount((c) => Math.max(0, c - 1));
+  // 🔧 Avoid scheduling state updates during React's insertion phase
+  const schedule = (fn: () => void) => {
+    if (typeof queueMicrotask === "function") queueMicrotask(fn);
+    else setTimeout(fn, 0);
+  };
+
+  const inc = () => schedule(() => setCount((c) => c + 1));
+  const dec = () => schedule(() => setCount((c) => Math.max(0, c - 1)));
 
   // Start a navigation overlay that auto-clears if something goes wrong
   const startNav = () => {
@@ -94,7 +100,6 @@ export default function GlobalLoadingProvider({ children }: { children: React.Re
       // @ts-expect-error variadic passthrough
       return function (...args) {
         startNav();
-       
         return fn(...args);
       };
     }

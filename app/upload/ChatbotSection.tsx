@@ -14,290 +14,6 @@ type ChatResultNetwork = { kind: 'network'; message: string };
 type ChatResult = ChatResultOk | ChatResultUnauth | ChatResultError | ChatResultNetwork;
 
 /* ---------------------------
-   Normalization (frontend)
----------------------------- */
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const edgeWord = (raw: string) =>
-  new RegExp(`(?<![a-z0-9])${escapeRegExp(raw)}(?![a-z0-9])`, 'g'); // handles dots/hyphens too
-
-// ✅ Synonym map (expanded; additive, preserves old logic)
-const SYNONYMS: Record<string, string> = {
-  // short-hands / common
-  js: 'javascript',
-  ts: 'typescript',
-  py: 'python',
-  tf: 'tensorflow',
-  sklearn: 'scikit',
-  'sk-learn': 'scikit',
-  k8s: 'kubernetes',
-  ml: 'machine learning',
-  ai: 'artificial intelligence',
-  cv: 'computer vision',
-  nlp: 'natural language processing',
-  fe: 'frontend',
-  'front end': 'frontend',
-  'front-end': 'frontend',
-  be: 'backend',
-  'back end': 'backend',
-  'back-end': 'backend',
-  fullstack: 'full-stack',
-
-  // frameworks / libs
-  reactjs: 'react',
-  'react.js': 'react',
-  nodejs: 'node',
-  'node.js': 'node',
-  nextjs: 'next',
-  'next.js': 'next',
-  nuxtjs: 'nuxt',
-  'nuxt.js': 'nuxt',
-  'vue.js': 'vue',
-  tensorflowjs: 'tensorflow',
-  'tensorflow.js': 'tensorflow',
-  pytorch: 'torch',
-  'ci/cd': 'cicd',
-  'ci-cd': 'cicd',
-  'ci cd': 'cicd',
-  sass: 'scss',
-  tailwindcss: 'tailwind',
-  'power bi': 'powerbi',
-  'power-bi': 'powerbi',
-  'ms-excel': 'excel',
-  msexcel: 'excel',
-  msword: 'word',
-  ppt: 'powerpoint',
-  xd: 'adobe xd',
-  ps: 'photoshop',
-  mlops: 'ml ops',
-  gcloud: 'gcp',
-  'google cloud': 'gcp',
-  'google cloud platform': 'gcp',
-  'amazon web services': 'aws',
-  'ms azure': 'azure',
-  'microsoft azure': 'azure',
-  'git hub': 'github',
-  win: 'windows',
-  'mac os': 'macos',
-  'os x': 'macos',
-  usa: 'united states',
-  'u.s.': 'united states',
-  'u.s.a.': 'united states',
-  uk: 'united kingdom',
-  uae: 'united arab emirates',
-
-  // roles & titles
-  'data science': 'data scientist',
-  'data engineering': 'data engineer',
-  'software dev': 'software engineer',
-  'software developer': 'software engineer',
-  'ui/ux': 'ui ux',
-  uix: 'ui ux',
-  'front end developer': 'frontend developer',
-  'back end developer': 'backend developer',
-  'full stack developer': 'full stack developer',
-  'site reliability engineer': 'sre',
-  'quality assurance': 'qa',
-  'quality assurance engineer': 'qa engineer',
-  'user interface': 'ui',
-  'user experience': 'ux',
-  'frontend dev': 'frontend developer',
-  'front end dev': 'frontend developer',
-  'react developer': 'frontend developer',
-  'javascript developer': 'frontend developer',
-  'backend dev': 'backend developer',
-  'back end dev': 'backend developer',
-  'node developer': 'backend developer',
-  'python developer': 'backend developer',
-  'fullstack dev': 'full stack developer',
-  'full stack dev': 'full stack developer',
-  devops: 'devops/sre',
-  sre: 'devops/sre',
-  'site reliability': 'devops/sre',
-  qa: 'qa engineer',
-  'test engineer': 'qa engineer',
-  'ml engineer': 'ml engineer',
-  'ai engineer': 'ml engineer',
-  'etl developer': 'etl developer',
-  'ui designer': 'ui/ux designer',
-  'ux designer': 'ui/ux designer',
-  'product designer': 'product designer',
-  'graphic designer': 'web designer',
-  'visual designer': 'web designer',
-  'android engineer': 'mobile developer',
-  'ios engineer': 'mobile developer',
-  'mobile app developer': 'mobile developer',
-  attorney: 'advocate',
-  lawyer: 'advocate',
-  barrister: 'advocate',
-
-  // degrees
-  'll.b': 'llb',
-  'll.b.': 'llb',
-  'll.m': 'llm',
-  'll.m.': 'llm',
-  'b.sc': 'bsc',
-  'b.sc.': 'bsc',
-  'm.sc': 'msc',
-  'm.sc.': 'msc',
-  'ph.d': 'phd',
-  'ph.d.': 'phd',
-  'b tech': 'btech',
-  'm tech': 'mtech',
-  bachelors: 'bachelor',
-  masters: 'master',
-  'juris doctor': 'jd',
-  'bar-at-law': 'bar at law',
-
-  // databases & tools aliases
-  postgresql: 'postgres',
-  postgre: 'postgres',
-  postgress: 'postgres',
-  'mongo db': 'mongodb',
-  mongo: 'mongodb',
-  'ms sql': 'mssql',
-  'microsoft sql server': 'mssql',
-  tfserving: 'tensorflow serving',
-  'gpt-3': 'gpt3',
-  'gpt-4': 'gpt4',
-  jira: 'atlassian jira',
-  bitbucket: 'atlassian bitbucket',
-  'react native': 'react native', // keep
-  'natural language processing': 'natural language processing',
-  'computer vision': 'computer vision',
-  'machine learning': 'machine learning',
-  'deep learning': 'deep learning',
-  'ml ops': 'ml ops',
-  'google ads': 'google ads',
-  'project management': 'project management',
-  'supply chain': 'supply chain',
-  'human resources': 'human resources',
-  'financial modeling': 'financial modeling',
-  'micro services': 'microservices',
-  'micro-services': 'microservices',
-
-  // ✅ comparator & equality synonyms (help keyword extraction, even if backend parses too)
-  'less than equal to': '<=',
-  'less than or equal to': '<=',
-  lte: '<=',
-  'greater than equal to': '>=',
-  'greater than or equal to': '>=',
-  gte: '>=',
-  'equal to': '=',
-  equals: '=',
-  exactly: '=',
-
-  // ✅ number words → digits (helps prompts like “four”)
-  zero: '0',
-  one: '1',
-  two: '2',
-  three: '3',
-  four: '4',
-  five: '5',
-  six: '6',
-  seven: '7',
-  eight: '8',
-  nine: '9',
-  ten: '10',
-  eleven: '11',
-  twelve: '12',
-  thirteen: '13',
-  fourteen: '14',
-  fifteen: '15',
-  sixteen: '16',
-  seventeen: '17',
-  eighteen: '18',
-  nineteen: '19',
-  twenty: '20',
-};
-
-// Singularization for common role nouns
-const PLURAL_SINGULAR: Record<string, string> = {
-  developers: 'developer',
-  engineers: 'engineer',
-  scientists: 'scientist',
-  designers: 'designer',
-  managers: 'manager',
-  analysts: 'analyst',
-  architects: 'architect',
-  candidates: 'candidate',
-};
-
-// Light stopword list (kept small; additive)
-const STOPWORDS = new Set([
-  'show',
-  'find',
-  'me',
-  'with',
-  'and',
-  'in',
-  'of',
-  'for',
-  'to',
-  'a',
-  'an',
-  'the',
-  'please',
-  'pls',
-  'candidate',
-  'candidates',
-  'experience',
-  'year',
-  'years',
-  'yr',
-  'yrs',
-  'based',
-  'developer',
-  'developers',
-  'engineer',
-  'engineers',
-  'scientist',
-  'scientists',
-  'designer',
-  'designers',
-  'manager',
-  'managers',
-]);
-
-function normalizePrompt(raw: string) {
-  let s = (raw || '').toLowerCase().trim().replace(/\s+/g, ' ');
-
-  // singularize plurals
-  for (const [pl, sg] of Object.entries(PLURAL_SINGULAR)) {
-    s = s.replace(edgeWord(pl), sg);
-  }
-
-  // apply synonyms (handles dots/hyphens)
-  for (const [k, v] of Object.entries(SYNONYMS)) {
-    s = s.replace(edgeWord(k), v);
-  }
-
-  const cleaned = s.replace(/[^a-z0-9+ ]/g, ' ').replace(/\s+/g, ' ').trim();
-  const tokens = cleaned.split(' ').filter(Boolean);
-  const keywords: string[] = [];
-  const seen = new Set<string>();
-  for (const t of tokens) {
-    if (!STOPWORDS.has(t) && !seen.has(t)) {
-      seen.add(t);
-      keywords.push(t);
-    }
-  }
-  const isRoleLike = cleaned.split(' ').length <= 4;
-  return { normalized_prompt: s, keywords, isRoleLike };
-}
-
-// Pull out quoted phrases for exact matching mode
-const extractQuotedPhrases = (text: string): string[] => {
-  const out: string[] = [];
-  const re = /["']([^"']{2,200})["']/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text))) {
-    const p = m[1].trim();
-    if (p) out.push(p);
-  }
-  return Array.from(new Set(out));
-};
-
-/* ---------------------------
    Filter menu (checkboxes)
 ---------------------------- */
 type FilterKey = 'role' | 'skills' | 'location' | 'projects' | 'experience' | 'education' | 'cv';
@@ -334,6 +50,28 @@ export default function ChatbotSection({
   const [menuOpen, setMenuOpen] = useState(false);
   const [selected, setSelected] = useState<FilterKey[]>([]); // preserves order of selection
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Drawer/section inputs (History-style)
+  const [roleInput, setRoleInput] = useState('');
+
+  // Experience min/max → composed prompt (between / at least / at most)
+  const [expMin, setExpMin] = useState('');
+  const [expMax, setExpMax] = useState('');
+
+  const [educationInput, setEducationInput] = useState('');
+  const [skillsInput, setSkillsInput] = useState('');
+  const [projectsInput, setProjectsInput] = useState('');
+
+  // Location
+  const [locationInput, setLocationInput] = useState('');
+
+  // Phrases (include/exclude) + Exact phrase
+  const [phrasesInclude, setPhrasesInclude] = useState('');
+  const [phrasesExclude, setPhrasesExclude] = useState('');
+  const [phrasesExact, setPhrasesExact] = useState('');
+
+  // finish guard to always stop parent loader
+  const finishedRef = useRef(false);
 
   // lightweight toast
   const [toast, setToast] = useState<{
@@ -379,34 +117,21 @@ export default function ChatbotSection({
     return resp;
   }
 
-  async function callChatbot(prompt: string, token: string | null): Promise<ChatResult> {
-    const norm = normalizePrompt(prompt);
-
-    // Map selected -> backend expected fields; 'cv' becomes 'phrases' and toggles exact mode
-    const selectedMapped = selected.map((k) => (k === 'cv' ? ('phrases' as const) : k));
-    const quoted = extractQuotedPhrases(prompt);
-
-    const options = {
-      selected: selectedMapped, // ✅ backend expects these keys (education now included)
-      exact_match_only: selected.includes('cv') || quoted.length > 0,
-      exact_terms: quoted.length > 0 ? quoted : undefined,
-      // keep role prefilter enabled by default to save DB work
-      prefilter_role_regex: true,
-    };
-
-    const payload = {
-      prompt,
-      normalized_prompt: norm.normalized_prompt,
-      keywords: norm.keywords,
-      selected_filters: selected, // 👈 backward-compat field
-      options, // 👈 new structured filters (backend will use if supported)
-    };
-
+  // 🚫 No client-side synonyms; backend owns logic. We only pass prompt + optional focus_section.
+  async function callChatbot(
+    payload: { prompt: string; options?: { focus_section?: 'role'|'experience'|'education'|'skills'|'projects'|'phrases'|'location' } },
+    token: string | null
+  ): Promise<ChatResult> {
     const paths = ['/chatbot/query', '/query'];
     for (const p of paths) {
       try {
         const url = `${API_BASE}${p}`;
-        const resp = await postJSON(url, payload, token);
+        const body = {
+          prompt: payload.prompt,
+          selectedFilters: [], // explicit: frontend does not send guessed filters
+          options: payload.options ?? {},
+        };
+        const resp = await postJSON(url, body, token);
         const status = resp.status;
         if (status === 401) return { kind: 'unauth' };
         const text = await resp.text();
@@ -430,8 +155,15 @@ export default function ChatbotSection({
     return { kind: 'network', message: 'Network error or endpoint not reachable' };
   }
 
+  const finishParent = (prompt: string, list: any[]) => {
+    finishedRef.current = true;
+    onPromptSubmit(prompt, list);
+  };
+
   const handleSubmit = async (prompt = inputValue.trim()) => {
     if (!prompt) return;
+
+    finishedRef.current = false;
 
     const userMessage: ChatMsg = {
       id: Date.now(),
@@ -447,102 +179,231 @@ export default function ChatbotSection({
     onPromptSubmit(prompt, []); // START — loader ON
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    const result = await callChatbot(prompt, token);
 
-    if (result.kind === 'unauth') {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          type: 'bot',
-          content: 'You are not logged in or your session expired. Please log in again.',
-          timestamp: formatTime(),
-        },
-      ]);
-      onPromptSubmit(prompt, []); // FINISH — loader OFF
-      setIsTyping(false);
-      return;
-    }
-    if (result.kind === 'network') {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 2,
-          type: 'bot',
-          content: "Sorry, I couldn't reach the server. Please check your API URL or CORS settings.",
-          timestamp: formatTime(),
-        },
-      ]);
-      setToast({ show: true, msg: result.message, tone: 'error' });
-      onPromptSubmit(prompt, []); // FINISH — loader OFF
-      setIsTyping(false);
-      return;
-    }
-    if (result.kind === 'error') {
-      const msg = result.message || `Server error (${result.status || 'unknown'})`;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 3,
-          type: 'bot',
-          content: `Sorry, I couldn't process your request: ${msg}`,
-          timestamp: formatTime(),
-        },
-      ]);
-      setToast({ show: true, msg: 'Server error while processing your request.', tone: 'error' });
-      onPromptSubmit(prompt, []); // FINISH — loader OFF
-      setIsTyping(false);
-      return;
-    }
+    try {
+      const result = await callChatbot({ prompt }, token);
 
-    const data = result.data || {};
-    if (data?.no_cvs_uploaded === true || data?.message === 'no_cvs_uploaded') {
+      if (result.kind === 'unauth') {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            type: 'bot',
+            content: 'You are not logged in or your session expired. Please log in again.',
+            timestamp: formatTime(),
+          },
+        ]);
+        finishParent(prompt, []); // FINISH — loader OFF
+        setIsTyping(false);
+        return;
+      }
+      if (result.kind === 'network') {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 2,
+            type: 'bot',
+            content: "Sorry, I couldn't reach the server. Please check your API URL or CORS settings.",
+            timestamp: formatTime(),
+          },
+        ]);
+        setToast({ show: true, msg: result.message, tone: 'error' });
+        finishParent(prompt, []); // FINISH — loader OFF
+        setIsTyping(false);
+        return;
+      }
+      if (result.kind === 'error') {
+        const msg = result.message || `Server error (${result.status || 'unknown'})`;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 3,
+            type: 'bot',
+            content: `Sorry, I couldn't process your request: ${msg}`,
+            timestamp: formatTime(),
+          },
+        ]);
+        setToast({ show: true, msg: 'Server error while processing your request.', tone: 'error' });
+        finishParent(prompt, []); // FINISH — loader OFF
+        setIsTyping(false);
+        return;
+      }
+
+      const data = result.data || {};
+      if (data?.no_cvs_uploaded === true || data?.message === 'no_cvs_uploaded') {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 4,
+            type: 'bot',
+            content: 'There is no CV uploaded from your side.',
+            timestamp: formatTime(),
+          },
+        ]);
+        try {
+          window.dispatchEvent(new CustomEvent('shx:no-cvs', { detail: { prompt } }));
+        } catch {}
+        setToast({ show: true, msg: 'No CVs found. Please upload resumes first.', tone: 'warning' });
+        finishParent(prompt, []); // FINISH — loader OFF
+        setIsTyping(false);
+        return;
+      }
+
+      const list = Array.isArray(data.resumes_preview) ? data.resumes_preview : [];
+      const total = typeof data?.matchMeta?.total === 'number' ? data.matchMeta.total : list.length;
+      const q = (data?.normalized_prompt || prompt || '').toString().trim();
+
+      const standardizedReply =
+        `Showing ${total} result${total === 1 ? '' : 's'} for your query.` + (q ? `\nQuery: "${q}"` : '');
+
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now() + 5, type: 'bot', content: standardizedReply, timestamp: formatTime() },
+      ]);
+
+      if (data?.no_results === true || total === 0) {
+        setToast({ show: true, msg: 'No matching candidates found for your query.', tone: 'info' });
+        try {
+          window.dispatchEvent(new CustomEvent('shx:no-results', { detail: { prompt } }));
+        } catch {}
+        finishParent(prompt, []); // FINISH — loader OFF (empty results)
+        setIsTyping(false);
+        return;
+      }
+
+      finishParent(prompt, list); // FINISH — loader OFF via parent
+      setIsTyping(false);
+    } finally {
+      // Safety: ensure parent loader stops even if we missed a path
+      if (!finishedRef.current) {
+        onPromptSubmit(prompt, []);
+        setIsTyping(false);
+      }
+    }
+  };
+
+  // Targeted section submit (focus_section only; DO NOT mix sections)
+  const handleSectionSubmit = async (
+    section: 'role'|'experience'|'education'|'skills'|'projects'|'phrases'|'location',
+    value: string
+  ) => {
+    const prompt = value.trim();
+    if (!prompt) return;
+
+    finishedRef.current = false;
+
+    // Add a compact user message indicating focused search
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now(), type: 'user', content: `${prompt}`, timestamp: formatTime() },
+    ]);
+
+    // start loader
+    onPromptSubmit(prompt, []); // START
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
+    try {
+      const result = await callChatbot({ prompt, options: { focus_section: section } }, token);
+
+      if (result.kind === 'unauth') {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            type: 'bot',
+            content: 'You are not logged in or your session expired. Please log in again.',
+            timestamp: formatTime(),
+          },
+        ]);
+        finishParent(prompt, []);
+        return;
+      }
+      if (result.kind === 'network') {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 2,
+            type: 'bot',
+            content: "Sorry, I couldn't reach the server. Please check your API URL or CORS settings.",
+            timestamp: formatTime(),
+          },
+        ]);
+        setToast({ show: true, msg: result.message, tone: 'error' });
+        finishParent(prompt, []);
+        return;
+      }
+      if (result.kind === 'error') {
+        const msg = result.message || `Server error (${result.status || 'unknown'})`;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 3,
+            type: 'bot',
+            content: `Sorry, I couldn't process your request: ${msg}`,
+            timestamp: formatTime(),
+          },
+        ]);
+        setToast({ show: true, msg: 'Server error while processing your request.', tone: 'error' });
+        finishParent(prompt, []);
+        return;
+      }
+
+      const data = result.data || {};
+      const list = Array.isArray(data.resumes_preview) ? data.resumes_preview : [];
+      const total = typeof data?.matchMeta?.total === 'number' ? data.matchMeta.total : list.length;
+
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 4,
           type: 'bot',
-          content: 'There is no CV uploaded from your side.',
+          content: `Showing ${total} result${total === 1 ? '' : 's'} for section "${section}".`,
           timestamp: formatTime(),
         },
       ]);
-      try {
-        window.dispatchEvent(new CustomEvent('shx:no-cvs', { detail: { prompt } }));
-      } catch {}
-      setToast({ show: true, msg: 'No CVs found. Please upload resumes first.', tone: 'warning' });
-      onPromptSubmit(prompt, []); // FINISH — loader OFF
-      setIsTyping(false);
-      return;
+
+      if (data?.no_results === true || total === 0) {
+        setToast({ show: true, msg: `No matches found in ${section}.`, tone: 'info' });
+        finishParent(prompt, []);
+        return;
+      }
+
+      finishParent(prompt, list);
+    } finally {
+      if (!finishedRef.current) {
+        onPromptSubmit(prompt, []);
+      }
     }
+  };
 
-    const list = Array.isArray(data.resumes_preview) ? data.resumes_preview : [];
-    const total = typeof data?.matchMeta?.total === 'number' ? data.matchMeta.total : list.length;
-    const q = (data?.normalized_prompt || prompt || '').toString().trim();
+  // ---- Builders for composed prompts (Experience + Phrases) ----
+  const submitExperience = () => {
+    const min = expMin.trim();
+    const max = expMax.trim();
+    if (!min && !max) return;
+    if (min && max) return handleSectionSubmit('experience', `between ${min} and ${max} years`);
+    if (min) return handleSectionSubmit('experience', `at least ${min} years`);
+    if (max) return handleSectionSubmit('experience', `at most ${max} years`);
+  };
 
-    const standardizedReply =
-      `Showing ${total} result${total === 1 ? '' : 's'} for your query.` + (q ? `\nQuery: "${q}"` : '');
-
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now() + 5, type: 'bot', content: standardizedReply, timestamp: formatTime() },
-    ]);
-
-    if (data?.no_results === true || total === 0) {
-      setToast({ show: true, msg: 'No matching candidates found for your query.', tone: 'info' });
-      try {
-        window.dispatchEvent(new CustomEvent('shx:no-results', { detail: { prompt } }));
-      } catch {}
-      onPromptSubmit(prompt, []); // FINISH — loader OFF (empty results)
-      setIsTyping(false);
-      return;
-    }
-
-    onPromptSubmit(prompt, list); // FINISH — loader OFF via parent
-    setIsTyping(false);
+  const submitPhrasesInclude = () => {
+    if (!phrasesInclude.trim()) return;
+    const composed = phrasesExclude.trim()
+      ? `include: ${phrasesInclude.trim()}, exclude: ${phrasesExclude.trim()}`
+      : phrasesInclude.trim();
+    handleSectionSubmit('phrases', composed);
+  };
+  const submitPhrasesExclude = () => {
+    if (!phrasesExclude.trim()) return;
+    const composed = phrasesInclude.trim()
+      ? `include: ${phrasesInclude.trim()}, exclude: ${phrasesExclude.trim()}`
+      : `exclude: ${phrasesExclude.trim()}`;
+    handleSectionSubmit('phrases', composed);
   };
 
   return (
-    <section className="card-glass relative overflow-hidden animate-rise-in" aria-labelledby="ai-assistant-title">
+    <section className="card-glass relative animate-rise-in" aria-labelledby="ai-assistant-title">
       {/* Ambient overlays */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div className="absolute inset-0 opacity-[0.06] gradient-ink" />
@@ -591,7 +452,7 @@ export default function ChatbotSection({
 
                   {/* Scrollable list area */}
                   <div
-                    className="divide-y divide-border/60 overflow-y-scroll flex-1 pr-1 scrollable-menu"
+                    className="divide-y divide-border/60 overflow-y-auto flex-1 pr-1"
                     style={{ scrollbarGutter: 'stable' }}
                   >
                     {FILTERS.map((f) => {
@@ -634,6 +495,145 @@ export default function ChatbotSection({
             </div>
           </div>
         </header>
+
+        {/* History-style focused sections (scrollable panel; each submits ONLY its field) */}
+        <div className="px-6 pt-5 pb-3">
+          <div className="rounded-2xl border border-border/60 bg-muted/20 p-4 md:p-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[70vh] overflow-y-auto">
+              {/* Role */}
+              <div className="panel p-3">
+                <label className="text-xs font-semibold text-muted-foreground">Role</label>
+                <input
+                  className="input mt-2 h-11 rounded-xl"
+                  placeholder="e.g., Data Scientist"
+                  value={roleInput}
+                  onChange={(e) => setRoleInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSectionSubmit('role', roleInput);
+                  }}
+                />
+              </div>
+
+              {/* Experience (Min / Max) */}
+              <div className="panel p-3">
+                <label className="text-xs font-semibold text-muted-foreground">Experience</label>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <input
+                    className="input h-11 rounded-xl"
+                    placeholder="Min years"
+                    value={expMin}
+                    onChange={(e) => setExpMin(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') submitExperience();
+                    }}
+                  />
+                  <input
+                    className="input h-11 rounded-xl"
+                    placeholder="Max years"
+                    value={expMax}
+                    onChange={(e) => setExpMax(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') submitExperience();
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Skills */}
+              <div className="panel p-3">
+                <label className="text-xs font-semibold text-muted-foreground">Skills (comma separated)</label>
+                <input
+                  className="input mt-2 h-11 rounded-xl"
+                  placeholder="python, django, react"
+                  value={skillsInput}
+                  onChange={(e) => setSkillsInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSectionSubmit('skills', skillsInput);
+                  }}
+                />
+              </div>
+
+              {/* Location */}
+              <div className="panel p-3">
+                <label className="text-xs font-semibold text-muted-foreground">Location</label>
+                <input
+                  className="input mt-2 h-11 rounded-xl"
+                  placeholder="e.g., Bangalore"
+                  value={locationInput}
+                  onChange={(e) => setLocationInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSectionSubmit('location', locationInput);
+                  }}
+                />
+              </div>
+
+              {/* Education */}
+              <div className="panel p-3">
+                <label className="text-xs font-semibold text-muted-foreground">Education</label>
+                <input
+                  className="input mt-2 h-11 rounded-xl"
+                  placeholder='e.g., "MIT", "IIT", "Stanford"'
+                  value={educationInput}
+                  onChange={(e) => setEducationInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSectionSubmit('education', educationInput);
+                  }}
+                />
+              </div>
+
+              {/* Projects */}
+              <div className="panel p-3">
+                <label className="text-xs font-semibold text-muted-foreground">Projects</label>
+                <input
+                  className="input mt-2 h-11 rounded-xl"
+                  placeholder='e.g., "e-commerce", "microservices"'
+                  value={projectsInput}
+                  onChange={(e) => setProjectsInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSectionSubmit('projects', projectsInput);
+                  }}
+                />
+              </div>
+
+              {/* Phrases — include / exclude */}
+              <div className="panel p-3">
+                <label className="text-xs font-semibold text-muted-foreground">Phrases</label>
+                <input
+                  className="input mt-2 h-11 rounded-xl"
+                  placeholder={'must include (e.g., "microservices")'}
+                  value={phrasesInclude}
+                  onChange={(e) => setPhrasesInclude(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') submitPhrasesInclude();
+                  }}
+                />
+                <input
+                  className="input mt-2 h-11 rounded-xl"
+                  placeholder={'exclude (e.g., "internship only")'}
+                  value={phrasesExclude}
+                  onChange={(e) => setPhrasesExclude(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') submitPhrasesExclude();
+                  }}
+                />
+              </div>
+
+              {/* Exact phrase match */}
+              <div className="panel p-3">
+                <label className="text-xs font-semibold text-muted-foreground">Exact phrase match</label>
+                <input
+                  className="input mt-2 h-11 rounded-xl"
+                  placeholder="custom exact phrases (comma sep)"
+                  value={phrasesExact}
+                  onChange={(e) => setPhrasesExact(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSectionSubmit('phrases', phrasesExact);
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Messages */}
         <div className="px-6 py-6 space-y-4 max-h-96 overflow-y-auto" role="log" aria-live="polite" aria-relevant="additions">
@@ -686,7 +686,7 @@ export default function ChatbotSection({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input (no hardcoded suggestions) */}
+        {/* Free Prompt Input */}
         <div className="border-t border-border bg-gradient-to-r from-[hsl(var(--muted)/.4)] to-[hsl(var(--muted)/.25)] px-6 py-6">
           <div className="flex gap-4">
             <input
@@ -694,7 +694,7 @@ export default function ChatbotSection({
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              placeholder='Ask me to find candidates… (use quotes for exact match, e.g. "microservices")'
+              placeholder='Ask me to find candidates… (type in a section above for focused search)'
               className="input glass flex-1"
               disabled={isProcessing}
               aria-label="Type a prompt to filter candidates"
@@ -713,7 +713,7 @@ export default function ChatbotSection({
               )}
             </button>
           </div>
-          {/* selected filter tags preview */}
+          {/* selected filter tags preview (visual only) */}
           {selected.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {selected.map((k) => {

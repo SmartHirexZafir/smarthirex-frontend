@@ -9,9 +9,9 @@ export default function Logo({ showName = true }: { showName?: boolean }) {
       <Image
         src="/web-logo.png"
         alt="Smart HireX logo"
-        width={32}
-        height={32}
-        className="rounded-lg ring-1 ring-border object-cover"
+        width={36}
+        height={36}
+        className="rounded-lg ring-1 ring-border ring-offset-2 ring-offset-background object-cover"
         priority
       />
       {showName && (

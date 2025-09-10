@@ -14,7 +14,7 @@ export default function HistoryPage() {
   const [filteredData, setFilteredData] = useState<any[]>([]);
   const [selectedHistory, setSelectedHistory] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
-  const [rerunFor, setRerunFor] = useState<any | null>(null); // ✅ new: controls Re-run Prompt popup
+  const [rerunFor, setRerunFor] = useState<any | null>(null); // ✅ controls Re-run Prompt popup
 
   // fetch history (ignores AbortError cleanly)
   const fetchHistory = async () => {
@@ -114,10 +114,29 @@ export default function HistoryPage() {
     }
   };
 
-  // ✅ New: open the popup-style rerun modal scoped to a specific history block
+  // Open the popup-style rerun modal scoped to a specific history block
   const openRerunModal = (history: any) => {
     setRerunFor(history);
   };
+
+  /**
+   * 🔒 Prevent the page from jumping to the top by locking body scroll
+   * while any modal is open (Results or Re-run). Restores on close.
+   * (No window.scrollTo is used anywhere in this file.)
+   */
+  useEffect(() => {
+    const anyModalOpen = showModal || !!rerunFor;
+    if (anyModalOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+    // If no modal open, ensure body overflow is reset
+    document.body.style.overflow = '';
+    return;
+  }, [showModal, rerunFor]);
 
   return (
     <div className="min-h-screen">
@@ -183,7 +202,7 @@ export default function HistoryPage() {
           <HistoryBlocks
             historyData={filteredData}
             onViewResults={handleViewResults}
-            onOpenRerunModal={openRerunModal}   // ✅ new scoped rerun flow
+            onOpenRerunModal={openRerunModal}   // scoped rerun flow
             onRerunPrompt={handleRerunPrompt}   // legacy fallback (kept)
           />
         </div>
@@ -194,7 +213,7 @@ export default function HistoryPage() {
         <ResultsModal history={selectedHistory} onClose={() => setShowModal(false)} />
       )}
 
-      {/* ✅ Re-run Prompt Modal (scoped to the selected history block) */}
+      {/* Re-run Prompt Modal (scoped to the selected history block) */}
       {rerunFor && (
         <RerunPromptModal
           history={rerunFor}

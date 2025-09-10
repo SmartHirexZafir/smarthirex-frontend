@@ -9,7 +9,10 @@ type Candidate = {
   avatar_url?: string;          // backend alt
   currentRole?: string;
   company?: string;
-  score?: number | string;      // Match score (0–100)
+  score?: number | string;      // legacy match score
+  match_score?: number | string;
+  final_score?: number | string;
+  prompt_matching_score?: number | string;
   testScore?: number | string;  // frontend camelCase
   test_score?: number | string; // backend snake_case
   years_experience?: number | string;    // preferred backend field
@@ -54,6 +57,21 @@ function num(v: unknown): number | undefined {
   return undefined;
 }
 
+/** Normalize possibly-ratio values to a 0–100 range */
+function normalizePctValue(v: unknown): number | undefined {
+  const n = num(v);
+  if (typeof n !== "number") return undefined;
+  const pct = n <= 1 ? n * 100 : n; // treat 0..1 as ratio
+  const clamped = Math.max(0, Math.min(100, pct));
+  return clamped;
+}
+
+/** Format number/possibly-string to "NN%" (or "—" if absent) using normalization */
+function fmtPctFromAny(v?: unknown) {
+  const n = normalizePctValue(v);
+  return typeof n === "number" ? `${Math.round(n)}%` : "—";
+}
+
 export default function CandidateProfile({ candidate }: { candidate: Candidate }) {
   if (!candidate) return null;
 
@@ -63,9 +81,14 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
     avatar_url,
     currentRole,
     company = "Not specified",
-    score, // Match Score
+    // scores
+    score,
+    match_score,
+    final_score,
+    prompt_matching_score,
     test_score,
     testScore: testScoreCamel,
+    // misc
     years_experience,
     experience_years,
     email,
@@ -77,18 +100,22 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
     category,
   } = candidate;
 
-  // Prefer backend value; fall back to camelCase; accept numeric strings too
-  const normalizedTestScore = num(test_score) ?? num(testScoreCamel);
+  // ✅ Match Score: use preferred order and normalize
+  const matchScoreValue =
+    normalizePctValue(match_score) ??
+    normalizePctValue(final_score) ??
+    normalizePctValue(prompt_matching_score) ??
+    normalizePctValue(score);
+
+  // ✅ Test Score: from either snake_case or camelCase; normalize 0..1 to %
+  const testScoreValue =
+    normalizePctValue(test_score) ??
+    normalizePctValue(testScoreCamel);
 
   // Experience years: prefer dedicated numeric fields (accept numeric strings)
   const experienceYears = num(years_experience) ?? num(experience_years);
 
   const normalizedEmail = email || resume?.email || undefined;
-
-  const fmtPct = (v?: number | string) => {
-    const n = num(v);
-    return typeof n === "number" ? `${Math.round(n)}%` : "—";
-    };
 
   // ✅ ROLE: always show a concise job-role label, not a long description
   const rawRole =
@@ -119,6 +146,11 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
 
   return (
     <div className="panel glass gradient-border relative overflow-hidden p-4 md:p-5">
+      {/* Title — tidy top line using existing tokens (no redesign) */}
+      <h2 className="text-2xl md:text-3xl font-extrabold gradient-text text-center mb-4">
+        Candidate Profile
+      </h2>
+
       {/* header */}
       <div className="relative z-10">
         {/* Profile Header */}
@@ -153,7 +185,7 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
               <i className="ri-check-line text-xs text-[hsl(var(--success-foreground))]" aria-hidden />
             </div>
           </div>
-          <h2 className="mb-1 text-xl font-bold">{name}</h2>
+          <h3 className="mb-1 text-xl font-bold">{name}</h3>
 
           {/* ✅ Single-line concise role (Data Scientist, Frontend Engineer, etc.) */}
           <p
@@ -178,20 +210,22 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
             </div>
           </div>
 
-          {/* Match Score */}
+          {/* Match Score — unified normalization */}
           <div className="surface rounded-2xl p-3 ring-1 ring-border/60">
             <div className="text-center" aria-live="polite">
-              <div className="mb-1 text-xl font-bold text-[hsl(var(--info))]">{fmtPct(score)}</div>
+              <div className="mb-1 text-xl font-bold text-[hsl(var(--info))]">
+                {typeof matchScoreValue === "number" ? `${Math.round(matchScoreValue)}%` : "—"}
+              </div>
               <div className="text-xs font-medium text-muted-foreground">Match Score</div>
             </div>
           </div>
 
-          {/* Test Score — render only after candidate has taken a test */}
-          {typeof normalizedTestScore === "number" && Number.isFinite(normalizedTestScore) && (
+          {/* Test Score — render only after candidate has taken a test; unified normalization */}
+          {typeof testScoreValue === "number" && Number.isFinite(testScoreValue) && (
             <div className="surface rounded-2xl p-3 ring-1 ring-border/60">
               <div className="text-center" aria-live="polite" title="Latest assessment score (MCQ %)">
                 <div className="mb-1 text-xl font-bold text-[hsl(var(--success))]">
-                  {fmtPct(normalizedTestScore)}
+                  {`${Math.round(testScoreValue)}%`}
                 </div>
                 <div className="text-xs font-medium text-muted-foreground">Test Score</div>
               </div>
@@ -201,7 +235,7 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
 
         {/* Contact Info */}
         <div className="mb-2 space-y-2">
-          <ContactInfo label="Email" icon="ri-mail-line" color="info" value={normalizedEmail} />
+          <ContactInfo label="Email" icon="ri-mail-line" color="info" value={email || resume?.email} />
           <ContactInfo label="Phone" icon="ri-phone-line" color="success" value={phone} />
           <ContactInfo label="Location" icon="ri-map-pin-line" color="accent" value={location} />
         </div>

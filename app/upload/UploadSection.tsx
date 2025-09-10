@@ -30,6 +30,9 @@ const PROGRESS_HOLD_MS = 2000;
 // ✅ fallback paths (handles router prefix/no-prefix)
 const UPLOAD_PATHS = ['/upload/upload-resumes', '/upload-resumes'];
 
+// ⛑️ Guard timeout to auto-dismiss toast/progress if something is stuck
+const MAX_TOAST_MS = 15000;
+
 export default function UploadSection({ onFileUpload }: UploadSectionProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [processingFiles, setProcessingFiles] = useState<ProcessingFile[]>([]);
@@ -51,6 +54,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const timersRef = useRef<number[]>([]);
+  const guardRef = useRef<number | null>(null); // ⛑️ hard-cap guard timer
   const procRef = useRef<ProcessingFile[]>([]);
   useEffect(() => {
     procRef.current = processingFiles;
@@ -68,11 +72,43 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
           processingFiles.reduce((sum, f) => sum + (Number.isFinite(f.progress) ? f.progress : 0), 0) / totalCount
         );
 
+  // util: clear hold timers
+  const clearTimers = () => {
+    timersRef.current.forEach((id) => window.clearTimeout(id));
+    timersRef.current = [];
+  };
+
+  // util: start/clear guard timer (last resort)
+  const startGuard = () => {
+    clearGuard();
+    guardRef.current = window.setTimeout(() => {
+      // force-dismiss even if some rows stuck
+      setShowToast(false);
+      setShowProgress(false);
+      clearTimers();
+    }, MAX_TOAST_MS);
+  };
+  const clearGuard = () => {
+    if (guardRef.current) {
+      window.clearTimeout(guardRef.current);
+      guardRef.current = null;
+    }
+  };
+
+  // clear guard/timers on unmount
+  useEffect(() => {
+    return () => {
+      clearGuard();
+      clearTimers();
+    };
+  }, []);
+
   // auto-hide toast + progress after done
   useEffect(() => {
     const allDone = totalCount > 0 && processingFiles.every((f) => f.status !== 'processing');
 
     if (!allDone) return;
+
     // build one clear summary toast
     const skipped =
       agg.duplicates + agg.unsupported + agg.empty + agg.too_large + agg.parse_error;
@@ -82,6 +118,9 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
     setToastType(skipped === 0 ? 'success' : 'warning');
     setToastMsg(summary);
     setShowToast(true);
+
+    // once we know all are settled, the guard is no longer needed
+    clearGuard();
 
     const t1 = window.setTimeout(() => setShowToast(false), TOAST_HOLD_MS);
     const t2 = window.setTimeout(() => {
@@ -126,17 +165,16 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
   };
 
   // ---------- Core upload (true per-file progress, parallel with limit) ----------
-  const clearTimers = () => {
-    timersRef.current.forEach((id) => window.clearTimeout(id));
-    timersRef.current = [];
-  };
-
   async function processFiles(files: FileWithPreview[]) {
     if (!files.length) return;
 
     clearTimers();
+    clearGuard();
     setShowToast(false);
     setShowProgress(true);
+
+    // ⛑️ Start guard timer for this batch
+    startGuard();
 
     // rows for UI
     const rows: ProcessingFile[] = files.map((file) => ({

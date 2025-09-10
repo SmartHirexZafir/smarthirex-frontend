@@ -11,8 +11,6 @@ type Candidate = {
   name: string;
   email?: string;
   avatar?: string;
-  score?: number;
-  match_score?: number;
   final_score?: number;                // ✅ dynamic match %
   prompt_matching_score?: number;      // ✅ dynamic match %
   matchReasons?: string[];
@@ -38,41 +36,6 @@ type Props = {
 /* ✅ Align with rest of app: use NEXT_PUBLIC_API_BASE_URL and provide localhost fallback */
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/+$/, '');
-
-/* ---------- Helpers for score fallback (prevents 0% when backend lacks scores) ---------- */
-const tokenize = (s: string) =>
-  (s || '')
-    .toLowerCase()
-    .match(/[a-zA-Z]+|\d+\+?/g)?.filter(t => !['and','or','the','a','an','in','with','of'].includes(t)) || [];
-
-const candidateBlob = (c: Candidate) => {
-  const parts: string[] = [];
-  if (c.name) parts.push(c.name);
-  if (c.email) parts.push(c.email);
-  if (c.title) parts.push(c.title);
-  if (c.role) parts.push(c.role);
-  if (Array.isArray(c.skills)) parts.push(c.skills.join(' '));
-  if (Array.isArray(c.matchReasons)) parts.push(c.matchReasons.join(' '));
-  return parts.join(' ').toLowerCase();
-};
-
-const heuristicMatchScore = (prompt: string, c: Candidate): number => {
-  const toks = tokenize(prompt);
-  if (!toks.length) return 0;
-  const blob = candidateBlob(c);
-  let hits = 0;
-  for (const t of toks) {
-    if (t.endsWith('+') && /^\d+\+$/.test(t)) {
-      const base = parseInt(t.slice(0, -1), 10);
-      const nums = (blob.match(/\b\d+\b/g) || []).map(n => parseInt(n, 10));
-      if (nums.some(n => n >= base)) hits += 1;
-    } else if (blob.includes(t)) {
-      hits += 1;
-    }
-  }
-  // mirror backend fallback: base 40 + 15 per hit, capped 100
-  return Math.max(0, Math.min(100, 40 + hits * 15));
-};
 
 export default function ResultsModal({ history, onClose }: Props) {
   const router = useRouter();
@@ -125,18 +88,17 @@ export default function ResultsModal({ history, onClose }: Props) {
     });
   };
 
-  // ✅ Buttons open the *exact same* flows as the Candidate Profile by deep-linking with an action.
-  // This guarantees identical functionality without duplicating logic.
+  // Buttons: navigate to dedicated pages with candidateId query string
   const goSendTest = (candidate: Candidate) => {
     const cid = candidate._id || candidate.id || '';
     if (!cid) return;
-    router.push(`/candidate/${cid}?action=sendTest`);
+    router.push(`/test?candidateId=${encodeURIComponent(cid)}`);
   };
 
   const goScheduleInterview = (candidate: Candidate) => {
     const cid = candidate._id || candidate.id || '';
     if (!cid) return;
-    router.push(`/candidate/${cid}?action=scheduleInterview`);
+    router.push(`/meetings?candidateId=${encodeURIComponent(cid)}`);
   };
 
   // theme-aware score badge colors (kept same thresholds)
@@ -185,104 +147,110 @@ export default function ResultsModal({ history, onClose }: Props) {
             </h3>
           </div>
 
-          <div className="space-y-4">
-            {results.candidates.map((candidate) => {
-              const cid = candidate._id || candidate.id || '';
+          {results.candidates.length === 0 ? (
+            // Neat empty state
+            <div className="py-14 max-w-2xl mx-auto text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-[hsl(var(--primary-foreground))] shadow-glow">
+                <i className="ri-user-search-line text-2xl" />
+              </div>
+              <h4 className="text-xl font-semibold text-foreground">No candidates saved for this search</h4>
+              <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))]">
+                Try running a new query or adjusting your filters.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {results.candidates.map((candidate) => {
+                const cid = candidate._id || candidate.id || '';
 
-              // ✅ Dynamic match % (final_score / prompt_matching_score / score / match_score)
-              let displayScore =
-                Math.round(
-                  Number(
-                    candidate.final_score ??
-                    candidate.prompt_matching_score ??
-                    candidate.score ??
-                    candidate.match_score ??
-                    0
-                  ) || 0
-                );
+                // ✅ Matching Score from Mongo: final_score || prompt_matching_score
+                const rawScore =
+                  (typeof candidate.final_score === 'number' ? candidate.final_score : undefined) ??
+                  (typeof candidate.prompt_matching_score === 'number' ? candidate.prompt_matching_score : undefined) ?? 0;
 
-              // If backend provided no score (common for older saved blocks), compute a heuristic fallback
-              if ((!displayScore || displayScore === 0) && results.prompt) {
-                displayScore = Math.round(heuristicMatchScore(results.prompt, candidate));
-              }
+                // Normalize to 0–100 (accept 0..1 ratios too)
+                const normalized = (() => {
+                  const n = Number(rawScore);
+                  if (!Number.isFinite(n)) return 0;
+                  const pct = n <= 1 ? n * 100 : n;
+                  return Math.max(0, Math.min(100, Math.round(pct)));
+                })();
 
-              if (displayScore < 0) displayScore = 0;
-              if (displayScore > 100) displayScore = 100;
+                return (
+                  <div
+                    key={cid}
+                    className={`rounded-xl p-4 border transition-all duration-200 bg-card ${
+                      selectedCandidates.has(cid)
+                        ? 'border-[hsl(var(--primary)/.45)] ring-1 ring-[hsl(var(--primary)/.25)] shadow-glow'
+                        : 'border-border hover:border-[hsl(var(--border)/.9)]'
+                    }`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedCandidates.has(cid)}
+                        onChange={() => handleCandidateSelect(cid)}
+                        className="mt-2 h-4 w-4 rounded border-border text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
+                        aria-label={`Select ${candidate.name}`}
+                      />
 
-              return (
-                <div
-                  key={cid}
-                  className={`rounded-xl p-4 border transition-all duration-200 bg-card ${
-                    selectedCandidates.has(cid)
-                      ? 'border-[hsl(var(--primary)/.45)] ring-1 ring-[hsl(var(--primary)/.25)] shadow-glow'
-                      : 'border-border hover:border-[hsl(var(--border)/.9)]'
-                  }`}
-                >
-                  <div className="flex items-start gap-4">
-                    <input
-                      type="checkbox"
-                      checked={selectedCandidates.has(cid)}
-                      onChange={() => handleCandidateSelect(cid)}
-                      className="mt-2 h-4 w-4 rounded border-border text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-                      aria-label={`Select ${candidate.name}`}
-                    />
+                      <img
+                        src={candidate.avatar || `https://api.dicebear.com/8.x/initials/svg?seed=${candidate.name}`}
+                        alt={candidate.name}
+                        className="h-16 w-16 rounded-full object-cover border border-border shadow-soft"
+                      />
 
-                    <img
-                      src={candidate.avatar || `https://api.dicebear.com/8.x/initials/svg?seed=${candidate.name}`}
-                      alt={candidate.name}
-                      className="h-16 w-16 rounded-full object-cover border border-border shadow-soft"
-                    />
-
-                    <div className="flex-1 min-w-0">
-                      <div className="mb-2 flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <h4 className="text-lg font-semibold truncate">{candidate.name}</h4>
-                          <p className="text-sm text-muted-foreground truncate">{candidate.email}</p>
+                      <div className="flex-1 min-w-0">
+                        <div className="mb-2 flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <h4 className="text-lg font-semibold truncate">{candidate.name}</h4>
+                            <p className="text-sm text-muted-foreground truncate">{candidate.email}</p>
+                          </div>
+                          <div
+                            className={`px-3 py-1 rounded-full text-sm font-medium border whitespace-nowrap ${getScoreColor(
+                              normalized
+                            )}`}
+                            aria-label={`Match score ${normalized}%`}
+                          >
+                            {normalized}% Match
+                          </div>
                         </div>
-                        <div
-                          className={`px-3 py-1 rounded-full text-sm font-medium border whitespace-nowrap ${getScoreColor(
-                            displayScore
-                          )}`}
-                          aria-label={`Match score ${displayScore}%`}
-                        >
-                          {displayScore}% Match
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-2">
+                          <Link
+                            href={`/candidate/${cid}`}
+                            className="btn btn-primary text-sm whitespace-nowrap"
+                            aria-label={`View ${candidate.name}`}
+                          >
+                            <i className="ri-eye-line mr-1" />
+                            View Candidate
+                          </Link>
+
+                          <button
+                            onClick={() => goSendTest(candidate)}
+                            className="btn btn-primary text-sm whitespace-nowrap"
+                            aria-label={`Send Test to ${candidate.name}`}
+                          >
+                            <i className="ri-file-list-line mr-1" />
+                            Send Test
+                          </button>
+                          <button
+                            onClick={() => goScheduleInterview(candidate)}
+                            className="btn btn-primary text-sm whitespace-nowrap"
+                            aria-label={`Schedule Interview with ${candidate.name}`}
+                          >
+                            <i className="ri-calendar-event-line mr-1" />
+                            Schedule Interview
+                          </button>
                         </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2">
-                        <Link
-                          href={`/candidate/${cid}`}
-                          className="btn btn-primary text-sm whitespace-nowrap"
-                          aria-label={`View ${candidate.name}`}
-                        >
-                          <i className="ri-eye-line mr-1" />
-                          View Candidate
-                        </Link>
-
-                        <button
-                          onClick={() => goSendTest(candidate)}
-                          className="btn btn-primary text-sm whitespace-nowrap"
-                          aria-label={`Send Test to ${candidate.name}`}
-                        >
-                          <i className="ri-file-list-line mr-1" />
-                          Send Test
-                        </button>
-                        <button
-                          onClick={() => goScheduleInterview(candidate)}
-                          className="btn btn-primary text-sm whitespace-nowrap"
-                          aria-label={`Schedule Interview with ${candidate.name}`}
-                        >
-                          <i className="ri-calendar-event-line mr-1" />
-                          Schedule Interview
-                        </button>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Footer */}

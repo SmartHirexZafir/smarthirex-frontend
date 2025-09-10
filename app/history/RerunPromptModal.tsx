@@ -82,33 +82,34 @@ export default function RerunPromptModal({ history, onClose }: Props) {
   const [preview, setPreview] = useState<Candidate[]>([]);
   const [updatedCount, setUpdatedCount] = useState<number | null>(null);
 
-  // 🔽 “Chatbot-like” filter controls (mirrors Upload Chatbot at a light level)
-  const [showFilters, setShowFilters] = useState(false);
-  const [enableRole, setEnableRole] = useState(true);
-  const [enableExperience, setEnableExperience] = useState(true);
-  const [enableSkills, setEnableSkills] = useState(true);
-  const [enableProjects, setEnableProjects] = useState(false);
-  const [enableLocation, setEnableLocation] = useState(false);
-  const [enableEducation, setEnableEducation] = useState(false);
-  const [enablePhrases, setEnablePhrases] = useState(false);
+  // 🔽 Section inputs (identical semantics to Upload chatbot; each submits only its own value)
+  const [roleInput, setRoleInput] = useState('');
+  // Experience split into min/max fields to match UI screenshot; backend understands strings like ">= 3 years", "<= 5 years", or "between 3 and 5 years"
+  const [expMin, setExpMin] = useState('');
+  const [expMax, setExpMax] = useState('');
+  const [educationSchools, setEducationSchools] = useState('');
+  const [educationDegrees, setEducationDegrees] = useState('');
+  const [skillsInput, setSkillsInput] = useState('');
+  const [projectsInput, setProjectsInput] = useState('');
+  const [locationInput, setLocationInput] = useState('');
+  const [phrasesInclude, setPhrasesInclude] = useState('');
+  const [phrasesExclude, setPhrasesExclude] = useState('');
+  const [phrasesExact, setPhrasesExact] = useState('');
 
-  const [role, setRole] = useState('');
-  const [minYears, setMinYears] = useState<string>('');
-  const [maxYears, setMaxYears] = useState<string>('');
-  const [skills, setSkills] = useState<string>(''); // comma separated
-  const [projectsRequired, setProjectsRequired] = useState(false);
-  const [location, setLocation] = useState('');
-  const [schools, setSchools] = useState<string>(''); // comma separated
-  const [degrees, setDegrees] = useState<string>(''); // comma separated
-  const [mustPhrases, setMustPhrases] = useState<string>(''); // comma or ; separated
-  const [excludePhrases, setExcludePhrases] = useState<string>('');
-  const [exactOnly, setExactOnly] = useState(false);
-  const [exactTerms, setExactTerms] = useState<string>('');
+  // (Cosmetic) checkboxes to mirror the screenshot layout
+  const [chkRole, setChkRole] = useState(true);
+  const [chkExperience, setChkExperience] = useState(false);
+  const [chkSkills, setChkSkills] = useState(true);
+  const [chkProjects, setChkProjects] = useState(false);
+  const [chkLocation, setChkLocation] = useState(false);
+  const [chkEducation, setChkEducation] = useState(false);
+  const [chkPhrases, setChkPhrases] = useState(false);
+  const [chkExact, setChkExact] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const historyId = history?.id || history?._id || '';
+  const historyId = history?.id || (history as any)?._id || '';
   const originalPrompt = history?.prompt || '';
   const originalCount = Number(history?.totalMatches || 0);
 
@@ -122,10 +123,9 @@ export default function RerunPromptModal({ history, onClose }: Props) {
         `Saved CVs in this block: ${originalCount}.`,
     };
     setMessages([intro]);
-    // focus input
+    // focus input and seed the Role section with the original prompt (UX parity)
     textareaRef.current?.focus();
-    // seed role field from original prompt (nice UX; no dependency on backend)
-    setRole(originalPrompt || '');
+    setRoleInput(originalPrompt || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyId]);
 
@@ -136,49 +136,22 @@ export default function RerunPromptModal({ history, onClose }: Props) {
 
   const canSubmit = useMemo(() => input.trim().length > 0 && !submitting, [input, submitting]);
 
-  /** Build chatbot-like options payload (harmless if backend ignores it). */
-  const buildOptions = () => {
-    const selected: string[] = [];
-    if (enableRole) selected.push('role');
-    if (enableExperience) selected.push('experience');
-    if (enableSkills) selected.push('skills');
-    if (enableProjects) selected.push('projects');
-    if (enableLocation) selected.push('location');
-    if (enableEducation) selected.push('education');
-    if (enablePhrases) selected.push('phrases');
-
-    const toList = (s: string) =>
-      s
-        .split(/[,;]\s*|\s{2,}/g)
-        .map((x) => x.trim())
-        .filter(Boolean);
-
-    const opts: any = {
-      selected,
-      role: role.trim() || undefined,
-      min_years: minYears ? Number(minYears) : undefined,
-      max_years: maxYears ? Number(maxYears) : undefined,
-      skills: toList(skills.toLowerCase()),
-      projects_required: projectsRequired || undefined,
-      location: location.trim() || undefined,
-      schools: toList(schools.toLowerCase()),
-      degrees: toList(degrees.toLowerCase()),
-      must_phrases: toList(mustPhrases),
-      exclude_phrases: toList(excludePhrases),
-      exact_match_only: exactOnly || undefined,
-      exact_terms: exactTerms ? toList(exactTerms) : undefined,
-      prefilter_role_regex: true,
-    };
-
-    // prune undefined to keep payload tidy
-    Object.keys(opts).forEach((k) => {
-      if (opts[k] === undefined || (Array.isArray(opts[k]) && opts[k].length === 0)) {
-        delete opts[k];
-      }
+  /** POST helper to rerun with payload */
+  const postRerun = async (payload: any): Promise<RerunResponse> => {
+    const res = await fetch(`${API_BASE}/history/rerun/${historyId}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
     });
-    return opts;
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status} ${txt}`);
+    }
+    return (await res.json()) as RerunResponse;
   };
 
+  /** Free prompt submission (no section inference) */
   const sendPrompt = async () => {
     if (!canSubmit || !historyId) return;
     setSubmitting(true);
@@ -190,23 +163,8 @@ export default function RerunPromptModal({ history, onClose }: Props) {
 
     try {
       const payload: any = { prompt: userText };
-      // Include filters (mirrors chatbot behavior). Backend may ignore gracefully.
-      const options = buildOptions();
-      if (Object.keys(options).length > 0) payload.options = options;
+      const data = await postRerun(payload);
 
-      const res = await fetch(`${API_BASE}/history/rerun/${historyId}`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const txt = await res.text().catch(() => '');
-        throw new Error(`HTTP ${res.status} ${txt}`);
-      }
-
-      const data = (await res.json()) as RerunResponse;
       const assistantMsg =
         data?.ui?.primaryMessage ||
         data?.reply ||
@@ -220,8 +178,14 @@ export default function RerunPromptModal({ history, onClose }: Props) {
         : []) as Candidate[];
 
       setMessages((prev) => [...prev, { role: 'assistant', content: assistantMsg }]);
-      setPreview(list.slice(0, 20)); // show up to 20 in the modal preview
-      setUpdatedCount(typeof data?.totalMatches === 'number' ? data.totalMatches : list?.length ?? null);
+      setPreview(list.slice(0, 20));
+      setUpdatedCount(
+        typeof data?.totalMatches === 'number'
+          ? data.totalMatches
+          : data?.no_results
+          ? 0
+          : list?.length ?? null
+      );
     } catch (e: any) {
       const msg =
         e?.message?.includes('403')
@@ -240,6 +204,84 @@ export default function RerunPromptModal({ history, onClose }: Props) {
     }
   };
 
+  /** Targeted submission per section: only sends { prompt: value, options: { focus_section } } */
+  const sendFocused = async (
+    section:
+      | 'role'
+      | 'experience'
+      | 'education'
+      | 'skills'
+      | 'projects'
+      | 'phrases'
+      | 'location',
+    value: string
+  ) => {
+    const v = (value || '').trim();
+    if (!v || !historyId || submitting) return;
+
+    setSubmitting(true);
+    setError(null);
+
+    // chat echo
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', content: `${section.toUpperCase()}: "${v}"` },
+    ]);
+
+    try {
+      const payload = {
+        prompt: v,
+        options: { focus_section: section },
+      };
+      const data = await postRerun(payload);
+
+      const assistantMsg =
+        data?.ui?.primaryMessage ||
+        data?.reply ||
+        (data?.no_results ? 'No candidates matched your refined criteria.' : 'Updated results.');
+
+      const list = (Array.isArray(data?.resumes_preview) && data?.resumes_preview?.length
+        ? data?.resumes_preview
+        : Array.isArray(data?.candidates) && data?.candidates?.length
+        ? data?.candidates
+        : []) as Candidate[];
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: assistantMsg }]);
+      setPreview(list.slice(0, 20));
+      setUpdatedCount(
+        typeof data?.totalMatches === 'number'
+          ? data.totalMatches
+          : data?.no_results
+          ? 0
+          : list?.length ?? null
+      );
+    } catch (e: any) {
+      const msg =
+        e?.message?.includes('403')
+          ? 'You do not have access to update this history block.'
+          : e?.message?.includes('404')
+          ? 'That history block was not found.'
+          : 'Failed to re-run the prompt. Please try again.';
+      setError(msg);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Sorry, something went wrong while updating results.' },
+      ]);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Build an experience prompt string from min/max fields (matches backend parser)
+  const submitExperience = () => {
+    const min = expMin.trim();
+    const max = expMax.trim();
+    if (!min && !max) return;
+    if (min && max) return sendFocused('experience', `between ${min} and ${max} years`);
+    if (min) return sendFocused('experience', `at least ${min} years`);
+    if (max) return sendFocused('experience', `at most ${max} years`);
+  };
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
@@ -247,15 +289,55 @@ export default function RerunPromptModal({ history, onClose }: Props) {
     }
   };
 
+  // Handlers for section inputs (submit on Enter)
+  const onSectionKey = (
+    section:
+      | 'role'
+      | 'experience'
+      | 'education'
+      | 'skills'
+      | 'projects'
+      | 'phrases'
+      | 'location',
+    val: string,
+    setVal: (s: string) => void
+  ) => (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (section === 'experience') {
+        // experience uses its own builder
+        return submitExperience();
+      }
+      sendFocused(section, val);
+      // keep value visible
+    }
+  };
+
+  // Build phrases payload from include/exclude fields (stays in 'phrases' focus section)
+  const submitPhrasesInclude = () => {
+    if (!phrasesInclude.trim()) return;
+    const composed = phrasesExclude.trim()
+      ? `include: ${phrasesInclude.trim()}, exclude: ${phrasesExclude.trim()}`
+      : phrasesInclude.trim();
+    sendFocused('phrases', composed);
+  };
+  const submitPhrasesExclude = () => {
+    if (!phrasesExclude.trim()) return;
+    const composed = phrasesInclude.trim()
+      ? `include: ${phrasesInclude.trim()}, exclude: ${phrasesExclude.trim()}`
+      : `exclude: ${phrasesExclude.trim()}`;
+    sendFocused('phrases', composed);
+  };
+
   return (
     <div className="fixed inset-0 z-50 p-4 flex items-center justify-center">
-      <div className="w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border">
+      <div className="w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl border border-border/70 bg-card/90 backdrop-blur-md shadow-2xl shadow-glow gradient-border">
         {/* Header */}
         <div className="relative p-6 border-b border-border bg-card/80">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-xl font-bold gradient-text">Re-run Prompt (Scoped)</h2>
-              <p className="text-sm text-muted-foreground truncate">
+              <h2 className="text-lg font-semibold gradient-text">Re-run Prompt (Scoped)</h2>
+              <p className="text-xs text-muted-foreground">
                 Only within this block — applies to the {originalCount} saved CVs.
               </p>
               <p className="text-xs text-muted-foreground/90 mt-1">
@@ -265,241 +347,262 @@ export default function RerunPromptModal({ history, onClose }: Props) {
             </div>
 
             <div className="flex items-center gap-2">
-              {/* 🔘 Filters toggle */}
+              {/* Filters icon (cosmetic, matches screenshot) */}
               <button
-                onClick={() => setShowFilters((s) => !s)}
-                className="btn btn-ghost rounded-full h-10 px-4 text-sm"
-                aria-expanded={showFilters}
-                aria-controls="scoped-filters"
+                type="button"
+                className="btn btn-ghost rounded-full h-10 w-10 shrink-0"
+                aria-label="Filters"
+                title="Filters"
               >
-                <i className="ri-filter-3-line mr-1" />
-                Filters
+                <i className="ri-filter-3-line text-lg" />
               </button>
 
               <button
                 onClick={onClose}
                 className="btn btn-ghost rounded-full h-10 w-10 shrink-0"
                 aria-label="Close re-run modal"
+                title="Close"
               >
                 <i className="ri-close-line text-lg" />
               </button>
             </div>
           </div>
 
-          {/* Collapsible filters panel */}
-          {showFilters && (
-            <div id="scoped-filters" className="mt-4 rounded-xl border border-border p-4 bg-card/70">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Section inputs — identical semantics to Upload chatbot’s focused search */}
+          <div className="mt-5 rounded-2xl border border-border/60 bg-muted/20 p-4 md:p-5">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 max-h-[70vh] overflow-y-auto">
+              {/* Column 1 ------------------------------------------------------ */}
+              <div className="space-y-4">
                 {/* Role */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
                     <input
                       type="checkbox"
-                      checked={enableRole}
-                      onChange={(e) => setEnableRole(e.target.checked)}
+                      className="size-4"
+                      checked={chkRole}
+                      onChange={(e) => setChkRole(e.target.checked)}
+                      aria-label="Enable Role filter"
                     />
-                    Role
-                  </label>
+                    <span className="text-xs font-semibold text-muted-foreground">Role</span>
+                  </div>
                   <input
                     type="text"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="input w-full"
-                    placeholder="e.g., Python Developer"
+                    value={roleInput}
+                    onChange={(e) => setRoleInput(e.target.value)}
+                    onKeyDown={onSectionKey('role', roleInput, setRoleInput)}
+                    className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    placeholder="Data Scientist"
                   />
                 </div>
 
-                {/* Experience */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
+                {/* Phrases (include/exclude) */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
                     <input
                       type="checkbox"
-                      checked={enableExperience}
-                      onChange={(e) => setEnableExperience(e.target.checked)}
+                      className="size-4"
+                      checked={chkPhrases}
+                      onChange={(e) => setChkPhrases(e.target.checked)}
+                      aria-label="Enable Phrases filter"
                     />
-                    Experience
-                  </label>
-                  <div className="flex gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground">Phrases</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={phrasesInclude}
+                    onChange={(e) => setPhrasesInclude(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submitPhrasesInclude();
+                      }
+                    }}
+                    className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40 mb-2"
+                    placeholder={'must include (e.g., "microservices")'}
+                  />
+                  <input
+                    type="text"
+                    value={phrasesExclude}
+                    onChange={(e) => setPhrasesExclude(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submitPhrasesExclude();
+                      }
+                    }}
+                    className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    placeholder={'exclude (e.g., "internship only")'}
+                  />
+                </div>
+              </div>
+
+              {/* Column 2 ------------------------------------------------------ */}
+              <div className="space-y-4">
+                {/* Experience (min/max) */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
                     <input
-                      type="number"
-                      min={0}
-                      value={minYears}
-                      onChange={(e) => setMinYears(e.target.value)}
-                      className="input w-full"
+                      type="checkbox"
+                      className="size-4"
+                      checked={chkExperience}
+                      onChange={(e) => setChkExperience(e.target.checked)}
+                      aria-label="Enable Experience filter"
+                    />
+                    <span className="text-xs font-semibold text-muted-foreground">Experience</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input
+                      type="text"
+                      value={expMin}
+                      onChange={(e) => setExpMin(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          submitExperience();
+                        }
+                      }}
+                      className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                       placeholder="Min years"
                     />
                     <input
-                      type="number"
-                      min={0}
-                      value={maxYears}
-                      onChange={(e) => setMaxYears(e.target.value)}
-                      className="input w-full"
+                      type="text"
+                      value={expMax}
+                      onChange={(e) => setExpMax(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          submitExperience();
+                        }
+                      }}
+                      className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                       placeholder="Max years"
                     />
                   </div>
                 </div>
 
-                {/* Skills */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
+                {/* Exact phrase match */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
                     <input
                       type="checkbox"
-                      checked={enableSkills}
-                      onChange={(e) => setEnableSkills(e.target.checked)}
+                      className="size-4"
+                      checked={chkExact}
+                      onChange={(e) => setChkExact(e.target.checked)}
+                      aria-label="Enable Exact phrase match"
                     />
-                    Skills (comma separated)
-                  </label>
+                    <span className="text-xs font-semibold text-muted-foreground">Exact phrase match</span>
+                  </div>
                   <input
                     type="text"
-                    value={skills}
-                    onChange={(e) => setSkills(e.target.value)}
-                    className="input w-full"
+                    value={phrasesExact}
+                    onChange={(e) => setPhrasesExact(e.target.value)}
+                    onKeyDown={onSectionKey('phrases', phrasesExact, setPhrasesExact)}
+                    className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    placeholder="custom exact phrases (comma sep)"
+                  />
+                </div>
+              </div>
+
+              {/* Column 3 ------------------------------------------------------ */}
+              <div className="space-y-4">
+                {/* Skills */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={chkSkills}
+                      onChange={(e) => setChkSkills(e.target.checked)}
+                      aria-label="Enable Skills filter"
+                    />
+                    <span className="text-xs font-semibold text-muted-foreground">Skills (comma separated)</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={skillsInput}
+                    onChange={(e) => setSkillsInput(e.target.value)}
+                    onKeyDown={onSectionKey('skills', skillsInput, setSkillsInput)}
+                    className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     placeholder="python, django, react"
                   />
                 </div>
 
-                {/* Projects */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={enableProjects}
-                      onChange={(e) => setEnableProjects(e.target.checked)}
-                    />
-                    Projects
-                  </label>
-                  <label className="inline-flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={projectsRequired}
-                      onChange={(e) => setProjectsRequired(e.target.checked)}
-                    />
-                    Must have projects
-                  </label>
-                </div>
-
                 {/* Location */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
                     <input
                       type="checkbox"
-                      checked={enableLocation}
-                      onChange={(e) => setEnableLocation(e.target.checked)}
+                      className="size-4"
+                      checked={chkLocation}
+                      onChange={(e) => setChkLocation(e.target.checked)}
+                      aria-label="Enable Location filter"
                     />
-                    Location
-                  </label>
+                    <span className="text-xs font-semibold text-muted-foreground">Location</span>
+                  </div>
                   <input
                     type="text"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="input w-full"
+                    value={locationInput}
+                    onChange={(e) => setLocationInput(e.target.value)}
+                    onKeyDown={onSectionKey('location', locationInput, setLocationInput)}
+                    className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     placeholder="e.g., Bangalore"
                   />
                 </div>
 
-                {/* Education */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
+                {/* Education (schools + degrees) */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
                     <input
                       type="checkbox"
-                      checked={enableEducation}
-                      onChange={(e) => setEnableEducation(e.target.checked)}
+                      className="size-4"
+                      checked={chkEducation}
+                      onChange={(e) => setChkEducation(e.target.checked)}
+                      aria-label="Enable Education filter"
                     />
-                    Education
-                  </label>
+                    <span className="text-xs font-semibold text-muted-foreground">Education</span>
+                  </div>
                   <input
                     type="text"
-                    value={schools}
-                    onChange={(e) => setSchools(e.target.value)}
-                    className="input w-full"
+                    value={educationSchools}
+                    onChange={(e) => setEducationSchools(e.target.value)}
+                    onKeyDown={onSectionKey('education', educationSchools, setEducationSchools)}
+                    className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40 mb-2"
                     placeholder="schools (comma separated)"
                   />
                   <input
                     type="text"
-                    value={degrees}
-                    onChange={(e) => setDegrees(e.target.value)}
-                    className="input w-full"
+                    value={educationDegrees}
+                    onChange={(e) => setEducationDegrees(e.target.value)}
+                    onKeyDown={onSectionKey('education', educationDegrees, setEducationDegrees)}
+                    className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     placeholder="degrees (comma separated)"
                   />
                 </div>
 
-                {/* Phrases */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
+                {/* Projects */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
                     <input
                       type="checkbox"
-                      checked={enablePhrases}
-                      onChange={(e) => setEnablePhrases(e.target.checked)}
+                      className="size-4"
+                      checked={chkProjects}
+                      onChange={(e) => setChkProjects(e.target.checked)}
+                      aria-label="Enable Projects filter"
                     />
-                    Phrases
-                  </label>
+                    <span className="text-xs font-semibold text-muted-foreground">Projects</span>
+                  </div>
                   <input
                     type="text"
-                    value={mustPhrases}
-                    onChange={(e) => setMustPhrases(e.target.value)}
-                    className="input w-full"
-                    placeholder='must include (e.g., "microservices", rest api)'
-                  />
-                  <input
-                    type="text"
-                    value={excludePhrases}
-                    onChange={(e) => setExcludePhrases(e.target.value)}
-                    className="input w-full"
-                    placeholder='exclude (e.g., "internship only")'
+                    value={projectsInput}
+                    onChange={(e) => setProjectsInput(e.target.value)}
+                    onKeyDown={onSectionKey('projects', projectsInput, setProjectsInput)}
+                    className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    placeholder="e.g., e-commerce, microservices"
                   />
                 </div>
-
-                {/* Exact match */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={exactOnly}
-                      onChange={(e) => setExactOnly(e.target.checked)}
-                    />
-                    Exact phrase match
-                  </label>
-                  <input
-                    type="text"
-                    value={exactTerms}
-                    onChange={(e) => setExactTerms(e.target.value)}
-                    className="input w-full"
-                    placeholder='custom exact phrases (comma separated)'
-                  />
-                </div>
-              </div>
-
-              <div className="mt-3 flex items-center justify-end gap-2">
-                <button
-                  className="btn btn-ghost text-sm"
-                  onClick={() => {
-                    setEnableRole(true);
-                    setEnableExperience(true);
-                    setEnableSkills(true);
-                    setEnableProjects(false);
-                    setEnableLocation(false);
-                    setEnableEducation(false);
-                    setEnablePhrases(false);
-                    setRole(originalPrompt || '');
-                    setMinYears('');
-                    setMaxYears('');
-                    setSkills('');
-                    setProjectsRequired(false);
-                    setLocation('');
-                    setSchools('');
-                    setDegrees('');
-                    setMustPhrases('');
-                    setExcludePhrases('');
-                    setExactOnly(false);
-                    setExactTerms('');
-                  }}
-                >
-                  <i className="ri-refresh-line mr-1" />
-                  Reset
-                </button>
               </div>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Body */}
@@ -535,7 +638,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={onKeyDown}
-                    placeholder='Ask me to refine… e.g. “Need 5+ years”, “Must know Django”, or use quotes for exact match'
+                    placeholder='Ask me to refine… (free prompt). Use the section inputs above to target a specific field.'
                     className="input w-full min-h-[44px] max-h-40 resize-y pr-12"
                     rows={2}
                     aria-label="Refine prompt for this block only"
@@ -584,8 +687,9 @@ export default function RerunPromptModal({ history, onClose }: Props) {
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {preview.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
-                  Run a refinement to see updated candidates here. This preview only shows CVs from
-                  this saved block.
+                  {updatedCount === 0
+                    ? 'No matching candidates found for your refinement.'
+                    : 'Run a refinement to see updated candidates here. This preview only shows CVs from this saved block.'}
                 </div>
               ) : (
                 preview.map((c) => {

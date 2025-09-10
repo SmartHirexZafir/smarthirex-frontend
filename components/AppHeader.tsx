@@ -1,25 +1,34 @@
+// components/AppHeader.tsx
 "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ThemeToggle from "./ui/ThemeToogle"; // same path/style as before
 import Logo from "@/components/ui/Logo";
+import { useRouter } from "next/navigation";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
 
 type User = {
   name: string;
   role: string;
   avatarUrl?: string | null;
+  // legacy fields that might exist in storage
+  avatar?: string | null;
+  photoUrl?: string | null;
 };
 
 // ---- helpers ----
 function initialsFrom(name?: string) {
   if (!name) return "U";
-  return name
-    .trim()
-    .split(/\s+/)
-    .map((n) => n[0]?.toUpperCase())
-    .join("")
-    .slice(0, 2) || "U";
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .map((n) => n[0]?.toUpperCase())
+      .join("")
+      .slice(0, 2) || "U"
+  );
 }
 
 // decode JWT (for email fallback only)
@@ -116,16 +125,17 @@ function useCurrentUser(propUser?: User) {
     setResolved(u);
   });
 
-  return useMemo(() => ({ user: resolved, loading }), [resolved, loading]);
+  return useMemo(() => ({ user: resolved, loading, setResolved }), [resolved, loading]);
 }
 
 export default function AppHeader({ user }: { user?: User }) {
   const [open, setOpen] = useState(false); // mobile nav
   const [menuOpen, setMenuOpen] = useState(false); // user dropdown
   const menuRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   // resolve current user (prop or storage)
-  const { user: currentUser, loading } = useCurrentUser(user);
+  const { user: currentUser, loading, setResolved } = useCurrentUser(user);
 
   // Close menus on ESC
   useEffect(() => {
@@ -150,9 +160,57 @@ export default function AppHeader({ user }: { user?: User }) {
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  // Lazy fetch to populate/cache missing avatar only if not set
+  useEffect(() => {
+    if (loading) return;
+    const hasAvatar =
+      !!currentUser?.avatarUrl ||
+      !!(currentUser as any)?.avatar ||
+      !!(currentUser as any)?.photoUrl;
+
+    if (!hasAvatar && API_BASE) {
+      (async () => {
+        try {
+          const res = await fetch(`${API_BASE}/auth/me`, {
+            credentials: "include",
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          const newAvatar =
+            data?.avatarUrl || data?.avatar || data?.photoUrl || null;
+          if (newAvatar) {
+            // Update cached user
+            const storedRaw =
+              localStorage.getItem("user") ||
+              localStorage.getItem("auth_user") ||
+              localStorage.getItem("login_user") ||
+              localStorage.getItem("profile");
+            const stored = storedRaw ? JSON.parse(storedRaw) : {};
+            const updated = { ...stored, avatarUrl: newAvatar };
+            localStorage.setItem("user", JSON.stringify(updated));
+            setResolved?.({
+              name: currentUser?.name || "User",
+              role: currentUser?.role || "User",
+              avatarUrl: newAvatar,
+            });
+          }
+        } catch {
+          // silent fail
+        }
+      })();
+    }
+  }, [currentUser, loading, setResolved]);
+
   // Fallback skeleton while loading or no user yet
   const displayName = currentUser?.name || (loading ? "Loading…" : "User");
   const displayRole = currentUser?.role || (loading ? "Please wait" : "User");
+
+  // Derived avatar source: avatarUrl || avatar || photoUrl
+  const avatarSrc =
+    currentUser?.avatarUrl ??
+    (currentUser as any)?.avatar ??
+    (currentUser as any)?.photoUrl ??
+    null;
 
   return (
     <header className="nav full-bleed">
@@ -189,10 +247,10 @@ export default function AppHeader({ user }: { user?: User }) {
                 onClick={() => setMenuOpen((v) => !v)}
               >
                 {/* Avatar (initials fallback) */}
-                {currentUser?.avatarUrl ? (
+                {avatarSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={currentUser.avatarUrl}
+                    src={avatarSrc}
                     alt=""
                     className="h-10 w-10 rounded-xl ring-2 ring-border object-cover"
                   />
@@ -257,6 +315,32 @@ export default function AppHeader({ user }: { user?: User }) {
                   >
                     Settings
                   </Link>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="nav-item block w-full text-left px-3 py-2 rounded-xl hover:bg-muted/40"
+                    onClick={async () => {
+                      try {
+                        if (API_BASE) {
+                          await fetch(`${API_BASE}/auth/logout`, {
+                            method: "POST",
+                            credentials: "include",
+                          });
+                        }
+                      } catch {
+                        // ignore network errors
+                      } finally {
+                        localStorage.removeItem("token");
+                        localStorage.removeItem("access_token");
+                        localStorage.removeItem("user");
+                        localStorage.removeItem("profile");
+                        setMenuOpen(false);
+                        router.push("/login");
+                      }
+                    }}
+                  >
+                    Logout
+                  </button>
                 </div>
               )}
             </div>

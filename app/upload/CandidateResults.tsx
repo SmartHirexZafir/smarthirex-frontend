@@ -99,7 +99,6 @@ export default function CandidateResults({
   const toPercentText = (val: any): string | null => {
     const n = Number(val);
     if (!Number.isFinite(n)) return null;
-    // Heuristic: if value looks like ratio, scale to percent
     const pct = n <= 1 ? n * 100 : n;
     const bounded = Math.max(0, Math.min(100, pct));
     return `${bounded.toFixed(2)}%`;
@@ -279,13 +278,21 @@ export default function CandidateResults({
                   const id = String(candidate._id ?? candidate.id);
                   const name = safeName(candidate.name);
 
-                  // Related roles: accept both shapes (computed early so we can use as fallback)
+                  // Related roles: accept both shapes (normalize scores)
                   const relatedRoles =
                     (Array.isArray(candidate.related_roles) && candidate.related_roles.length > 0
-                      ? candidate.related_roles.map((r) => ({ role: r.role, match: r.match }))
+                      ? candidate.related_roles.map((r) => ({
+                          role: r.role,
+                          // normalize: if match is 0..1 treat as ratio → percent
+                          match:
+                            typeof r.match === 'number'
+                              ? (r.match <= 1 ? r.match * 100 : r.match)
+                              : undefined,
+                        }))
                       : Array.isArray(candidate.relatedRoles)
                       ? candidate.relatedRoles.map((r) => ({
                           role: r.role,
+                          // relatedRoles.score is ratio 0..1 → percent
                           match: typeof r.score === 'number' ? r.score * 100 : undefined,
                         }))
                       : []) || [];
@@ -318,24 +325,23 @@ export default function CandidateResults({
 
                   const expText = expDisplayFromBackend || formatYears(experienceNumeric);
 
-                  // ✅ Role Prediction Confidence: prefer new role_prediction_confidence, then role_prediction_score, then ml_confidence/confidence
+                  // ✅ ML Confidence Score: role_prediction_confidence || ml_confidence || confidence
                   const confRaw =
                     (candidate as any).role_prediction_confidence ??
-                    (candidate as any).role_prediction_score ??
                     (candidate as any).ml_confidence ??
                     candidate.confidence;
                   const confText = toPercentText(confRaw) ?? 'N/A';
 
-                  // ✅ Prompt Matching Score: prefer new prompt_matching_score; then semantic_score; then final_score; then legacy score
+                  // ✅ Prompt Matching Score: prompt_matching_score || final_score || semantic_score || score
                   const promptScoreText = (() => {
                     const pms = (candidate as any).prompt_matching_score;
-                    const sem = candidate.semantic_score;
                     const fin = candidate.final_score;
+                    const sem = candidate.semantic_score;
                     const legacy = (candidate as any).score;
                     return (
                       toPercentText(pms) ??
-                      toPercentText(sem) ??
                       toPercentText(fin) ??
+                      toPercentText(sem) ??
                       toPercentText(legacy)
                     );
                   })();
@@ -375,8 +381,6 @@ export default function CandidateResults({
                                 </div>
                               )}
                             </div>
-
-                            {/* ⛔️ Removed top-right prompt score block to keep the card simple */}
                           </div>
 
                           {/* ✅ Prompt Matching Score badge */}
@@ -388,7 +392,7 @@ export default function CandidateResults({
                             </div>
                           )}
 
-                          {/* ✅ Meta pills: Experience, Location, Role Prediction Confidence */}
+                          {/* ✅ Meta pills: Experience, Location, ML Confidence */}
                           <div className="mt-3 flex flex-wrap gap-2">
                             <Pill>
                               <i className="ri-briefcase-2-line" /> {expText}
@@ -403,9 +407,7 @@ export default function CandidateResults({
                         </div>
                       </div>
 
-                      {/* ⛔️ Skills section removed to keep the card simple */}
-
-                      {/* ✅ Related Roles with visible score */}
+                      {/* ✅ Related Roles with visible % (normalized) */}
                       {relatedRoles.length > 0 && (
                         <div className="mb-5">
                           <div className="mb-2 text-xs font-semibold text-[hsl(var(--muted-foreground))]">
@@ -413,10 +415,11 @@ export default function CandidateResults({
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {relatedRoles.slice(0, 3).map((r, idx) => {
-                              const pct =
+                              const matchVal =
                                 typeof r.match === 'number' && Number.isFinite(r.match)
-                                  ? ` (${Math.round(r.match)}%)`
-                                  : '';
+                                  ? Math.max(0, Math.min(100, r.match))
+                                  : undefined;
+                              const pct = typeof matchVal === 'number' ? ` (${Math.round(matchVal)}%)` : '';
                               return (
                                 <span
                                   key={idx}

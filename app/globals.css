@@ -72,7 +72,11 @@
   --z-dropdown: 55;
   --z-overlay: 60;
   --z-modal: 70;
-  --z-toast: 80;
+
+  /* NEW: Global z-index tokens per requirement */
+  --z-menu: 50;
+  --z-toast: 70;           /* normalized per spec */
+  --z-route-loader: 80;
 
   /* Fluid type */
   --step--1: clamp(.78rem, .70rem + .20vw, .88rem);
@@ -145,7 +149,7 @@
   h6 { font-size: var(--step-0); }
 
   /* Links */
-  a { color: hsl(var(--secondary)); text-underline-offset: 4px; }
+  a { color: hsl(var(--secondary)); text-underline-offset: 4px; @apply hoverable; }
   a:hover { color: hsl(var(--primary)); }
 
   /* Selection contrast for both themes */
@@ -154,14 +158,23 @@
     color: hsl(var(--primary-foreground));
   }
 
-  /* Scrollbar – globally visible in both themes */
+  /* Scrollbar – globally visible in both themes (WebKit) */
   *::-webkit-scrollbar { width: 10px; height: 10px; }
   *::-webkit-scrollbar-thumb {
     background: linear-gradient(180deg, hsl(var(--g1)), hsl(var(--g2)));
     border-radius: 9999px;
     border: 2px solid hsl(var(--background));
   }
-  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-track {
+    background: hsl(var(--muted)/.25);
+    border-radius: 9999px;
+  }
+
+  /* Firefox scrollbar fallback */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--foreground)/.35) hsl(var(--muted)/.25);
+  }
 
   /* Icon font clarity */
   i[class^="ri-"], i[class*=" ri-"],
@@ -264,12 +277,21 @@
   /* Timing function utility */
   .ease-lux { transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
 
+  /* NEW: Normalize hover/transition durations utility */
+  .hoverable { @apply transition-[transform,box-shadow] duration-200; }
+
   /* Simple fade/raise animations used by menus & modals */
   @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
   .animate-fade-in { animation: fade-in .2s ease-out both; }
 
   @keyframes rise-in { from { transform: translateY(6px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
   .animate-rise-in { animation: rise-in .25s cubic-bezier(.22,1,.36,1) both; }
+
+  /* NEW: Overlay z-index utilities */
+  .z-menu { z-index: var(--z-menu); }
+  .z-overlay { z-index: var(--z-overlay); }
+  .z-toast { z-index: var(--z-toast); }
+  .z-route-loader { z-index: var(--z-route-loader); }
 }
 
 /* ---------------- Components (global-only UI primitives) ---------------- */
@@ -277,8 +299,8 @@
   /* Buttons */
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5
-           font-medium transition-all duration-300 ease-lux select-none
-           focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
+           font-medium ease-lux select-none
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 hoverable;
     transform: translateZ(0);
   }
   .btn-primary {
@@ -395,7 +417,7 @@
     -webkit-backdrop-filter: blur(16px) saturate(120%);
     z-index: var(--z-nav);
   }
-  .nav-item { @apply text-sm text-[hsl(var(--muted-foreground))] hover:text-foreground transition-colors; }
+  .nav-item { @apply text-sm text-[hsl(var(--muted-foreground))] hover:text-foreground transition-colors duration-200; }
 
   /* Tabs */
   .tabs { @apply inline-flex gap-1 p-1 rounded-full bg-[hsl(var(--muted)/.6)] gradient-border; }

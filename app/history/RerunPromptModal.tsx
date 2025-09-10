@@ -1,3 +1,4 @@
+// smarthirex-frontend-main/app/history/RerunPromptModal.tsx
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -106,12 +107,36 @@ export default function RerunPromptModal({ history, onClose }: Props) {
   const [chkPhrases, setChkPhrases] = useState(false);
   const [chkExact, setChkExact] = useState(false);
 
+  // ✅ Build selectedFilters like Upload’s ChatbotSection (order is not important here)
+  const selectedFilters = useMemo(() => {
+    const arr: Array<
+      'role' | 'skills' | 'location' | 'projects' | 'experience' | 'education' | 'phrases'
+    > = [];
+    if (chkRole) arr.push('role');
+    if (chkSkills) arr.push('skills');
+    if (chkLocation) arr.push('location');
+    if (chkProjects) arr.push('projects');
+    if (chkExperience) arr.push('experience');
+    if (chkEducation) arr.push('education');
+    if (chkPhrases || chkExact) arr.push('phrases');
+    return arr;
+  }, [chkRole, chkSkills, chkLocation, chkProjects, chkExperience, chkEducation, chkPhrases, chkExact]);
+
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const historyId = history?.id || (history as any)?._id || '';
   const originalPrompt = history?.prompt || '';
   const originalCount = Number(history?.totalMatches || 0);
+
+  // 🔒 Lock body scroll while modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   useEffect(() => {
     // initial assistant message
@@ -151,7 +176,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
     return (await res.json()) as RerunResponse;
   };
 
-  /** Free prompt submission (no section inference) */
+  /** Free prompt submission (sends selectedFilters like Upload) */
   const sendPrompt = async () => {
     if (!canSubmit || !historyId) return;
     setSubmitting(true);
@@ -162,7 +187,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
     setInput('');
 
     try {
-      const payload: any = { prompt: userText };
+      const payload: any = { prompt: userText, selectedFilters };
       const data = await postRerun(payload);
 
       const assistantMsg =
@@ -204,7 +229,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
     }
   };
 
-  /** Targeted submission per section: only sends { prompt: value, options: { focus_section } } */
+  /** Targeted submission per section: sends { prompt: value, selectedFilters, options: { focus_section } } */
   const sendFocused = async (
     section:
       | 'role'
@@ -231,6 +256,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
     try {
       const payload = {
         prompt: v,
+        selectedFilters,
         options: { focus_section: section },
       };
       const data = await postRerun(payload);
@@ -300,7 +326,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
       | 'phrases'
       | 'location',
     val: string,
-    setVal: (s: string) => void
+    _setVal: (s: string) => void
   ) => (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -309,7 +335,6 @@ export default function RerunPromptModal({ history, onClose }: Props) {
         return submitExperience();
       }
       sendFocused(section, val);
-      // keep value visible
     }
   };
 
@@ -330,8 +355,11 @@ export default function RerunPromptModal({ history, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 p-4 flex items-center justify-center">
-      <div className="w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-2xl border border-border/70 bg-card/90 backdrop-blur-md shadow-2xl shadow-glow gradient-border">
+    <div className="fixed inset-0 z-overlay p-4 flex items-center justify-center">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
+      {/* Modal content */}
+      <div className="relative w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl border border-border/70 bg-card/90 backdrop-blur-md shadow-2xl shadow-glow gradient-border">
         {/* Header */}
         <div className="relative p-6 border-b border-border bg-card/80">
           <div className="flex items-start justify-between gap-3">
@@ -368,7 +396,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
             </div>
           </div>
 
-          {/* Section inputs — identical semantics to Upload chatbot’s focused search */}
+          {/* Section inputs — parity with Upload chatbot’s focused search */}
           <div className="mt-5 rounded-2xl border border-border/60 bg-muted/20 p-4 md:p-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 max-h-[70vh] overflow-y-auto">
               {/* Column 1 ------------------------------------------------------ */}
@@ -392,6 +420,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                     onKeyDown={onSectionKey('role', roleInput, setRoleInput)}
                     className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     placeholder="Data Scientist"
+                    aria-label="Role"
                   />
                 </div>
 
@@ -419,6 +448,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                     }}
                     className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40 mb-2"
                     placeholder={'must include (e.g., "microservices")'}
+                    aria-label="Include phrases"
                   />
                   <input
                     type="text"
@@ -432,6 +462,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                     }}
                     className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     placeholder={'exclude (e.g., "internship only")'}
+                    aria-label="Exclude phrases"
                   />
                 </div>
               </div>
@@ -463,6 +494,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                       }}
                       className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                       placeholder="Min years"
+                      aria-label="Minimum years experience"
                     />
                     <input
                       type="text"
@@ -476,6 +508,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                       }}
                       className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                       placeholder="Max years"
+                      aria-label="Maximum years experience"
                     />
                   </div>
                 </div>
@@ -499,6 +532,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                     onKeyDown={onSectionKey('phrases', phrasesExact, setPhrasesExact)}
                     className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     placeholder="custom exact phrases (comma sep)"
+                    aria-label="Exact phrases"
                   />
                 </div>
               </div>
@@ -524,6 +558,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                     onKeyDown={onSectionKey('skills', skillsInput, setSkillsInput)}
                     className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     placeholder="python, django, react"
+                    aria-label="Skills"
                   />
                 </div>
 
@@ -546,6 +581,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                     onKeyDown={onSectionKey('location', locationInput, setLocationInput)}
                     className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     placeholder="e.g., Bangalore"
+                    aria-label="Location"
                   />
                 </div>
 
@@ -568,6 +604,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                     onKeyDown={onSectionKey('education', educationSchools, setEducationSchools)}
                     className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40 mb-2"
                     placeholder="schools (comma separated)"
+                    aria-label="Education schools"
                   />
                   <input
                     type="text"
@@ -576,6 +613,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                     onKeyDown={onSectionKey('education', educationDegrees, setEducationDegrees)}
                     className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     placeholder="degrees (comma separated)"
+                    aria-label="Education degrees"
                   />
                 </div>
 
@@ -598,6 +636,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                     onKeyDown={onSectionKey('projects', projectsInput, setProjectsInput)}
                     className="input w-full h-11 rounded-xl bg-background/60 border border-border/70 px-4 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary/40"
                     placeholder="e.g., e-commerce, microservices"
+                    aria-label="Projects"
                   />
                 </div>
               </div>

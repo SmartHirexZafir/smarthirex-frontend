@@ -1,3 +1,4 @@
+// smarthirex-frontend-main/app/history/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -120,9 +121,8 @@ export default function HistoryPage() {
   };
 
   /**
-   * 🔒 Prevent the page from jumping to the top by locking body scroll
+   * 🔒 Prevent the page from shifting/scrolling by locking body scroll
    * while any modal is open (Results or Re-run). Restores on close.
-   * (No window.scrollTo is used anywhere in this file.)
    */
   useEffect(() => {
     const anyModalOpen = showModal || !!rerunFor;
@@ -138,75 +138,80 @@ export default function HistoryPage() {
     return;
   }, [showModal, rerunFor]);
 
+  const isModalOpen = showModal || !!rerunFor;
+
   return (
     <div className="min-h-screen">
-      {/* Hero / Intro */}
-      <section className="relative overflow-hidden py-14 md:py-20">
-        {/* soft aurora wash */}
-        <div className="absolute inset-0 pointer-events-none" />
+      {/* Background content is hidden from assistive tech while a modal is open */}
+      <div aria-hidden={isModalOpen}>
+        {/* Hero / Intro */}
+        <section className="relative overflow-hidden py-14 md:py-20">
+          {/* soft aurora wash */}
+          <div className="absolute inset-0 pointer-events-none" />
 
-        <div className="container relative z-10 max-w-6xl">
-          <div className="mx-auto max-w-4xl text-center animate-rise-in">
-            <h1 className="mb-4 font-bold gradient-text">
-              Prompt History & Matching Results
-            </h1>
+          <div className="container relative z-10 max-w-6xl">
+            <div className="mx-auto max-w-4xl text-center animate-rise-in">
+              <h1 className="mb-4 font-bold gradient-text">
+                Prompt History & Matching Results
+              </h1>
 
-            <p className="mx-auto max-w-3xl text-[hsl(var(--muted-foreground))] leading-relaxed">
-              Track and review all your AI-powered resume matching activities with
-              detailed analytics and insights.
-            </p>
-          </div>
+              <p className="mx-auto max-w-3xl text-[hsl(var(--muted-foreground))] leading-relaxed">
+                Track and review all your AI-powered resume matching activities with
+                detailed analytics and insights.
+              </p>
+            </div>
 
-          {/* Stats card */}
-          <div className="mt-10">
-            <div className="mx-auto max-w-3xl rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md shadow-glow gradient-border">
-              <div className="relative z-10 grid grid-cols-1 gap-6 p-6 md:grid-cols-2">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(var(--primary)/.18)] ring-1 ring-border">
-                    <i className="ri-database-2-line text-xl text-[hsl(var(--primary))]" />
+            {/* Stats card */}
+            <div className="mt-10">
+              <div className="mx-auto max-w-3xl rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md shadow-glow gradient-border">
+                <div className="relative z-10 grid grid-cols-1 gap-6 p-6 md:grid-cols-2">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(var(--primary)/.18)] ring-1 ring-border">
+                      <i className="ri-database-2-line text-xl text-[hsl(var(--primary))]" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{historyData.length}</p>
+                      <p className="text-sm text-[hsl(var(--muted-foreground))]">Total Searches</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{historyData.length}</p>
-                    <p className="text-sm text-[hsl(var(--muted-foreground))]">Total Searches</p>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(var(--success)/.18)] ring-1 ring-border">
-                    <i className="ri-group-line text-xl text-[hsl(var(--success))]" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">
-                      {historyData.reduce(
-                        (sum: number, item: any) => sum + (item.totalMatches || 0),
-                        0
-                      )}
-                    </p>
-                    <p className="text-sm text-[hsl(var(--muted-foreground))]">Total Matches</p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[hsl(var(--success)/.18)] ring-1 ring-border">
+                      <i className="ri-group-line text-xl text-[hsl(var(--success))]" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">
+                        {historyData.reduce(
+                          (sum: number, item: any) => sum + (item.totalMatches || 0),
+                          0
+                        )}
+                      </p>
+                      <p className="text-sm text-[hsl(var(--muted-foreground))]">Total Matches</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Content */}
-      <section className="pb-12">
-        <div className="container max-w-6xl space-y-6">
-          <HistoryFilter onFilter={handleFilter} />
+        {/* Content */}
+        <section className="pb-12">
+          <div className="container max-w-6xl space-y-6">
+            <HistoryFilter onFilter={handleFilter} />
 
-          {/* subtle divider */}
-          <div className="h-px w-full bg-gradient-to-r from-transparent via-[hsl(var(--border)/.8)] to-transparent" />
+            {/* subtle divider */}
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-[hsl(var(--border)/.8)] to-transparent" />
 
-          <HistoryBlocks
-            historyData={filteredData}
-            onViewResults={handleViewResults}
-            onOpenRerunModal={openRerunModal}   // scoped rerun flow
-            onRerunPrompt={handleRerunPrompt}   // legacy fallback (kept)
-          />
-        </div>
-      </section>
+            <HistoryBlocks
+              historyData={filteredData}
+              onViewResults={handleViewResults}
+              onOpenRerunModal={openRerunModal}   // scoped rerun flow
+              onRerunPrompt={handleRerunPrompt}   // legacy fallback (kept)
+            />
+          </div>
+        </section>
+      </div>
 
       {/* Results Modal */}
       {showModal && (

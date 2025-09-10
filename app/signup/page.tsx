@@ -1,4 +1,4 @@
-// app/signup/page.tsx
+// smarthirex-frontend-main/app/signup/page.tsx
 
 'use client';
 
@@ -458,18 +458,14 @@ export default function SignupPage() {
                   </div>
                 </div>
               </form>
-            </div>
-          )}
 
-          {/* When success screen is showing, do NOT show any login link */}
-          {!successMessage && (
-            <>
+              {/* Moved inside the same card as the form */}
               <div className="mt-6 text-center text-sm text-muted-foreground">
                 Already have an account?{' '}
                 <Link href="/login" className="link">Log in</Link>
               </div>
 
-              {/* Google SSO */}
+              {/* Google SSO (inside card) */}
               <div className="mt-8 text-center">
                 <div className="text-sm text-muted-foreground mb-2">Prefer single sign-on?</div>
                 <button
@@ -481,7 +477,7 @@ export default function SignupPage() {
                   <i className="ri-google-fill" /> Login with Google
                 </button>
               </div>
-            </>
+            </div>
           )}
 
           <div className="mt-6 text-center text-xs text-muted-foreground">

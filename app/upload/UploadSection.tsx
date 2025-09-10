@@ -1,6 +1,9 @@
+// smarthirex-frontend-main/app/upload/UploadSection.tsx
+
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useToast } from '@/components/system/Toaster';
 
 type FileWithPreview = File & { preview?: string };
 
@@ -24,22 +27,15 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:1000
 const CONCURRENCY = 8;
 
 // Hold durations
-const TOAST_HOLD_MS = 3000;   // ⬅️ exact 3s
 const PROGRESS_HOLD_MS = 2000;
 
 // ✅ fallback paths (handles router prefix/no-prefix)
 const UPLOAD_PATHS = ['/upload/upload-resumes', '/upload-resumes'];
 
-// ⛑️ Guard timeout to auto-dismiss toast/progress if something is stuck
-const MAX_TOAST_MS = 15000;
-
 export default function UploadSection({ onFileUpload }: UploadSectionProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [processingFiles, setProcessingFiles] = useState<ProcessingFile[]>([]);
   const [showProgress, setShowProgress] = useState(false);
-  const [showToast, setShowToast] = useState(false);
-  const [toastMsg, setToastMsg] = useState('');
-  const [toastType, setToastType] = useState<'success' | 'warning'>('success');
 
   // aggregated counters (across many requests)
   const [agg, setAgg] = useState({
@@ -52,10 +48,13 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
     parse_error: 0,
   });
 
+  const { success, error } = useToast();
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const timersRef = useRef<number[]>([]);
-  const guardRef = useRef<number | null>(null); // ⛑️ hard-cap guard timer
   const procRef = useRef<ProcessingFile[]>([]);
+  const firstSuccessToastRef = useRef(false);
+
   useEffect(() => {
     procRef.current = processingFiles;
   }, [processingFiles]);
@@ -78,51 +77,23 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
     timersRef.current = [];
   };
 
-  // util: start/clear guard timer (last resort)
-  const startGuard = () => {
-    clearGuard();
-    guardRef.current = window.setTimeout(() => {
-      // force-dismiss even if some rows stuck
-      setShowToast(false);
-      setShowProgress(false);
-      clearTimers();
-    }, MAX_TOAST_MS);
-  };
-  const clearGuard = () => {
-    if (guardRef.current) {
-      window.clearTimeout(guardRef.current);
-      guardRef.current = null;
-    }
-  };
-
-  // clear guard/timers on unmount
+  // clear timers on unmount
   useEffect(() => {
     return () => {
-      clearGuard();
       clearTimers();
     };
   }, []);
 
-  // auto-hide toast + progress after done
+  // auto-hide progress after done + show final summary toast
   useEffect(() => {
     const allDone = totalCount > 0 && processingFiles.every((f) => f.status !== 'processing');
-
     if (!allDone) return;
 
     // build one clear summary toast
-    const skipped =
-      agg.duplicates + agg.unsupported + agg.empty + agg.too_large + agg.parse_error;
-
     const summary = `Uploaded ${agg.inserted} of ${agg.received} · Duplicates: ${agg.duplicates} · Unsupported: ${agg.unsupported} · Empty: ${agg.empty} · Too large: ${agg.too_large} · Parse errors: ${agg.parse_error}`;
 
-    setToastType(skipped === 0 ? 'success' : 'warning');
-    setToastMsg(summary);
-    setShowToast(true);
+    success(summary, undefined, 3000);
 
-    // once we know all are settled, the guard is no longer needed
-    clearGuard();
-
-    const t1 = window.setTimeout(() => setShowToast(false), TOAST_HOLD_MS);
     const t2 = window.setTimeout(() => {
       setShowProgress(false);
       setProcessingFiles([]);
@@ -136,13 +107,13 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
         parse_error: 0,
       });
     }, PROGRESS_HOLD_MS);
-    timersRef.current.push(t1, t2);
+    timersRef.current.push(t2);
 
     return () => {
       timersRef.current.forEach((id) => window.clearTimeout(id));
       timersRef.current = [];
     };
-  }, [processingFiles, totalCount, agg]);
+  }, [processingFiles, totalCount, agg, success]);
 
   // ---------- DnD ----------
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -169,12 +140,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
     if (!files.length) return;
 
     clearTimers();
-    clearGuard();
-    setShowToast(false);
     setShowProgress(true);
-
-    // ⛑️ Start guard timer for this batch
-    startGuard();
 
     // rows for UI
     const rows: ProcessingFile[] = files.map((file) => ({
@@ -197,6 +163,9 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
       parse_error: 0,
     });
 
+    // reset "started" info toast flag
+    firstSuccessToastRef.current = false;
+
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
     const uploadSingle = (idx: number, file: File) =>
@@ -215,6 +184,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
                 f.id === row.id ? { ...f, status: 'error', progress: 0, errorMsg: 'Upload endpoint not reachable' } : f
               )
             );
+            error(`Upload failed for ${file.name}`);
             return resolve();
           }
 
@@ -254,6 +224,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
                   f.id === row.id ? { ...f, status: 'error', progress: 0, errorMsg: 'Upload failed' } : f
                 )
               );
+              error(`Upload failed for ${file.name}`);
               return resolve();
             }
 
@@ -279,6 +250,10 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
               setProcessingFiles((prev) =>
                 prev.map((f) => (f.id === row.id ? { ...f, status: 'completed', progress: 100 } : f))
               );
+              if (!firstSuccessToastRef.current) {
+                firstSuccessToastRef.current = true;
+                success('Upload started. Processing…', undefined, 2000);
+              }
             } else {
               // show reason if we have it
               const reason =
@@ -292,6 +267,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
                   f.id === row.id ? { ...f, status: 'error', progress: 0, errorMsg: reason } : f
                 )
               );
+              error(`Upload failed for ${file.name}`);
             }
             return resolve();
           };
@@ -415,24 +391,6 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
           <div className="mt-3 text-sm text-[hsl(var(--muted-foreground))]">
             <span className="font-medium text-foreground">{completedCount}</span> out of{' '}
             <span className="font-medium text-foreground">{totalCount}</span> resumes uploaded
-          </div>
-        </div>
-      )}
-
-      {/* Big, high-contrast toast */}
-      {showToast && (
-        <div
-          className={`fixed bottom-6 right-6 z-50 rounded-xl px-5 py-4 shadow-xl border text-base font-medium ${
-            toastType === 'success'
-              ? 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-transparent'
-              : 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))] border-border'
-          }`}
-          role="status"
-          aria-live="polite"
-        >
-          <div className="flex items-center gap-3">
-            <i className={toastType === 'success' ? 'ri-check-line text-xl' : 'ri-alert-line text-xl'} />
-            <span>{toastMsg}</span>
           </div>
         </div>
       )}

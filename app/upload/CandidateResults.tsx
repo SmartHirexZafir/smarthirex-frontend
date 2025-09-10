@@ -1,3 +1,4 @@
+// smarthirex-frontend-main/app/upload/CandidateResults.tsx
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -78,7 +79,7 @@ export default function CandidateResults({
   const isBadText = (s?: string | null) => {
     const t = String(s ?? '').trim().toLowerCase();
     return !t || t === 'n/a' || t === 'na' || t === 'none' || t === '-' || t === 'unknown' || t === 'not specified';
-    };
+  };
   const pickFirstGood = (...vals: (string | undefined | null)[]) => {
     for (const v of vals) {
       if (!isBadText(v)) return String(v).trim();
@@ -225,6 +226,33 @@ export default function CandidateResults({
     </div>
   );
 
+  // ---------- Related roles fallback map (client-side safety net) ----------
+  const RELATED_ROLE_MAP: Record<string, string[]> = {
+    'data scientist': ['ML Engineer', 'Data Analyst', 'Research Scientist'],
+    'machine learning engineer': ['Data Scientist', 'MLOps Engineer', 'Applied Scientist'],
+    'data engineer': ['Analytics Engineer', 'Backend Engineer', 'Platform Engineer'],
+    'data analyst': ['Business Analyst', 'BI Developer', 'Reporting Analyst'],
+    'frontend developer': ['Full-Stack Developer', 'UI Engineer', 'React Developer'],
+    'backend developer': ['Full-Stack Developer', 'Platform Engineer', 'API Engineer'],
+    'full-stack developer': ['Frontend Developer', 'Backend Developer', 'Software Engineer'],
+    'product manager': ['Program Manager', 'Business Analyst', 'Product Owner'],
+    'devops engineer': ['SRE', 'Platform Engineer', 'Cloud Engineer'],
+    'qa engineer': ['SDET', 'Test Engineer', 'Automation Engineer'],
+  };
+
+  const buildFallbackRelatedRoles = (baseRoleRaw: string): { role: string; match?: number }[] => {
+    const key = baseRoleRaw.toLowerCase();
+    const list =
+      RELATED_ROLE_MAP[key] ||
+      RELATED_ROLE_MAP[key.replace(/engineer/i, 'developer')] ||
+      [];
+    if (list.length > 0) {
+      return list.slice(0, 3).map((r) => ({ role: r }));
+    }
+    // If we truly don't know, show placeholders to keep the section structure
+    return [{ role: '—' }, { role: '—' }];
+  };
+
   return (
     <section className="card-glass relative overflow-hidden animate-rise-in" aria-labelledby="filtered-title">
       {/* Ambient overlays */}
@@ -279,11 +307,10 @@ export default function CandidateResults({
                   const name = safeName(candidate.name);
 
                   // Related roles: accept both shapes (normalize scores)
-                  const relatedRoles =
+                  const relatedRolesNormalized =
                     (Array.isArray(candidate.related_roles) && candidate.related_roles.length > 0
                       ? candidate.related_roles.map((r) => ({
                           role: r.role,
-                          // normalize: if match is 0..1 treat as ratio → percent
                           match:
                             typeof r.match === 'number'
                               ? (r.match <= 1 ? r.match * 100 : r.match)
@@ -292,7 +319,6 @@ export default function CandidateResults({
                       : Array.isArray(candidate.relatedRoles)
                       ? candidate.relatedRoles.map((r) => ({
                           role: r.role,
-                          // relatedRoles.score is ratio 0..1 → percent
                           match: typeof r.score === 'number' ? r.score * 100 : undefined,
                         }))
                       : []) || [];
@@ -304,9 +330,15 @@ export default function CandidateResults({
                       candidate.category,
                       candidate.currentRole,
                       (candidate as any).ml_predicted_role,
-                      relatedRoles[0]?.role
+                      relatedRolesNormalized[0]?.role
                     ) || '';
                   const roleLine = roleCore ? `(${roleCore})` : ''; // show in parentheses under the name
+
+                  // If backend didn't provide related roles, build a small fallback set
+                  const relatedRolesForDisplay =
+                    relatedRolesNormalized.length > 0
+                      ? relatedRolesNormalized.slice(0, 3)
+                      : buildFallbackRelatedRoles(roleCore || ''); // may return placeholders
 
                   // Prefer clean experience display from backend if present
                   const expDisplayFromBackend =
@@ -407,32 +439,29 @@ export default function CandidateResults({
                         </div>
                       </div>
 
-                      {/* ✅ Related Roles with visible % (normalized) */}
-                      {relatedRoles.length > 0 && (
-                        <div className="mb-5">
-                          <div className="mb-2 text-xs font-semibold text-[hsl(var(--muted-foreground))]">
-                            Related roles
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {relatedRoles.slice(0, 3).map((r, idx) => {
-                              const matchVal =
-                                typeof r.match === 'number' && Number.isFinite(r.match)
-                                  ? Math.max(0, Math.min(100, r.match))
-                                  : undefined;
-                              const pct = typeof matchVal === 'number' ? ` (${Math.round(matchVal)}%)` : '';
-                              return (
-                                <span
-                                  key={idx}
-                                  className="rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground"
-                                >
-                                  {r.role}
-                                  {pct}
-                                </span>
-                              );
-                            })}
-                          </div>
+                      {/* ✅ Related Roles with visible % (normalized) — always render, with fallback if missing */}
+                      <div className="mb-5">
+                        <div className="mb-2 text-xs font-semibold text-[hsl(var(--muted-foreground))]">
+                          Related roles
                         </div>
-                      )}
+                        <div className="flex flex-wrap gap-2">
+                          {relatedRolesForDisplay.map((r, idx) => {
+                            const matchVal =
+                              typeof r.match === 'number' && Number.isFinite(r.match)
+                                ? Math.max(0, Math.min(100, r.match))
+                                : undefined;
+                            const pct = typeof matchVal === 'number' ? ` (${Math.round(matchVal)}%)` : '';
+                            return (
+                              <span
+                                key={idx}
+                                className="rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground"
+                              >
+                                {r.role}{pct}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
 
                       {/* Button aligned bottom across cards */}
                       <Link href={`/candidate/${id}`} className="btn btn-primary w-full justify-center mt-auto">

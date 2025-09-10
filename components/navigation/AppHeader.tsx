@@ -31,7 +31,7 @@ export default function AppHeader() {
           <nav aria-label="Primary" className="hidden md:flex items-center justify-center gap-8">
             <Link className="nav-item" href="/features">Features</Link>
             <Link className="nav-item" href="/pricing">Pricing</Link>
-            <Link className="nav-item" href="/docs">Docs</Link>
+            <Link className="nav-item" href="/about">About</Link>
           </nav>
 
           {/* Actions */}
@@ -85,10 +85,10 @@ export default function AppHeader() {
               </Link>
               <Link
                 className="nav-item px-4 py-3 rounded-xl hover:bg-muted/40"
-                href="/docs"
+                href="/about"
                 onClick={() => setOpen(false)}
               >
-                Docs
+                About
               </Link>
             </div>
           </div>

@@ -1,3 +1,4 @@
+// smarthirex-frontend-main/app/history/ResultsModal.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -42,6 +43,15 @@ export default function ResultsModal({ history, onClose }: Props) {
 
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [results, setResults] = useState<ResultsPayload | null>(null);
+
+  // 🔒 Lock body scroll while modal is open
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   useEffect(() => {
     if (!history?.id) {
@@ -114,9 +124,9 @@ export default function ResultsModal({ history, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-overlay p-4 flex items-center justify-center">
       {/* Themed backdrop */}
-      <div className="absolute inset-0 bg-[hsl(var(--background)/.7)]" />
+      <div className="absolute inset-0 bg-[hsl(var(--background)/.7)]" aria-hidden="true" />
 
-      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border">
+      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border">
         {/* Header */}
         <div className="relative p-6">
           <div className="absolute inset-0 -z-10 opacity-[.22] bg-[radial-gradient(900px_400px_at_-10%_-20%,hsl(var(--g1)/.6),transparent_60%),radial-gradient(800px_500px_at_120%_-20%,hsl(var(--g2)/.5),transparent_55%),radial-gradient(700px_700px_at_80%_120%,hsl(var(--g3)/.45),transparent_60%)]" />

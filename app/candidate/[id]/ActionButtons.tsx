@@ -14,6 +14,7 @@ type Candidate = {
   predicted_role?: string;
   category?: string;
   test_score?: number; // <-- used to gate Schedule flow
+  // (may also include) testCompleted?: boolean; hasTestResult?: boolean;
 };
 
 type ActionButtonsProps = {
@@ -50,6 +51,9 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
   const [isShortlisted, setIsShortlisted] = useState(false);
   const [isRejected, setIsRejected] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // While routing to meetings, disable the Schedule button and mark busy
+  const [scheduleRouting, setScheduleRouting] = useState(false);
 
   // Error toast (also used for the “please complete test” dialog)
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -154,15 +158,21 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
 
   // 2) Schedule Interview gating:
   //    - must have an email (hard block)
-  //    - must have a test score (soft guard that shows dialog until test completed)
+  //    - must have a test completed/score (soft guard that shows dialog until test completed)
   const hasEmail = !!candidateEmail;
   const hasTestScore =
     candidate?.test_score !== undefined &&
     candidate?.test_score !== null &&
     !Number.isNaN(Number(candidate?.test_score));
 
+  // accept alternative completion flags if backend provides them
+  const hasTestCompleted =
+    (candidate as any)?.testCompleted === true || (candidate as any)?.hasTestResult === true;
+
+  const hasTestScoreOrCompleted = hasTestScore || hasTestCompleted;
+
   const scheduleHardDisabled = !hasEmail; // truly disable when we can't proceed at all
-  const scheduleSoftBlocked = !hasTestScore; // clickable but shows guidance dialog
+  const scheduleSoftBlocked = !hasTestScoreOrCompleted; // clickable but shows guidance dialog
 
   const handleSchedule = () => {
     if (!candidate?._id) {
@@ -172,14 +182,15 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
     if (scheduleHardDisabled) return; // native disabled prevents click; extra guard
 
     if (scheduleSoftBlocked) {
-      // Friendly dialog per requirement
+      // Friendly dialog per requirement (exact message specified)
       setErrorMsg(
-        "Please have the candidate complete the test first. Once their test score is available, you can schedule the interview here."
+        "Interview schedule karne se pehle candidate ka test complete hona zaroori hai."
       );
       return;
     }
 
     // All good → redirect to Meetings page with prefilled candidate
+    setScheduleRouting(true); // disable button & mark busy while routing
     router.push(`/meetings?candidateId=${candidate._id}`);
   };
 
@@ -190,7 +201,7 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
   const sendTestBtnCls = [baseBtn].join(" ");
   const scheduleBtnCls = [
     baseBtn,
-    scheduleHardDisabled || scheduleSoftBlocked ? "opacity-60" : "",
+    scheduleHardDisabled || scheduleSoftBlocked || scheduleRouting ? "opacity-60" : "",
   ].join(" ");
 
   return (
@@ -234,11 +245,11 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
             <span className="text-sm">Send Test</span>
           </button>
 
-          {/* Schedule → gated by email (hard) and test_score (soft dialog) */}
+          {/* Schedule → gated by email (hard) and test completion/score (soft dialog) */}
           <button
             type="button"
             onClick={handleSchedule}
-            disabled={scheduleHardDisabled}
+            disabled={scheduleHardDisabled || scheduleRouting}
             title={
               scheduleHardDisabled
                 ? "Candidate email required to schedule"
@@ -246,7 +257,9 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
                 ? "Please complete the test first"
                 : undefined
             }
-            aria-disabled={scheduleHardDisabled || scheduleSoftBlocked}
+            aria-disabled={scheduleHardDisabled || scheduleSoftBlocked || scheduleRouting}
+            aria-busy={scheduleRouting ? "true" : "false"}
+            aria-label="Send Schedule"
             className={scheduleBtnCls}
           >
             <i className="ri-calendar-event-line text-[1.05em]" />
@@ -277,7 +290,7 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
       {/* Error toast / guidance dialog */}
       {errorMsg && (
         <div className="fixed bottom-6 right-6 z-[60]">
-          <div role="status" aria-live="assertive" className="panel glass shadow-lux px-4 py-3 min-w-[260px]">
+          <div role="status" aria-live="assertive" className="panel glass shadow-lux px-4 py-3 min-w:[260px]">
             <div className="flex items-start gap-3">
               <div className="mt-1 h-2.5 w-2.5 rounded-full bg-[hsl(var(--destructive))]" />
               <div className="flex-1 text-sm">

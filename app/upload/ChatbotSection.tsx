@@ -1,6 +1,8 @@
+// smarthirex-frontend-main/app/upload/ChatbotSection.tsx
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useGlobalLoading } from '@/components/system/GlobalLoadingProvider';
 
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
@@ -73,7 +75,7 @@ export default function ChatbotSection({
   // finish guard to always stop parent loader
   const finishedRef = useRef(false);
 
-  // lightweight toast
+  // lightweight toast (unchanged UI block at bottom)
   const [toast, setToast] = useState<{
     show: boolean;
     msg: string;
@@ -84,6 +86,8 @@ export default function ChatbotSection({
     const t = window.setTimeout(() => setToast({ show: false, msg: '', tone: 'info' }), 3200);
     return () => window.clearTimeout(t);
   }, [toast.show]);
+
+  const { trackPromise } = useGlobalLoading();
 
   const formatTime = () => new Date().toLocaleTimeString();
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -117,7 +121,7 @@ export default function ChatbotSection({
     return resp;
   }
 
-  // 🚫 No client-side synonyms; backend owns logic. We only pass prompt + optional focus_section.
+  // 🚫 No client-side synonyms; backend owns logic. We pass prompt + selectedFilters + optional focus_section.
   async function callChatbot(
     payload: { prompt: string; options?: { focus_section?: 'role'|'experience'|'education'|'skills'|'projects'|'phrases'|'location' } },
     token: string | null
@@ -128,7 +132,7 @@ export default function ChatbotSection({
         const url = `${API_BASE}${p}`;
         const body = {
           prompt: payload.prompt,
-          selectedFilters: [], // explicit: frontend does not send guessed filters
+          selectedFilters: selected, // ← use currently chosen filter namespaces
           options: payload.options ?? {},
         };
         const resp = await postJSON(url, body, token);
@@ -181,7 +185,7 @@ export default function ChatbotSection({
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
     try {
-      const result = await callChatbot({ prompt }, token);
+      const result = await trackPromise(callChatbot({ prompt }, token));
 
       if (result.kind === 'unauth') {
         setMessages((prev) => [
@@ -304,7 +308,7 @@ export default function ChatbotSection({
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
     try {
-      const result = await callChatbot({ prompt, options: { focus_section: section } }, token);
+      const result = await trackPromise(callChatbot({ prompt, options: { focus_section: section } }, token));
 
       if (result.kind === 'unauth') {
         setMessages((prev) => [
@@ -446,7 +450,7 @@ export default function ChatbotSection({
               {menuOpen && (
                 <div
                   role="menu"
-                  className="absolute right-0 mt-2 w-64 rounded-2xl border border-border surface glass shadow-xl p-2 z-50 max-h-[70vh] flex flex-col"
+                  className="absolute right-0 mt-2 w-64 rounded-2xl border border-border surface glass shadow-xl p-2 z-50 max-h:[70vh] max-h-[70vh] flex flex-col"
                 >
                   <div className="p-2 text-xs text-[hsl(var(--muted-foreground))]">Select one or more categories</div>
 
@@ -494,6 +498,12 @@ export default function ChatbotSection({
               )}
             </div>
           </div>
+
+          {/* Guidance between filters and input panels */}
+          <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+            If you want to search using a prompt, please select filters and then search.
+            If you want to search without a prompt, use the category input boxes instead.
+          </p>
         </header>
 
         {/* History-style focused sections (scrollable panel; each submits ONLY its field) */}
@@ -511,7 +521,17 @@ export default function ChatbotSection({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSectionSubmit('role', roleInput);
                   }}
+                  aria-label="Role input"
                 />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleSectionSubmit('role', roleInput)}
+                    aria-label="Submit role filter"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
 
               {/* Experience (Min / Max) */}
@@ -526,6 +546,7 @@ export default function ChatbotSection({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') submitExperience();
                     }}
+                    aria-label="Minimum years of experience"
                   />
                   <input
                     className="input h-11 rounded-xl"
@@ -535,7 +556,17 @@ export default function ChatbotSection({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') submitExperience();
                     }}
+                    aria-label="Maximum years of experience"
                   />
+                </div>
+                <div className="mt-2 flex justify-end">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={submitExperience}
+                    aria-label="Submit experience filter"
+                  >
+                    Done
+                  </button>
                 </div>
               </div>
 
@@ -550,7 +581,17 @@ export default function ChatbotSection({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSectionSubmit('skills', skillsInput);
                   }}
+                  aria-label="Skills input"
                 />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleSectionSubmit('skills', skillsInput)}
+                    aria-label="Submit skills filter"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
 
               {/* Location */}
@@ -564,7 +605,17 @@ export default function ChatbotSection({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSectionSubmit('location', locationInput);
                   }}
+                  aria-label="Location input"
                 />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleSectionSubmit('location', locationInput)}
+                    aria-label="Submit location filter"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
 
               {/* Education */}
@@ -578,7 +629,17 @@ export default function ChatbotSection({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSectionSubmit('education', educationInput);
                   }}
+                  aria-label="Education input"
                 />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleSectionSubmit('education', educationInput)}
+                    aria-label="Submit education filter"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
 
               {/* Projects */}
@@ -592,7 +653,17 @@ export default function ChatbotSection({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSectionSubmit('projects', projectsInput);
                   }}
+                  aria-label="Projects input"
                 />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleSectionSubmit('projects', projectsInput)}
+                    aria-label="Submit projects filter"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
 
               {/* Phrases — include / exclude */}
@@ -606,6 +677,7 @@ export default function ChatbotSection({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') submitPhrasesInclude();
                   }}
+                  aria-label="Phrases include input"
                 />
                 <input
                   className="input mt-2 h-11 rounded-xl"
@@ -615,7 +687,17 @@ export default function ChatbotSection({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') submitPhrasesExclude();
                   }}
+                  aria-label="Phrases exclude input"
                 />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={submitPhrasesInclude}
+                    aria-label="Submit phrases include filter"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
 
               {/* Exact phrase match */}
@@ -629,7 +711,17 @@ export default function ChatbotSection({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSectionSubmit('phrases', phrasesExact);
                   }}
+                  aria-label="Exact phrase input"
                 />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleSectionSubmit('phrases', phrasesExact)}
+                    aria-label="Submit exact phrase filter"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -715,18 +807,20 @@ export default function ChatbotSection({
           </div>
           {/* selected filter tags preview (visual only) */}
           {selected.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {selected.map((k) => {
-                const f = FILTERS.find((x) => x.key === k)!;
-                return (
-                  <span
-                    key={k}
-                    className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground"
-                  >
-                    <i className={`${f.icon}`} /> {f.label}
-                  </span>
-                );
-              })}
+            <div className="mt-3 overflow-x-auto px-2 md:px-3">
+              <div className="flex gap-2 overflow-visible">
+                {selected.map((k) => {
+                  const f = FILTERS.find((x) => x.key === k)!;
+                  return (
+                    <span
+                      key={k}
+                      className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-card/50 px-2.5 py-1 text-xs text-foreground"
+                    >
+                      <i className={`${f.icon}`} /> {f.label}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

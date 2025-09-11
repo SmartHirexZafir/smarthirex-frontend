@@ -1,3 +1,4 @@
+// app/upload/page.tsx
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -77,21 +78,24 @@ export default function UploadPage() {
     (prompt: string, results: any[] = []) => {
       const incomingPrompt = String(prompt || '').trim();
 
-      // START or FINISH(0 results)
+      // Zero-results guard: if this is FINISH for the current prompt, stop loader + broadcast
       if (!Array.isArray(results) || results.length === 0) {
-        const isStart = !isProcessing || pendingPromptRef.current !== incomingPrompt;
+        if (pendingPromptRef.current === incomingPrompt) {
+          setCandidates([]);
+          setIsProcessing(false);
+          pendingPromptRef.current = '';
+          // belt & suspenders: also notify the global loader
+          window.dispatchEvent(new Event('shx:no-results'));
+          return;
+        }
 
+        // START path (no results yet): begin processing current prompt
+        const isStart = !isProcessing || pendingPromptRef.current !== incomingPrompt;
         if (isStart) {
-          // START: update active prompt only here to avoid flicker on stale FINISH calls
           setActivePrompt(incomingPrompt);
           setCandidates([]);            // clear immediately
           setIsProcessing(true);        // show loader
           pendingPromptRef.current = incomingPrompt;
-        } else {
-          // FINISH with zero results for the current prompt
-          setCandidates([]);            // ensure empty
-          setIsProcessing(false);       // hide loader
-          pendingPromptRef.current = ''; // clear token
         }
         return;
       }

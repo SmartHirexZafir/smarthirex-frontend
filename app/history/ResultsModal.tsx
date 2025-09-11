@@ -1,9 +1,11 @@
-// smarthirex-frontend-main/app/history/ResultsModal.tsx
+// app/history/ResultsModal.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
+import { getMatchScore } from '@/lib/score';
 
 /* ---- Types (safe for strict TS, no backend changes) ---- */
 type Candidate = {
@@ -12,8 +14,10 @@ type Candidate = {
   name: string;
   email?: string;
   avatar?: string;
-  final_score?: number;                // ✅ dynamic match %
-  prompt_matching_score?: number;      // ✅ dynamic match %
+  final_score?: number | string;           // may be % string/ratio
+  prompt_matching_score?: number | string; // may be % string/ratio
+  match_score?: number | string;           // alt field
+  score?: number | string;                 // legacy
   matchReasons?: string[];
   skills?: string[];
   title?: string;
@@ -43,6 +47,8 @@ export default function ResultsModal({ history, onClose }: Props) {
 
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [results, setResults] = useState<ResultsPayload | null>(null);
+
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // 🔒 Lock body scroll while modal is open
   useEffect(() => {
@@ -90,6 +96,11 @@ export default function ResultsModal({ history, onClose }: Props) {
     return () => ac.abort();
   }, [history]);
 
+  // Focus the close button on open for a11y
+  useEffect(() => {
+    closeBtnRef.current?.focus();
+  }, []);
+
   const handleCandidateSelect = (candidateId: string) => {
     setSelectedCandidates(prev => {
       const next = new Set(prev);
@@ -121,8 +132,14 @@ export default function ResultsModal({ history, onClose }: Props) {
 
   if (!results) return null;
 
-  return (
-    <div className="fixed inset-0 z-overlay p-4 flex items-center justify-center">
+  // Portal render for viewport-relative centering + a11y attributes
+  return createPortal(
+    <div
+      className="fixed inset-0 z-overlay p-4 flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search results"
+    >
       {/* Themed backdrop */}
       <div className="absolute inset-0 bg-[hsl(var(--background)/.7)]" aria-hidden="true" />
 
@@ -140,6 +157,7 @@ export default function ResultsModal({ history, onClose }: Props) {
               </p>
             </div>
             <button
+              ref={closeBtnRef}
               onClick={onClose}
               className="btn btn-ghost rounded-full h-10 w-10 shrink-0"
               aria-label="Close results modal"
@@ -173,23 +191,14 @@ export default function ResultsModal({ history, onClose }: Props) {
               {results.candidates.map((candidate) => {
                 const cid = candidate._id || candidate.id || '';
 
-                // ✅ Matching Score from Mongo: final_score || prompt_matching_score
-                const rawScore =
-                  (typeof candidate.final_score === 'number' ? candidate.final_score : undefined) ??
-                  (typeof candidate.prompt_matching_score === 'number' ? candidate.prompt_matching_score : undefined) ?? 0;
-
-                // Normalize to 0–100 (accept 0..1 ratios too)
-                const normalized = (() => {
-                  const n = Number(rawScore);
-                  if (!Number.isFinite(n)) return 0;
-                  const pct = n <= 1 ? n * 100 : n;
-                  return Math.max(0, Math.min(100, Math.round(pct)));
-                })();
+                // ✅ Centralized match score (accepts %, integer, or ratio 0..1)
+                const ms = getMatchScore(candidate);
+                const normalized = Math.round(ms ?? 0);
 
                 return (
                   <div
                     key={cid}
-                    className={`rounded-xl p-4 border transition-all duration-200 bg-card ${
+                    className={`rounded-2xl p-4 border transition-all duration-200 bg-card ${
                       selectedCandidates.has(cid)
                         ? 'border-[hsl(var(--primary)/.45)] ring-1 ring-[hsl(var(--primary)/.25)] shadow-glow'
                         : 'border-border hover:border-[hsl(var(--border)/.9)]'
@@ -283,6 +292,7 @@ export default function ResultsModal({ history, onClose }: Props) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

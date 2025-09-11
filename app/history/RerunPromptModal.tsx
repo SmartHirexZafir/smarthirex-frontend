@@ -1,7 +1,8 @@
-// smarthirex-frontend-main/app/history/RerunPromptModal.tsx
+// app/history/RerunPromptModal.tsx
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 /* ---------- Types ---------- */
 type Candidate = {
@@ -354,7 +355,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
     sendFocused('phrases', composed);
   };
 
-  return (
+  const modalContent = (
     <div className="fixed inset-0 z-overlay p-4 flex items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
@@ -775,4 +776,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
       </div>
     </div>
   );
+
+  // ✅ Render the modal via portal so fixed inset-0 is viewport-relative
+  return createPortal(modalContent, document.body);
 }

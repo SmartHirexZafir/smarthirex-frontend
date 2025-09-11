@@ -148,6 +148,20 @@ export default function GlobalLoadingProvider({ children }: { children: React.Re
     };
   }, []);
 
+  // ✅ Hard-stop loaders on global "no results" broadcast from Upload
+  useEffect(() => {
+    const onNoResults = (_e: Event) => {
+      setCount(0);
+      navInFlight.current = false;
+      if (navTimeout.current) {
+        clearTimeout(navTimeout.current);
+        navTimeout.current = null;
+      }
+    };
+    window.addEventListener("shx:no-results", onNoResults as EventListener);
+    return () => window.removeEventListener("shx:no-results", onNoResults as EventListener);
+  }, []);
+
   // Optional manual promise tracker
   const trackPromise = <T,>(p: Promise<T>) => {
     inc();
@@ -159,6 +173,7 @@ export default function GlobalLoadingProvider({ children }: { children: React.Re
   return (
     <LoadingCtx.Provider value={value}>
       {children}
+      {/* ✅ Render overlay directly; the component itself portals to body */}
       {count > 0 && <LoaderOverlay fullscreen />}
     </LoadingCtx.Provider>
   );

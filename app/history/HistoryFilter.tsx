@@ -1,3 +1,4 @@
+// app/history/HistoryFilter.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -27,16 +28,23 @@ export default function HistoryFilter({ onFilter }: Props) {
     sort: 'latest',
   });
 
-  // 🔁 Auto-fetch on filter change
+  // 🔁 Debounced filters (for ~300ms)
+  const [debouncedFilters, setDebouncedFilters] = useState<Filters>(filters);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedFilters(filters), 300);
+    return () => clearTimeout(t);
+  }, [filters]);
+
+  // 🔁 Auto-fetch once per combined (AND) filter set, after debounce
   useEffect(() => {
     const controller = new AbortController();
 
     const fetchFilteredHistory = async () => {
       const params = new URLSearchParams();
-      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
-      if (filters.dateTo) params.append('dateTo', filters.dateTo);
-      if (filters.search) params.append('search', filters.search);
-      if (filters.sort) params.append('sort', filters.sort);
+      if (debouncedFilters.dateFrom) params.append('dateFrom', debouncedFilters.dateFrom);
+      if (debouncedFilters.dateTo) params.append('dateTo', debouncedFilters.dateTo);
+      if (debouncedFilters.search) params.append('search', debouncedFilters.search);
+      if (debouncedFilters.sort) params.append('sort', debouncedFilters.sort);
 
       try {
         const url = new URL(`${API_BASE}/history/user-history`);
@@ -66,7 +74,7 @@ export default function HistoryFilter({ onFilter }: Props) {
     return () => {
       controller.abort(); // cleanup without logging as error
     };
-  }, [filters, onFilter]);
+  }, [debouncedFilters, onFilter]);
 
   // Fully typed key/value (no implicit any)
   const handleFilterChange = <K extends keyof Filters>(key: K, value: Filters[K]) => {
@@ -94,7 +102,7 @@ export default function HistoryFilter({ onFilter }: Props) {
             </span>
           </h2>
 
-          <button
+        <button
             onClick={handleClearFilters}
             className="btn btn-ghost text-sm"
             aria-label="Clear all filters"

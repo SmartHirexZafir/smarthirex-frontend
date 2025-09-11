@@ -292,6 +292,16 @@
   .z-overlay { z-index: var(--z-overlay); }
   .z-toast { z-index: var(--z-toast); }
   .z-route-loader { z-index: var(--z-route-loader); }
+
+  /* NEW: Reliable fixed centering utility */
+  .fixed-center { position: fixed; inset: 0; display: grid; place-items: center; }
+
+  /* NEW: Section centering helper for hero-like blocks */
+  .section-center {
+    min-height: min(60vh, calc(100dvh - 12rem));
+    display: grid;
+    place-items: center;
+  }
 }
 
 /* ---------------- Components (global-only UI primitives) ---------------- */
@@ -509,3 +519,6 @@ body.page-aurora {
 /* ======= Mobile/iOS tweak: avoid fixed-attachment jank ======= */
 @media (pointer: coarse) { .page-aurora { background-attachment: scroll; } }
 @supports (-webkit-touch-callout: none) { .page-aurora { background-attachment: scroll; } }
+
+/* ======= Optional guardrail: ensure body isn't transformed (prevents fixed centering quirks) ======= */
+html, body { transform: none !important; }

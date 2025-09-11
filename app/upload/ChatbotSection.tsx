@@ -18,16 +18,93 @@ type ChatResult = ChatResultOk | ChatResultUnauth | ChatResultError | ChatResult
 /* ---------------------------
    Filter menu (checkboxes)
 ---------------------------- */
-type FilterKey = 'role' | 'skills' | 'location' | 'projects' | 'experience' | 'education' | 'cv';
+type FilterKey =
+  | 'role'
+  | 'experience'
+  | 'education'
+  | 'skills'
+  | 'projects'
+  | 'phrases'
+  | 'location';
+
 const FILTERS: { key: FilterKey; label: string; icon: string }[] = [
-  { key: 'role',       label: 'Job Role',             icon: 'ri-id-card-line' },
-  { key: 'skills',     label: 'Skills',               icon: 'ri-star-line' },
-  { key: 'location',   label: 'Location',             icon: 'ri-map-pin-2-line' },
-  { key: 'projects',   label: 'Projects',             icon: 'ri-folder-3-line' },
-  { key: 'experience', label: 'Experience',           icon: 'ri-briefcase-2-line' },
-  { key: 'education',  label: 'Education',            icon: 'ri-graduation-cap-line' },
-  { key: 'cv',         label: 'Exact Phrase Match',   icon: 'ri-double-quotes-l' },
+  { key: 'role',       label: 'Job Role',   icon: 'ri-id-card-line' },
+  { key: 'skills',     label: 'Skills',     icon: 'ri-star-line' },
+  { key: 'location',   label: 'Location',   icon: 'ri-map-pin-2-line' },
+  { key: 'projects',   label: 'Projects',   icon: 'ri-folder-3-line' },
+  { key: 'experience', label: 'Experience', icon: 'ri-briefcase-2-line' },
+  { key: 'education',  label: 'Education',  icon: 'ri-graduation-cap-line' },
+  { key: 'phrases',    label: 'Phrases',    icon: 'ri-double-quotes-l' },
 ];
+
+/* ---------------------------
+   Helpers (composite prompt)
+---------------------------- */
+function splitCSV(s?: string) {
+  return (s ?? '')
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+// Non-empty sections → selectedFilters (AND semantics on backend)
+function getEffectiveSelectedFromValues(state: {
+  roleInput?: string;
+  expMin?: string | number;
+  expMax?: string | number;
+  educationInput?: string;
+  skillsInput?: string;
+  projectsInput?: string;
+  locationInput?: string;
+  phrasesInclude?: string;
+  phrasesExclude?: string;
+  phrasesExact?: string;
+}): FilterKey[] {
+  const keys = new Set<FilterKey>();
+  if (state.roleInput?.trim()) keys.add('role');
+  if (state.expMin || state.expMax) keys.add('experience');
+  if (state.educationInput?.trim()) keys.add('education');
+  if (state.skillsInput?.trim()) keys.add('skills');
+  if (state.projectsInput?.trim()) keys.add('projects');
+  if (state.locationInput?.trim()) keys.add('location');
+  if (state.phrasesInclude?.trim() || state.phrasesExclude?.trim() || state.phrasesExact?.trim())
+    keys.add('phrases');
+  return Array.from(keys);
+}
+
+// Human-readable composite prompt from filled filter fields
+function buildCompositePrompt(state: {
+  roleInput?: string;
+  expMin?: string | number;
+  expMax?: string | number;
+  educationInput?: string;
+  skillsInput?: string;
+  projectsInput?: string;
+  locationInput?: string;
+  phrasesInclude?: string;
+  phrasesExclude?: string;
+  phrasesExact?: string;
+}) {
+  const parts: string[] = [];
+  if (state.roleInput?.trim()) parts.push(`Role: ${state.roleInput.trim()}`);
+
+  const hasMin = state.expMin !== undefined && String(state.expMin).trim() !== '';
+  const hasMax = state.expMax !== undefined && String(state.expMax).trim() !== '';
+  if (hasMin && hasMax) parts.push(`Experience: between ${state.expMin} and ${state.expMax} years`);
+  else if (hasMin) parts.push(`Experience: at least ${state.expMin} years`);
+  else if (hasMax) parts.push(`Experience: at most ${state.expMax} years`);
+
+  if (state.educationInput?.trim()) parts.push(`Education: ${state.educationInput.trim()}`);
+  if (state.skillsInput?.trim()) parts.push(`Skills: ${state.skillsInput.trim()}`);
+  if (state.projectsInput?.trim()) parts.push(`Projects: ${state.projectsInput.trim()}`);
+  if (state.locationInput?.trim()) parts.push(`Location: ${state.locationInput.trim()}`);
+
+  if (state.phrasesInclude?.trim()) parts.push(`Must include "${state.phrasesInclude.trim()}"`);
+  if (state.phrasesExclude?.trim()) parts.push(`Exclude "${state.phrasesExclude.trim()}"`);
+  if (state.phrasesExact?.trim()) parts.push(`Exact terms: "${state.phrasesExact.trim()}"`);
+
+  return parts.join('; ');
+}
 
 export default function ChatbotSection({
   onPromptSubmit,
@@ -50,7 +127,7 @@ export default function ChatbotSection({
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [selected, setSelected] = useState<FilterKey[]>([]); // preserves order of selection
+  const [selected, setSelected] = useState<FilterKey[]>([]); // UI-only; logic derives from filled fields
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Drawer/section inputs (History-style)
@@ -121,9 +198,9 @@ export default function ChatbotSection({
     return resp;
   }
 
-  // 🚫 No client-side synonyms; backend owns logic. We pass prompt + selectedFilters + optional focus_section.
+  // Backend owns semantics. We pass: prompt + selectedFilters + (optional) strict options.
   async function callChatbot(
-    payload: { prompt: string; options?: { focus_section?: 'role'|'experience'|'education'|'skills'|'projects'|'phrases'|'location' } },
+    payload: { prompt: string; selectedFilters?: FilterKey[]; options?: Record<string, any> },
     token: string | null
   ): Promise<ChatResult> {
     const paths = ['/chatbot/query', '/query'];
@@ -132,7 +209,7 @@ export default function ChatbotSection({
         const url = `${API_BASE}${p}`;
         const body = {
           prompt: payload.prompt,
-          selectedFilters: selected, // ← use currently chosen filter namespaces
+          selectedFilters: payload.selectedFilters ?? [],
           options: payload.options ?? {},
         };
         const resp = await postJSON(url, body, token);
@@ -164,6 +241,7 @@ export default function ChatbotSection({
     onPromptSubmit(prompt, list);
   };
 
+  // Free-prompt submit (unchanged)
   const handleSubmit = async (prompt = inputValue.trim()) => {
     if (!prompt) return;
 
@@ -286,29 +364,60 @@ export default function ChatbotSection({
     }
   };
 
-  // Targeted section submit (focus_section only; DO NOT mix sections)
-  const handleSectionSubmit = async (
-    section: 'role'|'experience'|'education'|'skills'|'projects'|'phrases'|'location',
-    value: string
-  ) => {
-    const prompt = value.trim();
-    if (!prompt) return;
+  // Single Apply handler (composite prompt + derived selectedFilters)
+  const handleApply = async () => {
+    const promptInput = inputValue?.trim() ?? '';
+    const filterState = {
+      roleInput,
+      expMin,
+      expMax,
+      educationInput,
+      skillsInput,
+      projectsInput,
+      locationInput,
+      phrasesInclude,
+      phrasesExclude,
+      phrasesExact,
+    };
+
+    const composite = buildCompositePrompt(filterState);
+    const finalPrompt = [promptInput, composite].filter(Boolean).join(' — ');
+
+    if (!finalPrompt) {
+      setToast({ show: true, tone: 'warning', msg: 'Koi field ya prompt fill karke Apply dabayein.' });
+      return;
+    }
+
+    const selectedFilters = getEffectiveSelectedFromValues(filterState);
+
+    const options: Record<string, any> = {};
+    const exactTerms = splitCSV(phrasesExact);
+    if (exactTerms.length) {
+      options.exact_match_only = true;
+      options.exact_terms = exactTerms;
+    }
 
     finishedRef.current = false;
 
-    // Add a compact user message indicating focused search
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now(), type: 'user', content: `${prompt}`, timestamp: formatTime() },
-    ]);
+    // Add a compact user message for the composite search
+    const userMessage: ChatMsg = {
+      id: Date.now(),
+      type: 'user',
+      content: finalPrompt,
+      timestamp: formatTime(),
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setIsTyping(true);
 
     // start loader
-    onPromptSubmit(prompt, []); // START
+    onPromptSubmit(finalPrompt, []); // START
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
     try {
-      const result = await trackPromise(callChatbot({ prompt, options: { focus_section: section } }, token));
+      const result = await trackPromise(
+        callChatbot({ prompt: finalPrompt, selectedFilters, options }, token)
+      );
 
       if (result.kind === 'unauth') {
         setMessages((prev) => [
@@ -320,7 +429,8 @@ export default function ChatbotSection({
             timestamp: formatTime(),
           },
         ]);
-        finishParent(prompt, []);
+        finishParent(finalPrompt, []);
+        setIsTyping(false);
         return;
       }
       if (result.kind === 'network') {
@@ -334,7 +444,8 @@ export default function ChatbotSection({
           },
         ]);
         setToast({ show: true, msg: result.message, tone: 'error' });
-        finishParent(prompt, []);
+        finishParent(finalPrompt, []);
+        setIsTyping(false);
         return;
       }
       if (result.kind === 'error') {
@@ -349,61 +460,62 @@ export default function ChatbotSection({
           },
         ]);
         setToast({ show: true, msg: 'Server error while processing your request.', tone: 'error' });
-        finishParent(prompt, []);
+        finishParent(finalPrompt, []);
+        setIsTyping(false);
         return;
       }
 
       const data = result.data || {};
+      if (data?.no_cvs_uploaded === true || data?.message === 'no_cvs_uploaded') {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 4,
+            type: 'bot',
+            content: 'There is no CV uploaded from your side.',
+            timestamp: formatTime(),
+          },
+        ]);
+        try {
+          window.dispatchEvent(new CustomEvent('shx:no-cvs', { detail: { prompt: finalPrompt } }));
+        } catch {}
+        setToast({ show: true, msg: 'No CVs found. Please upload resumes first.', tone: 'warning' });
+        finishParent(finalPrompt, []);
+        setIsTyping(false);
+        return;
+      }
+
       const list = Array.isArray(data.resumes_preview) ? data.resumes_preview : [];
       const total = typeof data?.matchMeta?.total === 'number' ? data.matchMeta.total : list.length;
 
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now() + 4,
+          id: Date.now() + 5,
           type: 'bot',
-          content: `Showing ${total} result${total === 1 ? '' : 's'} for section "${section}".`,
+          content: `Showing ${total} result${total === 1 ? '' : 's'} for your query.`,
           timestamp: formatTime(),
         },
       ]);
 
       if (data?.no_results === true || total === 0) {
-        setToast({ show: true, msg: `No matches found in ${section}.`, tone: 'info' });
-        finishParent(prompt, []);
+        setToast({ show: true, msg: 'No matching candidates found for your query.', tone: 'info' });
+        try {
+          window.dispatchEvent(new CustomEvent('shx:no-results', { detail: { prompt: finalPrompt } }));
+        } catch {}
+        finishParent(finalPrompt, []);
+        setIsTyping(false);
         return;
       }
 
-      finishParent(prompt, list);
+      finishParent(finalPrompt, list);
+      setIsTyping(false);
     } finally {
       if (!finishedRef.current) {
-        onPromptSubmit(prompt, []);
+        onPromptSubmit(finalPrompt, []);
+        setIsTyping(false);
       }
     }
-  };
-
-  // ---- Builders for composed prompts (Experience + Phrases) ----
-  const submitExperience = () => {
-    const min = expMin.trim();
-    const max = expMax.trim();
-    if (!min && !max) return;
-    if (min && max) return handleSectionSubmit('experience', `between ${min} and ${max} years`);
-    if (min) return handleSectionSubmit('experience', `at least ${min} years`);
-    if (max) return handleSectionSubmit('experience', `at most ${max} years`);
-  };
-
-  const submitPhrasesInclude = () => {
-    if (!phrasesInclude.trim()) return;
-    const composed = phrasesExclude.trim()
-      ? `include: ${phrasesInclude.trim()}, exclude: ${phrasesExclude.trim()}`
-      : phrasesInclude.trim();
-    handleSectionSubmit('phrases', composed);
-  };
-  const submitPhrasesExclude = () => {
-    if (!phrasesExclude.trim()) return;
-    const composed = phrasesInclude.trim()
-      ? `include: ${phrasesInclude.trim()}, exclude: ${phrasesExclude.trim()}`
-      : `exclude: ${phrasesExclude.trim()}`;
-    handleSectionSubmit('phrases', composed);
   };
 
   return (
@@ -506,7 +618,7 @@ export default function ChatbotSection({
           </p>
         </header>
 
-        {/* History-style focused sections (scrollable panel; each submits ONLY its field) */}
+        {/* History-style focused sections (scrollable panel; ENTER triggers Apply) */}
         <div className="px-6 pt-5 pb-3">
           <div className="rounded-2xl border border-border/60 bg-muted/20 p-4 md:p-5">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[70vh] overflow-y-auto">
@@ -519,19 +631,10 @@ export default function ChatbotSection({
                   value={roleInput}
                   onChange={(e) => setRoleInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSectionSubmit('role', roleInput);
+                    if (e.key === 'Enter') handleApply();
                   }}
                   aria-label="Role input"
                 />
-                <div className="mt-2 flex justify-end">
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => handleSectionSubmit('role', roleInput)}
-                    aria-label="Submit role filter"
-                  >
-                    Done
-                  </button>
-                </div>
               </div>
 
               {/* Experience (Min / Max) */}
@@ -544,7 +647,7 @@ export default function ChatbotSection({
                     value={expMin}
                     onChange={(e) => setExpMin(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') submitExperience();
+                      if (e.key === 'Enter') handleApply();
                     }}
                     aria-label="Minimum years of experience"
                   />
@@ -554,19 +657,10 @@ export default function ChatbotSection({
                     value={expMax}
                     onChange={(e) => setExpMax(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter') submitExperience();
+                      if (e.key === 'Enter') handleApply();
                     }}
                     aria-label="Maximum years of experience"
                   />
-                </div>
-                <div className="mt-2 flex justify-end">
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={submitExperience}
-                    aria-label="Submit experience filter"
-                  >
-                    Done
-                  </button>
                 </div>
               </div>
 
@@ -579,19 +673,10 @@ export default function ChatbotSection({
                   value={skillsInput}
                   onChange={(e) => setSkillsInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSectionSubmit('skills', skillsInput);
+                    if (e.key === 'Enter') handleApply();
                   }}
                   aria-label="Skills input"
                 />
-                <div className="mt-2 flex justify-end">
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => handleSectionSubmit('skills', skillsInput)}
-                    aria-label="Submit skills filter"
-                  >
-                    Done
-                  </button>
-                </div>
               </div>
 
               {/* Location */}
@@ -603,19 +688,10 @@ export default function ChatbotSection({
                   value={locationInput}
                   onChange={(e) => setLocationInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSectionSubmit('location', locationInput);
+                    if (e.key === 'Enter') handleApply();
                   }}
                   aria-label="Location input"
                 />
-                <div className="mt-2 flex justify-end">
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => handleSectionSubmit('location', locationInput)}
-                    aria-label="Submit location filter"
-                  >
-                    Done
-                  </button>
-                </div>
               </div>
 
               {/* Education */}
@@ -627,19 +703,10 @@ export default function ChatbotSection({
                   value={educationInput}
                   onChange={(e) => setEducationInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSectionSubmit('education', educationInput);
+                    if (e.key === 'Enter') handleApply();
                   }}
                   aria-label="Education input"
                 />
-                <div className="mt-2 flex justify-end">
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => handleSectionSubmit('education', educationInput)}
-                    aria-label="Submit education filter"
-                  >
-                    Done
-                  </button>
-                </div>
               </div>
 
               {/* Projects */}
@@ -651,19 +718,10 @@ export default function ChatbotSection({
                   value={projectsInput}
                   onChange={(e) => setProjectsInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSectionSubmit('projects', projectsInput);
+                    if (e.key === 'Enter') handleApply();
                   }}
                   aria-label="Projects input"
                 />
-                <div className="mt-2 flex justify-end">
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => handleSectionSubmit('projects', projectsInput)}
-                    aria-label="Submit projects filter"
-                  >
-                    Done
-                  </button>
-                </div>
               </div>
 
               {/* Phrases — include / exclude */}
@@ -675,7 +733,7 @@ export default function ChatbotSection({
                   value={phrasesInclude}
                   onChange={(e) => setPhrasesInclude(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') submitPhrasesInclude();
+                    if (e.key === 'Enter') handleApply();
                   }}
                   aria-label="Phrases include input"
                 />
@@ -685,19 +743,10 @@ export default function ChatbotSection({
                   value={phrasesExclude}
                   onChange={(e) => setPhrasesExclude(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') submitPhrasesExclude();
+                    if (e.key === 'Enter') handleApply();
                   }}
                   aria-label="Phrases exclude input"
                 />
-                <div className="mt-2 flex justify-end">
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={submitPhrasesInclude}
-                    aria-label="Submit phrases include filter"
-                  >
-                    Done
-                  </button>
-                </div>
               </div>
 
               {/* Exact phrase match */}
@@ -709,20 +758,24 @@ export default function ChatbotSection({
                   value={phrasesExact}
                   onChange={(e) => setPhrasesExact(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSectionSubmit('phrases', phrasesExact);
+                    if (e.key === 'Enter') handleApply();
                   }}
                   aria-label="Exact phrase input"
                 />
-                <div className="mt-2 flex justify-end">
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => handleSectionSubmit('phrases', phrasesExact)}
-                    aria-label="Submit exact phrase filter"
-                  >
-                    Done
-                  </button>
-                </div>
               </div>
+            </div>
+
+            {/* Single Apply button */}
+            <div className="mt-4 flex items-center justify-end">
+              <button
+                onClick={handleApply}
+                disabled={isProcessing}
+                data-testid="apply-filters"
+                className="btn btn-primary"
+                aria-label="Apply filters"
+              >
+                Apply
+              </button>
             </div>
           </div>
         </div>

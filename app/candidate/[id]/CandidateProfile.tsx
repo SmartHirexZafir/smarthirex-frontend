@@ -2,6 +2,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { getMatchScore, toPctNumber } from "@/lib/score";
 
 type Candidate = {
   name?: string;
@@ -57,21 +58,6 @@ function num(v: unknown): number | undefined {
   return undefined;
 }
 
-/** Normalize possibly-ratio values to a 0–100 range */
-function normalizePctValue(v: unknown): number | undefined {
-  const n = num(v);
-  if (typeof n !== "number") return undefined;
-  const pct = n <= 1 ? n * 100 : n; // treat 0..1 as ratio
-  const clamped = Math.max(0, Math.min(100, pct));
-  return clamped;
-}
-
-/** Format number/possibly-string to "NN%" (or "—" if absent) using normalization */
-function fmtPctFromAny(v?: unknown) {
-  const n = normalizePctValue(v);
-  return typeof n === "number" ? `${Math.round(n)}%` : "—";
-}
-
 export default function CandidateProfile({ candidate }: { candidate: Candidate }) {
   if (!candidate) return null;
 
@@ -100,17 +86,13 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
     category,
   } = candidate;
 
-  // ✅ Match Score: use preferred order and normalize
+  // ✅ Match Score: centralized via lib/score (accepts "85%", "85", 0.85); clamped 0..100
   const matchScoreValue =
-    normalizePctValue(match_score) ??
-    normalizePctValue(final_score) ??
-    normalizePctValue(prompt_matching_score) ??
-    normalizePctValue(score);
+    getMatchScore({ match_score, final_score, prompt_matching_score, score });
 
-  // ✅ Test Score: from either snake_case or camelCase; normalize 0..1 to %
+  // ✅ Test Score: use shared tolerant normalization; render only if present
   const testScoreValue =
-    normalizePctValue(test_score) ??
-    normalizePctValue(testScoreCamel);
+    toPctNumber(test_score) ?? toPctNumber(testScoreCamel);
 
   // Experience years: prefer dedicated numeric fields (accept numeric strings)
   const experienceYears = num(years_experience) ?? num(experience_years);
@@ -210,7 +192,7 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
             </div>
           </div>
 
-          {/* Match Score — unified normalization */}
+          {/* Match Score — centralized normalization */}
           <div className="surface rounded-2xl p-3 ring-1 ring-border/60">
             <div className="text-center" aria-live="polite">
               <div className="mb-1 text-xl font-bold text-[hsl(var(--info))]">
@@ -220,7 +202,7 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
             </div>
           </div>
 
-          {/* Test Score — render only after candidate has taken a test; unified normalization */}
+          {/* Test Score — render only after candidate has taken a test; centralized normalization */}
           {typeof testScoreValue === "number" && Number.isFinite(testScoreValue) && (
             <div className="surface rounded-2xl p-3 ring-1 ring-border/60">
               <div className="text-center" aria-live="polite" title="Latest assessment score (MCQ %)">

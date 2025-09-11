@@ -1,3 +1,4 @@
+// app/history/HistoryBlocks.tsx
 'use client';
 
 import { useState } from 'react';
@@ -81,7 +82,7 @@ export default function HistoryBlocks({
           <p className="text-[hsl(var(--muted-foreground))]">Try adjusting your filters or search terms</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 items-start">
           {currentItems.map((history: HistoryItem, index: number) => (
             <div
               key={history.id}

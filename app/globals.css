@@ -73,6 +73,7 @@
   --z-overlay: 60;
   --z-modal: 70;
 
+  
   /* NEW: Global z-index tokens per requirement */
   --z-menu: 50;
   --z-toast: 70;           /* normalized per spec */
@@ -87,6 +88,9 @@
   --step-4:  clamp(2.05rem, 1.80rem + 1.20vw, 2.70rem);
   --step-5:  clamp(2.60rem, 2.20rem + 1.80vw, 3.60rem);
 }
+
+/* Ensure the app root is its own stacking context so fixed overlays render predictably */
+#__next, body { isolation: isolate; }
 
 /* Light theme via <html class="light"> */
 .light {
@@ -302,6 +306,16 @@
     display: grid;
     place-items: center;
   }
+
+  /* NEW: Hard-raise ONLY history modals that use .fixed-center + z-modal
+     (prevents them from being covered or appearing “lower” due to other stacks) */
+  .fixed-center.z-modal { z-index: 2147483646 !important; }          /* NEW */
+  .fixed.inset-0.z-overlay { z-index: 2147483645 !important; }       /* NEW */
+
+  /* (Optional) If you ever want a dedicated portal wrapper:
+     .modal-portal { position: fixed; inset:0; display:grid; place-items:center; z-index:2147483646; pointer-events:none; }
+     .modal-portal > * { pointer-events:auto; }
+  */
 }
 
 /* ---------------- Components (global-only UI primitives) ---------------- */

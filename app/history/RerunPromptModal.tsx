@@ -1,10 +1,8 @@
-// app/history/RerunPromptModal.tsx
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-/* ---------- Types ---------- */
 type Candidate = {
   _id?: string;
   id?: string;
@@ -24,7 +22,6 @@ type HistoryItem = {
   prompt?: string;
   totalMatches?: number;
   timestamp?: string;
-  // any extra backend fields are fine
   [key: string]: any;
 };
 
@@ -43,34 +40,21 @@ type Props = {
   onClose: () => void;
 };
 
-/* ✅ Use NEXT_PUBLIC_API_BASE_URL with localhost fallback; strip trailing slashes */
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(
-  /\/+$/,
-  ''
-);
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/+$/, '');
 
-/* ---------- Helpers ---------- */
 const candidateId = (c: Candidate) => String(c._id || c.id || '');
 const candidateName = (c: Candidate) => c.name || c.title || c.role || 'Unnamed';
 const candidateScore = (c: Candidate) => {
-  const raw =
-    c.final_score ??
-    c.prompt_matching_score ??
-    c.score ??
-    c.match_score ??
-    0;
+  const raw = c.final_score ?? c.prompt_matching_score ?? c.score ?? c.match_score ?? 0;
   let s = Math.round(Number(raw) || 0);
   if (s < 0) s = 0;
   if (s > 100) s = 100;
   return s;
 };
 const scoreBadge = (s: number) => {
-  if (s >= 90)
-    return 'bg-[hsl(var(--success)/.15)] text-[hsl(var(--success))] border-[hsl(var(--success)/.35)]';
-  if (s >= 80)
-    return 'bg-[hsl(var(--info)/.15)] text-[hsl(var(--info))] border-[hsl(var(--info)/.35)]';
-  if (s >= 70)
-    return 'bg-[hsl(var(--warning)/.18)] text-[hsl(var(--warning-foreground))] border-[hsl(var(--warning)/.35)]';
+  if (s >= 90) return 'bg-[hsl(var(--success)/.15)] text-[hsl(var(--success))] border-[hsl(var(--success)/.35)]';
+  if (s >= 80) return 'bg-[hsl(var(--info)/.15)] text-[hsl(var(--info))] border-[hsl(var(--info)/.35)]';
+  if (s >= 70) return 'bg-[hsl(var(--warning)/.18)] text-[hsl(var(--warning-foreground))] border-[hsl(var(--warning)/.35)]';
   return 'bg-[hsl(var(--destructive)/.15)] text-[hsl(var(--destructive))] border-[hsl(var(--destructive)/.35)]';
 };
 
@@ -84,9 +68,8 @@ export default function RerunPromptModal({ history, onClose }: Props) {
   const [preview, setPreview] = useState<Candidate[]>([]);
   const [updatedCount, setUpdatedCount] = useState<number | null>(null);
 
-  // 🔽 Section inputs (identical semantics to Upload chatbot; each submits only its own value)
+  // Section inputs
   const [roleInput, setRoleInput] = useState('');
-  // Experience split into min/max fields to match UI screenshot; backend understands strings like ">= 3 years", "<= 5 years", or "between 3 and 5 years"
   const [expMin, setExpMin] = useState('');
   const [expMax, setExpMax] = useState('');
   const [educationSchools, setEducationSchools] = useState('');
@@ -98,7 +81,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
   const [phrasesExclude, setPhrasesExclude] = useState('');
   const [phrasesExact, setPhrasesExact] = useState('');
 
-  // (Cosmetic) checkboxes to mirror the screenshot layout
+  // Cosmetic checkboxes (kept for payload – unchanged behavior)
   const [chkRole, setChkRole] = useState(true);
   const [chkExperience, setChkExperience] = useState(false);
   const [chkSkills, setChkSkills] = useState(true);
@@ -108,21 +91,6 @@ export default function RerunPromptModal({ history, onClose }: Props) {
   const [chkPhrases, setChkPhrases] = useState(false);
   const [chkExact, setChkExact] = useState(false);
 
-  // ✅ Build selectedFilters like Upload’s ChatbotSection (order is not important here)
-  const selectedFilters = useMemo(() => {
-    const arr: Array<
-      'role' | 'skills' | 'location' | 'projects' | 'experience' | 'education' | 'phrases'
-    > = [];
-    if (chkRole) arr.push('role');
-    if (chkSkills) arr.push('skills');
-    if (chkLocation) arr.push('location');
-    if (chkProjects) arr.push('projects');
-    if (chkExperience) arr.push('experience');
-    if (chkEducation) arr.push('education');
-    if (chkPhrases || chkExact) arr.push('phrases');
-    return arr;
-  }, [chkRole, chkSkills, chkLocation, chkProjects, chkExperience, chkEducation, chkPhrases, chkExact]);
-
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -130,7 +98,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
   const originalPrompt = history?.prompt || '';
   const originalCount = Number(history?.totalMatches || 0);
 
-  // 🔒 Lock body scroll while modal is open
+  // Lock body scroll
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -140,29 +108,107 @@ export default function RerunPromptModal({ history, onClose }: Props) {
   }, []);
 
   useEffect(() => {
-    // initial assistant message
     const intro: ChatMsg = {
       role: 'assistant',
-      content:
-        `You're re-running inside this block only.\n` +
-        `Original prompt: “${originalPrompt}”.\n` +
-        `Saved CVs in this block: ${originalCount}.`,
+      content: `You're re-running inside this block only.
++ Original prompt: “${originalPrompt}”.
++ Saved CVs in this block: ${originalCount}.`,
     };
     setMessages([intro]);
-    // focus input and seed the Role section with the original prompt (UX parity)
     textareaRef.current?.focus();
     setRoleInput(originalPrompt || '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyId]);
 
   useEffect(() => {
-    // auto-scroll chat area
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages.length]);
 
-  const canSubmit = useMemo(() => input.trim().length > 0 && !submitting, [input, submitting]);
+  // Derive selected filters from non-empty sections
+  const selectedFilters = useMemo(() => {
+    const arr: Array<'role' | 'skills' | 'location' | 'projects' | 'experience' | 'education' | 'phrases'> = [];
+    if (roleInput.trim()) arr.push('role');
+    if (skillsInput.trim()) arr.push('skills');
+    if (locationInput.trim()) arr.push('location');
+    if (projectsInput.trim()) arr.push('projects');
+    if (expMin.trim() || expMax.trim()) arr.push('experience');
+    if (educationSchools.trim() || educationDegrees.trim()) arr.push('education');
+    if (phrasesInclude.trim() || phrasesExclude.trim() || phrasesExact.trim()) arr.push('phrases');
+    return arr;
+  }, [
+    roleInput,
+    skillsInput,
+    locationInput,
+    projectsInput,
+    expMin,
+    expMax,
+    educationSchools,
+    educationDegrees,
+    phrasesInclude,
+    phrasesExclude,
+    phrasesExact,
+  ]);
 
-  /** POST helper to rerun with payload */
+  // Build composite free prompt
+  const buildCompositePrompt = () => {
+    const parts: string[] = [];
+    const free = input.trim();
+    if (free) parts.push(free);
+    if (roleInput.trim()) parts.push(`role: ${roleInput.trim()}`);
+    if (expMin.trim() || expMax.trim()) {
+      if (expMin.trim() && expMax.trim()) parts.push(`experience: between ${expMin.trim()} and ${expMax.trim()} years`);
+      else if (expMin.trim()) parts.push(`experience: at least ${expMin.trim()} years`);
+      else if (expMax.trim()) parts.push(`experience: at most ${expMax.trim()} years`);
+    }
+    if (skillsInput.trim()) parts.push(`skills: ${skillsInput.trim()}`);
+    if (projectsInput.trim()) parts.push(`projects: ${projectsInput.trim()}`);
+    if (locationInput.trim()) parts.push(`location: ${locationInput.trim()}`);
+    if (educationSchools.trim() || educationDegrees.trim()) {
+      const sch = educationSchools.trim() ? `schools: ${educationSchools.trim()}` : '';
+      const deg = educationDegrees.trim() ? `degrees: ${educationDegrees.trim()}` : '';
+      parts.push(`education: ${[sch, deg].filter(Boolean).join('; ')}`);
+    }
+    if (phrasesInclude.trim() || phrasesExclude.trim() || phrasesExact.trim()) {
+      const inc = phrasesInclude.trim() ? `include: ${phrasesInclude.trim()}` : '';
+      const exc = phrasesExclude.trim() ? `exclude: ${phrasesExclude.trim()}` : '';
+      const exa = phrasesExact.trim() ? `exact: ${phrasesExact.trim()}` : '';
+      parts.push(`phrases: ${[inc, exc, exa].filter(Boolean).join('; ')}`);
+    }
+    return parts.join(' | ');
+  };
+
+  const canSubmit = useMemo(() => {
+    return (
+      !submitting &&
+      (input.trim() ||
+        roleInput.trim() ||
+        skillsInput.trim() ||
+        locationInput.trim() ||
+        projectsInput.trim() ||
+        expMin.trim() ||
+        expMax.trim() ||
+        educationSchools.trim() ||
+        educationDegrees.trim() ||
+        phrasesInclude.trim() ||
+        phrasesExclude.trim() ||
+        phrasesExact.trim())
+    );
+  }, [
+    submitting,
+    input,
+    roleInput,
+    skillsInput,
+    locationInput,
+    projectsInput,
+    expMin,
+    expMax,
+    educationSchools,
+    educationDegrees,
+    phrasesInclude,
+    phrasesExclude,
+    phrasesExact,
+  ]);
+
   const postRerun = async (payload: any): Promise<RerunResponse> => {
     const res = await fetch(`${API_BASE}/history/rerun/${historyId}`, {
       method: 'POST',
@@ -177,88 +223,20 @@ export default function RerunPromptModal({ history, onClose }: Props) {
     return (await res.json()) as RerunResponse;
   };
 
-  /** Free prompt submission (sends selectedFilters like Upload) */
   const sendPrompt = async () => {
     if (!canSubmit || !historyId) return;
     setSubmitting(true);
     setError(null);
 
-    const userText = input.trim();
-    setMessages((prev) => [...prev, { role: 'user', content: userText }]);
+    const composed = buildCompositePrompt();
+    setMessages((prev) => [...prev, { role: 'user', content: composed }]);
     setInput('');
 
     try {
-      const payload: any = { prompt: userText, selectedFilters };
-      const data = await postRerun(payload);
-
-      const assistantMsg =
-        data?.ui?.primaryMessage ||
-        data?.reply ||
-        (data?.no_results ? 'No candidates matched your refined criteria.' : 'Updated results.');
-
-      // derive preview candidates (supports different backend shapes)
-      const list = (Array.isArray(data?.resumes_preview) && data?.resumes_preview?.length
-        ? data?.resumes_preview
-        : Array.isArray(data?.candidates) && data?.candidates?.length
-        ? data?.candidates
-        : []) as Candidate[];
-
-      setMessages((prev) => [...prev, { role: 'assistant', content: assistantMsg }]);
-      setPreview(list.slice(0, 20));
-      setUpdatedCount(
-        typeof data?.totalMatches === 'number'
-          ? data.totalMatches
-          : data?.no_results
-          ? 0
-          : list?.length ?? null
-      );
-    } catch (e: any) {
-      const msg =
-        e?.message?.includes('403')
-          ? 'You do not have access to update this history block.'
-          : e?.message?.includes('404')
-          ? 'That history block was not found.'
-          : 'Failed to re-run the prompt. Please try again.';
-      setError(msg);
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: 'Sorry, something went wrong while updating results.' },
-      ]);
-    } finally {
-      setSubmitting(false);
-      textareaRef.current?.focus();
-    }
-  };
-
-  /** Targeted submission per section: sends { prompt: value, selectedFilters, options: { focus_section } } */
-  const sendFocused = async (
-    section:
-      | 'role'
-      | 'experience'
-      | 'education'
-      | 'skills'
-      | 'projects'
-      | 'phrases'
-      | 'location',
-    value: string
-  ) => {
-    const v = (value || '').trim();
-    if (!v || !historyId || submitting) return;
-
-    setSubmitting(true);
-    setError(null);
-
-    // chat echo
-    setMessages((prev) => [
-      ...prev,
-      { role: 'user', content: `${section.toUpperCase()}: "${v}"` },
-    ]);
-
-    try {
-      const payload = {
-        prompt: v,
+      const payload: any = {
+        prompt: composed,
         selectedFilters,
-        options: { focus_section: section },
+        options: { exact_phrases: phrasesExact.trim() || undefined },
       };
       const data = await postRerun(payload);
 
@@ -266,7 +244,6 @@ export default function RerunPromptModal({ history, onClose }: Props) {
         data?.ui?.primaryMessage ||
         data?.reply ||
         (data?.no_results ? 'No candidates matched your refined criteria.' : 'Updated results.');
-
       const list = (Array.isArray(data?.resumes_preview) && data?.resumes_preview?.length
         ? data?.resumes_preview
         : Array.isArray(data?.candidates) && data?.candidates?.length
@@ -276,30 +253,69 @@ export default function RerunPromptModal({ history, onClose }: Props) {
       setMessages((prev) => [...prev, { role: 'assistant', content: assistantMsg }]);
       setPreview(list.slice(0, 20));
       setUpdatedCount(
-        typeof data?.totalMatches === 'number'
-          ? data.totalMatches
-          : data?.no_results
-          ? 0
-          : list?.length ?? null
+        typeof data?.totalMatches === 'number' ? data.totalMatches : data?.no_results ? 0 : list?.length ?? null
       );
     } catch (e: any) {
-      const msg =
-        e?.message?.includes('403')
-          ? 'You do not have access to update this history block.'
-          : e?.message?.includes('404')
-          ? 'That history block was not found.'
-          : 'Failed to re-run the prompt. Please try again.';
+      const msg = e?.message?.includes('403')
+        ? 'You do not have access to update this history block.'
+        : e?.message?.includes('404')
+        ? 'That history block was not found.'
+        : 'Failed to re-run the prompt. Please try again.';
       setError(msg);
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: 'Sorry, something went wrong while updating results.' },
-      ]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, something went wrong while updating results.' }]);
+    } finally {
+      setSubmitting(false);
+      textareaRef.current?.focus();
+    }
+  };
+
+  const sendFocused = async (
+    section: 'role' | 'experience' | 'education' | 'skills' | 'projects' | 'phrases' | 'location',
+    value: string
+  ) => {
+    const v = (value || '').trim();
+    if (!v || !historyId || submitting) return;
+
+    setSubmitting(true);
+    setError(null);
+    setMessages((prev) => [...prev, { role: 'user', content: `${section.toUpperCase()}: "${v}"` }]);
+
+    try {
+      const payload = {
+        prompt: v,
+        selectedFilters,
+        options: { focus_section: section, exact_phrases: phrasesExact.trim() || undefined },
+      };
+      const data = await postRerun(payload);
+
+      const assistantMsg =
+        data?.ui?.primaryMessage ||
+        data?.reply ||
+        (data?.no_results ? 'No candidates matched your refined criteria.' : 'Updated results.');
+      const list = (Array.isArray(data?.resumes_preview) && data?.resumes_preview?.length
+        ? data?.resumes_preview
+        : Array.isArray(data?.candidates) && data?.candidates?.length
+        ? data?.candidates
+        : []) as Candidate[];
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: assistantMsg }]);
+      setPreview(list.slice(0, 20));
+      setUpdatedCount(
+        typeof data?.totalMatches === 'number' ? data.totalMatches : data?.no_results ? 0 : list?.length ?? null
+      );
+    } catch (e: any) {
+      const msg = e?.message?.includes('403')
+        ? 'You do not have access to update this history block.'
+        : e?.message?.includes('404')
+        ? 'That history block was not found.'
+        : 'Failed to re-run the prompt. Please try again.';
+      setError(msg);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, something went wrong while updating results.' }]);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Build an experience prompt string from min/max fields (matches backend parser)
   const submitExperience = () => {
     const min = expMin.trim();
     const max = expMax.trim();
@@ -316,30 +332,20 @@ export default function RerunPromptModal({ history, onClose }: Props) {
     }
   };
 
-  // Handlers for section inputs (submit on Enter)
-  const onSectionKey = (
-    section:
-      | 'role'
-      | 'experience'
-      | 'education'
-      | 'skills'
-      | 'projects'
-      | 'phrases'
-      | 'location',
-    val: string,
-    _setVal: (s: string) => void
-  ) => (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (section === 'experience') {
-        // experience uses its own builder
-        return submitExperience();
+  const onSectionKey =
+    (
+      section: 'role' | 'experience' | 'education' | 'skills' | 'projects' | 'phrases' | 'location',
+      val: string,
+      _setVal: (s: string) => void
+    ) =>
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (section === 'experience') return submitExperience();
+        sendFocused(section, val);
       }
-      sendFocused(section, val);
-    }
-  };
+    };
 
-  // Build phrases payload from include/exclude fields (stays in 'phrases' focus section)
   const submitPhrasesInclude = () => {
     if (!phrasesInclude.trim()) return;
     const composed = phrasesExclude.trim()
@@ -347,6 +353,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
       : phrasesInclude.trim();
     sendFocused('phrases', composed);
   };
+
   const submitPhrasesExclude = () => {
     if (!phrasesExclude.trim()) return;
     const composed = phrasesInclude.trim()
@@ -355,28 +362,25 @@ export default function RerunPromptModal({ history, onClose }: Props) {
     sendFocused('phrases', composed);
   };
 
-  const modalContent = (
-    <div className="fixed inset-0 z-overlay p-4 flex items-center justify-center">
+  // -------- Modal Markup --------
+  const modal = (
+    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 2147483646 }}>
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
-      {/* Modal content */}
+
+      {/* Modal */}
       <div className="relative w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl border border-border/70 bg-card/90 backdrop-blur-md shadow-2xl shadow-glow gradient-border">
         {/* Header */}
         <div className="relative p-6 border-b border-border bg-card/80">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-lg font-semibold gradient-text">Re-run Prompt (Scoped)</h2>
-              <p className="text-xs text-muted-foreground">
-                Only within this block — applies to the {originalCount} saved CVs.
-              </p>
+              <p className="text-xs text-muted-foreground">Only within this block — applies to the {originalCount} saved CVs.</p>
               <p className="text-xs text-muted-foreground/90 mt-1">
-                <i className="ri-message-2-line mr-1" />
-                Original: “{originalPrompt}”
+                <i className="ri-message-2-line mr-1" /> Original: “{originalPrompt}”
               </p>
             </div>
-
             <div className="flex items-center gap-2">
-              {/* Filters icon (cosmetic, matches screenshot) */}
               <button
                 type="button"
                 className="btn btn-ghost rounded-full h-10 w-10 shrink-0"
@@ -385,7 +389,6 @@ export default function RerunPromptModal({ history, onClose }: Props) {
               >
                 <i className="ri-filter-3-line text-lg" />
               </button>
-
               <button
                 onClick={onClose}
                 className="btn btn-ghost rounded-full h-10 w-10 shrink-0"
@@ -397,12 +400,11 @@ export default function RerunPromptModal({ history, onClose }: Props) {
             </div>
           </div>
 
-          {/* Section inputs — parity with Upload chatbot’s focused search */}
+          {/* Section inputs */}
           <div className="mt-5 rounded-2xl border border-border/60 bg-muted/20 p-4 md:p-5">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 max-h-[70vh] overflow-y-auto">
-              {/* Column 1 ------------------------------------------------------ */}
+              {/* Col 1 */}
               <div className="space-y-4">
-                {/* Role */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <input
@@ -425,7 +427,6 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                   />
                 </div>
 
-                {/* Phrases (include/exclude) */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <input
@@ -468,9 +469,8 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                 </div>
               </div>
 
-              {/* Column 2 ------------------------------------------------------ */}
+              {/* Col 2 */}
               <div className="space-y-4">
-                {/* Experience (min/max) */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <input
@@ -514,7 +514,6 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                   </div>
                 </div>
 
-                {/* Exact phrase match */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <input
@@ -538,9 +537,8 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                 </div>
               </div>
 
-              {/* Column 3 ------------------------------------------------------ */}
+              {/* Col 3 */}
               <div className="space-y-4">
-                {/* Skills */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <input
@@ -563,7 +561,6 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                   />
                 </div>
 
-                {/* Location */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <input
@@ -586,7 +583,6 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                   />
                 </div>
 
-                {/* Education (schools + degrees) */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <input
@@ -618,7 +614,6 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                   />
                 </div>
 
-                {/* Projects */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <input
@@ -647,7 +642,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
 
         {/* Body */}
         <div className="grid md:grid-cols-2 gap-0">
-          {/* Chat side */}
+          {/* Chat */}
           <div className="flex flex-col h-[60vh]">
             <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-3" aria-live="polite">
               {messages.map((m, idx) => (
@@ -662,6 +657,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                   <div className="text-sm whitespace-pre-wrap">{m.content}</div>
                 </div>
               ))}
+
               {error && (
                 <div className="mr-auto max-w-[90%] md:max-w-[85%] rounded-2xl px-3 py-2 border bg-[hsl(var(--destructive)/.1)] border-[hsl(var(--destructive)/.35)] text-[hsl(var(--destructive))]">
                   <div className="text-sm">{error}</div>
@@ -678,7 +674,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={onKeyDown}
-                    placeholder='Ask me to refine… (free prompt). Use the section inputs above to target a specific field.'
+                    placeholder="Ask me to refine… (free prompt). Use the section inputs above to target a specific field."
                     className="input w-full min-h-[44px] max-h-40 resize-y pr-12"
                     rows={2}
                     aria-label="Refine prompt for this block only"
@@ -706,7 +702,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
             </div>
           </div>
 
-          {/* Preview side */}
+          {/* Preview */}
           <div className="border-l border-border h-[60vh] flex flex-col">
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between">
@@ -737,21 +733,14 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                   const name = candidateName(c);
                   const s = candidateScore(c);
                   return (
-                    <div
-                      key={id}
-                      className="border rounded-xl p-3 bg-card hover:border-[hsl(var(--border)/.9)] transition-colors"
-                    >
+                    <div key={id} className="border rounded-xl p-3 bg-card hover:border-[hsl(var(--border)/.9)] transition-colors">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="font-medium truncate">{name}</div>
-                          {c.email && (
-                            <div className="text-xs text-muted-foreground truncate">{c.email}</div>
-                          )}
+                          {c.email && <div className="text-xs text-muted-foreground truncate">{c.email}</div>}
                         </div>
                         <div
-                          className={`px-2 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap ${scoreBadge(
-                            s
-                          )}`}
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap ${scoreBadge(s)}`}
                           aria-label={`Match score ${s}%`}
                         >
                           {s}% Match
@@ -777,6 +766,5 @@ export default function RerunPromptModal({ history, onClose }: Props) {
     </div>
   );
 
-  // ✅ Render the modal via portal so fixed inset-0 is viewport-relative
-  return createPortal(modalContent, document.body);
+  return createPortal(modal, document.body);
 }

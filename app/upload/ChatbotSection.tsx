@@ -18,7 +18,7 @@ type ChatResult = ChatResultOk | ChatResultUnauth | ChatResultError | ChatResult
 /* ---------------------------
    Filter menu (checkboxes)
 ---------------------------- */
-type FilterKey =
+export type FilterKey =
   | 'role'
   | 'experience'
   | 'education'
@@ -40,7 +40,7 @@ const FILTERS: { key: FilterKey; label: string; icon: string }[] = [
 /* ---------------------------
    Helpers (composite prompt)
 ---------------------------- */
-function splitCSV(s?: string) {
+export function splitCSV(s?: string) {
   return (s ?? '')
     .split(',')
     .map((x) => x.trim())
@@ -48,7 +48,7 @@ function splitCSV(s?: string) {
 }
 
 // Non-empty sections → selectedFilters (AND semantics on backend)
-function getEffectiveSelectedFromValues(state: {
+export function getEffectiveSelectedFromValues(state: {
   roleInput?: string;
   expMin?: string | number;
   expMax?: string | number;
@@ -73,7 +73,7 @@ function getEffectiveSelectedFromValues(state: {
 }
 
 // Human-readable composite prompt from filled filter fields
-function buildCompositePrompt(state: {
+export function buildCompositePrompt(state: {
   roleInput?: string;
   expMin?: string | number;
   expMax?: string | number;
@@ -404,7 +404,7 @@ export default function ChatbotSection({
       id: Date.now(),
       type: 'user',
       content: finalPrompt,
-      timestamp: formatTime(),
+      timestamp: '',
     };
     setMessages((prev) => [...prev, userMessage]);
     setIsTyping(true);

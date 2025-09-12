@@ -1,4 +1,3 @@
-// app/history/HistoryBlocks.tsx
 'use client';
 
 import { useState } from 'react';
@@ -31,8 +30,6 @@ export default function HistoryBlocks({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 5;
 
-  // ✅ Updated: open popup-style rerun modal scoped to this history block if provided,
-  // otherwise gracefully fall back to the legacy onRerunPrompt(prompt).
   const handleRerun = (history: HistoryItem) => {
     setRerunningId(history.id);
     if (onOpenRerunModal) {
@@ -40,12 +37,10 @@ export default function HistoryBlocks({
     } else if (onRerunPrompt) {
       onRerunPrompt(history.prompt);
     }
-    // brief visual feedback without delaying the action
     setTimeout(() => setRerunningId(null), 300);
   };
 
   const getMatchBadgeClasses = (count: number) => {
-    // Theme-aware semantic colors
     if (count >= 15) return 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]';
     if (count >= 10) return 'bg-[hsl(var(--info))] text-[hsl(var(--info-foreground))]';
     if (count >= 5) return 'bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]';
@@ -82,14 +77,14 @@ export default function HistoryBlocks({
           <p className="text-[hsl(var(--muted-foreground))]">Try adjusting your filters or search terms</p>
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3 items-start">
+        /* ✅ Single-column list (no grid) */
+        <div className="space-y-4">
           {currentItems.map((history: HistoryItem, index: number) => (
             <div
               key={history.id}
               className="card p-6 hover:shadow-glow transition-transform duration-300 ease-lux animate-rise-in relative overflow-hidden"
               style={{ animationDelay: `${index * 0.08}s` }}
             >
-              {/* soft ambient gradient veil */}
               <div className="pointer-events-none absolute inset-0 opacity-[.06] bg-luxe-aurora" />
 
               <div className="relative z-10">

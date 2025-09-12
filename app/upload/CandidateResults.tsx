@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { getMatchScore } from '@/lib/score';
 
 type Candidate = {
   _id?: string;
@@ -364,19 +365,12 @@ export default function CandidateResults({
                     candidate.confidence;
                   const confText = toPercentText(confRaw) ?? 'N/A';
 
-                  // ✅ Prompt Matching Score: prompt_matching_score || final_score || semantic_score || score
-                  const promptScoreText = (() => {
-                    const pms = (candidate as any).prompt_matching_score;
-                    const fin = candidate.final_score;
-                    const sem = candidate.semantic_score;
-                    const legacy = (candidate as any).score;
-                    return (
-                      toPercentText(pms) ??
-                      toPercentText(fin) ??
-                      toPercentText(sem) ??
-                      toPercentText(legacy)
-                    );
-                  })();
+                  // ✅ Prompt Matching Score: now sourced via getMatchScore (centralized)
+                  const ms = getMatchScore(candidate);
+                  const promptScoreText =
+                    typeof ms === 'number' && Number.isFinite(ms)
+                      ? `${Math.max(0, Math.min(100, ms)).toFixed(2)}%`
+                      : null;
 
                   const location = (candidate.location && String(candidate.location).trim()) || 'N/A';
 
@@ -415,7 +409,7 @@ export default function CandidateResults({
                             </div>
                           </div>
 
-                          {/* ✅ Prompt Matching Score badge */}
+                          {/* ✅ Prompt Matching Score badge (source: getMatchScore) */}
                           {promptScoreText && (
                             <div className="mt-3">
                               <Pill>

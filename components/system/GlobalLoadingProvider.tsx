@@ -173,8 +173,12 @@ export default function GlobalLoadingProvider({ children }: { children: React.Re
   return (
     <LoadingCtx.Provider value={value}>
       {children}
-      {/* ✅ Render overlay directly; the component itself portals to body */}
-      {count > 0 && <LoaderOverlay fullscreen />}
+      {/* ✅ Full-screen, top-most overlay container using z-index token */}
+      {count > 0 && (
+        <div className="fixed inset-0 z-route-loader">
+          <LoaderOverlay fullscreen />
+        </div>
+      )}
     </LoadingCtx.Provider>
   );
 }

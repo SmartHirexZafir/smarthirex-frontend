@@ -17,6 +17,11 @@ import { NextResponse } from 'next/server';
 const AUTH_COOKIE = 'token';
 
 export function middleware(req: NextRequest) {
+  // ✅ Bypass auth for tokenized test routes per requirement
+  if (req.nextUrl.pathname.startsWith('/test/')) {
+    return NextResponse.next();
+  }
+
   const token = req.cookies.get(AUTH_COOKIE)?.value;
 
   if (!token) {

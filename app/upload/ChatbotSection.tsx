@@ -110,10 +110,13 @@ export default function ChatbotSection({
   onPromptSubmit,
   isProcessing,
   activePrompt,
+  /** NEW: when true, do NOT call /chatbot/query internally; parent will handle submission */
+  delegateToParent = false,
 }: {
   onPromptSubmit: (prompt: string, candidates: any[]) => void;
   isProcessing: boolean;
   activePrompt: string;
+  delegateToParent?: boolean; // ← minimal addition to avoid hard-wiring when embedding in History re-run
 }) {
   const [messages, setMessages] = useState<ChatMsg[]>([
     {
@@ -175,6 +178,11 @@ export default function ChatbotSection({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Seed the prompt field when provided (for “Re-run Prompt” flow)
+  useEffect(() => {
+    if (activePrompt) setInputValue(activePrompt);
+  }, [activePrompt]);
 
   // checkbox change (preserve selection order; remove on uncheck)
   const toggleFilter = (k: FilterKey) => {
@@ -241,7 +249,7 @@ export default function ChatbotSection({
     onPromptSubmit(prompt, list);
   };
 
-  // Free-prompt submit (unchanged)
+  // Free-prompt submit
   const handleSubmit = async (prompt = inputValue.trim()) => {
     if (!prompt) return;
 
@@ -259,6 +267,12 @@ export default function ChatbotSection({
 
     // clear old candidates & show loader in parent
     onPromptSubmit(prompt, []); // START — loader ON
+
+    // If we’re embedded (History re-run), delegate to parent and stop here.
+    if (delegateToParent) {
+      setIsTyping(false);
+      return;
+    }
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
@@ -411,6 +425,12 @@ export default function ChatbotSection({
 
     // start loader
     onPromptSubmit(finalPrompt, []); // START
+
+    // If we’re embedded (History re-run), delegate to parent and stop here.
+    if (delegateToParent) {
+      setIsTyping(false);
+      return;
+    }
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 

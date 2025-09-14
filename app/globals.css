@@ -1,3 +1,34 @@
+:root{
+  --z-nav:50;
+  --z-overlay:99998;
+  --z-modal:99999;
+  --z-toast:100000;
+}
+
+/* Guard against transformed ancestors breaking fixed positioning */
+html, body { transform: none !important; }
+
+/* Helpers */
+.fixed-center { position: fixed; inset: 0; display: grid; place-items: center; }
+
+.fixed.inset-0.z-overlay { z-index: var(--z-overlay) !important; }
+.fixed-center.z-modal { z-index: var(--z-modal) !important; }
+
+/* Modal primitives (use these names everywhere to be consistent) */
+.modal-backdrop{
+  position: fixed; inset: 0;
+  background: hsl(var(--background)/.7);
+  backdrop-filter: blur(4px);
+  z-index: var(--z-overlay);
+}
+.modal{
+  position: fixed; left:50%; top:50%;
+  transform: translate(-50%,-50%);
+  width: min(92vw, 48rem);
+  max-width: 48rem;
+  z-index: var(--z-modal);
+}
+
 /* =============== Icons (global) =============== */
 /* @import "@fortawesome/fontawesome-free/css/all.min.css";
 @import "remixicon/fonts/remixicon.css"; */
@@ -509,7 +540,6 @@
   .animate-pulse-float-fast,
   .animate-loading-bar,
   .animate-spin-slow,
-  .animate-shimmer,
   .skeleton,
   .animate-fade-in,
   .animate-rise-in {

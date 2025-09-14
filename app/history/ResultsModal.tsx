@@ -1,3 +1,4 @@
+// app/history/ResultsModal.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -44,17 +45,9 @@ export default function ResultsModal({ history, onClose }: Props) {
 
   const [selectedCandidates, setSelectedCandidates] = useState<Set<string>>(new Set());
   const [results, setResults] = useState<ResultsPayload | null>(null);
-
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
 
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
-
+  // fetch the results
   useEffect(() => {
     if (!history?.id) {
       setResults(null);
@@ -84,9 +77,15 @@ export default function ResultsModal({ history, onClose }: Props) {
     return () => ac.abort();
   }, [history]);
 
+  // focus close on open
   useEffect(() => {
-    closeBtnRef.current?.focus();
+    closeBtnRef.current?.focus({ preventScroll: true } as any);
   }, []);
+
+  const stopBgScroll = (e: any) => {
+    e.preventDefault?.();
+    e.stopPropagation?.();
+  };
 
   const handleCandidateSelect = (candidateId: string) => {
     setSelectedCandidates(prev => {
@@ -119,18 +118,24 @@ export default function ResultsModal({ history, onClose }: Props) {
 
   return createPortal(
     <>
-      {/* ⬇️ Using global z-index utilities to guarantee full-screen, top-most overlay */}
+      {/* Overlay (blocks scroll without locking body) */}
       <div
-        className="fixed inset-0 z-overlay bg-[hsl(var(--background)/.7)]"
+        className="fixed inset-0 z-overlay bg-[hsl(var(--background)/.7)] backdrop-blur-sm"
         aria-hidden="true"
+        onWheel={stopBgScroll}
+        onTouchMove={stopBgScroll}
       />
+
+      {/* Centered modal */}
       <div
-        className="fixed-center z-modal p-4"
         role="dialog"
         aria-modal="true"
         aria-label="Search results"
+        className="fixed-center z-modal p-4"
+        onWheel={stopBgScroll}
+        onTouchMove={stopBgScroll}
       >
-        <div className="relative w-[92vw] max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border">
+        <div className="relative max-h-[90vh] overflow-y-auto rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border w-[92vw] max-w-4xl">
           {/* Header */}
           <div className="relative p-6">
             <div className="absolute inset-0 -z-10 opacity-[.22] bg-[radial-gradient(900px_400px_at_-10%_-20%,hsl(var(--g1)/.6),transparent_60%),radial-gradient(800px_500px_at_120%_-20%,hsl(var(--g2)/.5),transparent_55%),radial-gradient(700px_700px_at_80%_120%,hsl(var(--g3)/.45),transparent_60%)]" />
@@ -157,9 +162,7 @@ export default function ResultsModal({ history, onClose }: Props) {
           {/* Content */}
           <div className="px-6 pb-2 overflow-y-auto max-h-[60vh]">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold">
-                {results.totalMatches} Candidates Found
-              </h3>
+              <h3 className="text-lg font-semibold">{results.totalMatches} Candidates Found</h3>
             </div>
 
             {results.candidates.length === 0 ? (
@@ -279,15 +282,10 @@ export default function ResultsModal({ history, onClose }: Props) {
                 {selectedCandidates.size} of {results.candidates.length} candidates selected
               </p>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={onClose}
-                  className="btn btn-outline text-sm"
-                >
+                <button onClick={onClose} className="btn btn-outline text-sm">
                   Close
                 </button>
-                <button className="btn btn-primary text-sm">
-                  Save Selection
-                </button>
+                <button className="btn btn-primary text-sm">Save Selection</button>
               </div>
             </div>
           </div>

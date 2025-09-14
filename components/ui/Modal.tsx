@@ -1,56 +1,29 @@
 "use client";
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
+import { cn } from "@/lib/util";
 
-import { useEffect, useRef } from "react";
-import { cn } from "../../lib/util";
-
-interface Props {
-  open: boolean;
-  onClose: () => void;
-  labelledBy?: string;
-  className?: string;
-  children: React.ReactNode;
-}
-
-/** A11y: aria-modal, focus trap, close on ESC, backdrop click */
-export default function Modal({ open, onClose, labelledBy, className, children }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
-
+export default function Modal({ open, onClose, labelledBy, className, children }:{
+  open:boolean; onClose:()=>void; labelledBy?:string; className?:string; children:React.ReactNode;
+}) {
   useEffect(() => {
     if (!open) return;
-    const prev = document.activeElement as HTMLElement | null;
-    const handleKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    const trap = () => {
-      if (!ref.current) return;
-      if (!ref.current.contains(document.activeElement)) {
-        const focusable = ref.current.querySelector<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-        );
-        focusable?.focus();
-      }
-    };
-    document.addEventListener("keydown", handleKey);
-    document.addEventListener("focusin", trap);
-    return () => {
-      document.removeEventListener("keydown", handleKey);
-      document.removeEventListener("focusin", trap);
-      prev?.focus();
-    };
+    const onKey=(e:KeyboardEvent)=> e.key==="Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
   }, [open, onClose]);
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <>
       <div className="modal-backdrop" onClick={onClose} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={labelledBy}
-        className={cn("modal", className)}
-        ref={ref}
-      >
+      <div className={cn("modal", className)} role="dialog" aria-modal="true" aria-labelledby={labelledBy}>
         {children}
       </div>
-    </>
+    </>,
+    document.body
   );
 }

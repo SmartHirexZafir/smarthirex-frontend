@@ -116,7 +116,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <GlobalLoadingProvider>
           {/* App wrappers */}
           <Toaster>
-            <RouteLoader />
+            {/* ✅ Wrap RouteLoader in Suspense (required) */}
+            <Suspense fallback={null}>
+              <RouteLoader />
+            </Suspense>
 
             {/* Headers via gates */}
             <MarketingHeaderGate>

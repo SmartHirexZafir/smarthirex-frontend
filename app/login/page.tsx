@@ -1,5 +1,3 @@
-// app/(auth)/login/page.tsx
-
 'use client';
 
 import Link from 'next/link';
@@ -33,6 +31,13 @@ export default function LoginPage() {
     []
   );
 
+  // Detect candidate context: ?as=candidate&token=...
+  const candidateToken = searchParams?.get('token') || '';
+  const isCandidateCtx = useMemo(
+    () => (searchParams?.get('as') || '').toLowerCase() === 'candidate' && !!candidateToken,
+    [searchParams, candidateToken]
+  );
+
   // If redirected from verify page like /login?verified=1, show success info
   useEffect(() => {
     if (searchParams?.get('verified') === '1') {
@@ -40,7 +45,7 @@ export default function LoginPage() {
     }
   }, [searchParams]);
 
-  // Helper: robust JSON parsing
+  // -------- helpers --------
   const safeJson = async (res: Response) => {
     const text = await res.text();
     try {
@@ -48,6 +53,18 @@ export default function LoginPage() {
     } catch {
       return { __raw: text };
     }
+  };
+
+  // Write token where middleware can see it (cookie) + keep localStorage behavior
+  const setTokenEverywhere = (token: string) => {
+    try {
+      localStorage.setItem('token', token);
+    } catch {}
+    try {
+      const maxAge = 60 * 60 * 24 * 7; // 7 days
+      const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
+      document.cookie = `token=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;
+    } catch {}
   };
 
   // Helper: authorized fetch for OAuth-protected endpoints (sends JWT if present and includes cookies)
@@ -73,28 +90,50 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
+      // Candidate context -> create candidate session
+      if (isCandidateCtx) {
+        const res = await fetch(`${API_BASE}/auth/candidate/session`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, token: candidateToken }),
+        });
+        const data = await safeJson(res);
+
+        if (res.status === 403) {
+          const detail = (data as any)?.detail || 'Email not verified';
+          setError(detail);
+          setVerifPending(true);
+          return;
+        }
+        if (!res.ok) {
+          throw new Error((data as any)?.detail || 'Login failed');
+        }
+
+        if ((data as any)?.token) setTokenEverywhere((data as any).token);
+        if ((data as any)?.user) localStorage.setItem('user', JSON.stringify((data as any).user));
+
+        return router.push(`/test/${encodeURIComponent(candidateToken)}`);
+      }
+
+      // Normal user login
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-
       const data = await safeJson(res);
 
-      // If backend enforces email verification, it should return 403
       if (res.status === 403) {
         const detail = (data as any)?.detail || 'Email not verified';
         setError(detail);
-        setVerifPending(true); // show resend button
+        setVerifPending(true);
         return;
       }
-
       if (!res.ok) {
         throw new Error((data as any)?.detail || 'Login failed');
       }
 
-      // Success -> keep your existing behavior
-      localStorage.setItem('token', (data as any).token);
+      setTokenEverywhere((data as any).token);
       localStorage.setItem('user', JSON.stringify((data as any).user));
       router.push('/upload');
     } catch (err: any) {
@@ -111,12 +150,10 @@ export default function LoginPage() {
       const res = await fetch(`${API_BASE}/auth/resend-verification`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }), // uses the email user typed
+        body: JSON.stringify({ email }),
       });
       const data = await safeJson(res);
-      if (!res.ok) {
-        throw new Error((data as any)?.detail || 'Failed to resend verification email');
-      }
+      if (!res.ok) throw new Error((data as any)?.detail || 'Failed to resend verification email');
       setResendMsg('Verification email sent. Please check your inbox.');
     } catch (err: any) {
       setResendMsg(err.message || 'Failed to resend verification email');
@@ -125,15 +162,14 @@ export default function LoginPage() {
     }
   };
 
-  // --- Login with Google: start OAuth flow by redirecting to backend ---
+  // Start Google OAuth
   const handleGoogleLogin = () => {
-    // After OAuth, backend should redirect back to this page with ?oauth=google&token=...&needs_profile=0|1
     const redirectUrl = `${window.location.origin}/login`;
     const url = `${API_BASE}/auth/google?redirect_url=${encodeURIComponent(redirectUrl)}`;
     window.location.href = url;
   };
 
-  // --- After OAuth redirect: detect params, store token, fetch user, and decide if profile modal is needed ---
+  // After OAuth redirect: store token (cookie + localStorage), fetch user, and route
   useEffect(() => {
     const provider =
       (searchParams?.get('oauth') || searchParams?.get('provider') || '').toLowerCase();
@@ -142,7 +178,6 @@ export default function LoginPage() {
       searchParams?.get('google') === '1' ||
       searchParams?.get('g') === 'google';
 
-    // Token might come as ?token=... or ?jwt=... or ?access_token=...
     const tokenParam =
       searchParams?.get('token') ||
       searchParams?.get('jwt') ||
@@ -151,23 +186,18 @@ export default function LoginPage() {
 
     const needsProfileParam = searchParams?.get('needs_profile') || '';
 
-    // Only run when redirected from Google OR when token is present
     if (!isGoogle && !tokenParam) return;
 
     (async () => {
       try {
         if (tokenParam) {
-          localStorage.setItem('token', tokenParam);
+          setTokenEverywhere(tokenParam); // <-- ensure middleware sees the cookie
         }
 
-        // Try to get current user from backend
         const res = await authFetch(`${API_BASE}/auth/me`, { method: 'GET' });
         const data = await safeJson(res);
-
-        // Accept either { user: {...} } or the user object directly
         const user = (data as any)?.user ?? data;
 
-        // Keep any pre-filled values if backend provides them
         if (user?.name) setFullName(user.name);
         if (user?.role) setRole(user.role);
         if (user?.company) setCompany(user.company);
@@ -177,20 +207,21 @@ export default function LoginPage() {
         const missingProfile = !user?.name || !user?.role || !user?.company;
 
         if (needsProfileExplicit || missingProfile) {
-          // Ask for profile completion
           setProfileOpen(true);
         } else {
-          // Fully ready; persist and continue
           localStorage.setItem('user', JSON.stringify(user));
-          router.push('/upload');
+          if (isCandidateCtx && candidateToken) {
+            router.push(`/test/${encodeURIComponent(candidateToken)}`);
+          } else {
+            router.push('/upload');
+          }
         }
       } catch {
-        // If anything fails, still allow user to complete profile so they can proceed
         setProfileOpen(true);
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [searchParams, isCandidateCtx, candidateToken]);
 
   const handleCompleteProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,15 +242,17 @@ export default function LoginPage() {
         }),
       });
       const data = await safeJson(res);
-      if (!res.ok) {
-        throw new Error((data as any)?.detail || 'Failed to save your profile');
-      }
+      if (!res.ok) throw new Error((data as any)?.detail || 'Failed to save your profile');
 
       const user = (data as any)?.user ?? data;
       localStorage.setItem('user', JSON.stringify(user));
-
       setProfileOpen(false);
-      router.push('/upload');
+
+      if (isCandidateCtx && candidateToken) {
+        router.push(`/test/${encodeURIComponent(candidateToken)}`);
+      } else {
+        router.push('/upload');
+      }
     } catch (err: any) {
       setProfileError(err.message || 'Failed to save your profile');
     } finally {
@@ -229,7 +262,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] grid lg:grid-cols-2 gap-8">
-      {/* Left: Brand / Hero (neutral panel background only) */}
+      {/* Left: Brand / Hero */}
       <section className="relative hidden lg:flex rounded-3xl panel overflow-hidden items-center justify-center">
         <div className="relative z-10 p-8 max-w-xl">
           <Link href="/" className="inline-flex items-center gap-3 mb-8">
@@ -290,7 +323,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Info banner (e.g., after verification) */}
+            {/* Info banner */}
             {info && (
               <div className="mb-4 rounded-2xl bg-[hsl(var(--success))/0.12] ring-1 ring-[hsl(var(--success))/0.35] px-4 py-3 text-sm text-[hsl(var(--success))]">
                 <div className="flex items-start gap-2">
@@ -421,7 +454,7 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Social: Google with global btn-google */}
+              {/* Social: Google */}
               <div className="mt-6">
                 <button
                   type="button"
@@ -451,11 +484,7 @@ export default function LoginPage() {
 
       {/* Profile Completion Modal (shown after successful Login with Google if needed) */}
       {profileOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center"
-        >
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-[hsl(var(--background))/0.6]" />
           <div className="relative z-10 w-full max-w-lg card p-6 shadow-elev-3 rounded-3xl">
             <div className="mb-4">
@@ -515,11 +544,7 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <button
-                type="submit"
-                disabled={profileLoading}
-                className="btn-primary mt-2 w-full py-3 rounded-2xl"
-              >
+              <button type="submit" disabled={profileLoading} className="btn-primary mt-2 w-full py-3 rounded-2xl">
                 {profileLoading ? (
                   <span className="inline-flex items-center gap-2">
                     <span className="animate-spin rounded-full h-4 w-4 border-2 border-[hsl(var(--primary-foreground))/0.7] border-b-transparent" />

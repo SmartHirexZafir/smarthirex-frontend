@@ -1,42 +1,73 @@
 // app/history/HistoryFilter.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
-const API_BASE: string =
-  (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
+export type SortKey = 'latest' | 'oldest' | 'mostMatches';
 
-type SortKey = 'latest' | 'oldest' | 'mostMatches';
-
-interface Filters {
+export interface Filters {
   dateFrom: string;
   dateTo: string;
   search: string;
   sort: SortKey;
 }
 
+const API_BASE: string =
+  (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
+
 type HistoryItem = any; // backend shape untouched
+
 type Props = {
-  onFilter: (data: HistoryItem[]) => void;
+  /** Uncontrolled mode: called with fetched results (default behavior) */
+  onFilter?: (data: HistoryItem[]) => void;
+
+  /** Controlled mode: provide filters value + change handler */
+  value?: Filters;
+  onChange?: (next: Filters) => void;
+
+  /**
+   * Expose an explicit Apply action for controlled/embedded usage (Req. 7).
+   * When provided, an "Apply" button is shown and this callback is invoked with current filters.
+   * Parent is responsible for fetching/filtering and rendering results.
+   */
+  onApply?: (filters: Filters) => void;
+
+  /** When false, disables auto-fetch in uncontrolled mode. Defaults to true. */
+  autoFetch?: boolean;
 };
 
-export default function HistoryFilter({ onFilter }: Props) {
-  const [filters, setFilters] = useState<Filters>({
+export default function HistoryFilter({
+  onFilter,
+  value,
+  onChange,
+  onApply,
+  autoFetch = true,
+}: Props) {
+  const isControlled = useMemo(() => value !== undefined, [value]);
+
+  // Uncontrolled internal state (preserve original defaults)
+  const [uncontrolledFilters, setUncontrolledFilters] = useState<Filters>({
     dateFrom: '',
     dateTo: '',
     search: '',
     sort: 'latest',
   });
 
-  // 🔁 Debounced filters (for ~300ms)
-  const [debouncedFilters, setDebouncedFilters] = useState<Filters>(filters);
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedFilters(filters), 300);
-    return () => clearTimeout(t);
-  }, [filters]);
+  // Current filters (controlled vs uncontrolled)
+  const current: Filters = isControlled ? (value as Filters) : uncontrolledFilters;
 
-  // 🔁 Auto-fetch once per combined (AND) filter set, after debounce
+  // 🔁 Debounced filters (for ~300ms) — only relevant when we auto-fetch
+  const [debouncedFilters, setDebouncedFilters] = useState<Filters>(current);
   useEffect(() => {
+    if (!shouldAutoFetch(isControlled, autoFetch, onApply)) return;
+    const t = setTimeout(() => setDebouncedFilters(current), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current.dateFrom, current.dateTo, current.search, current.sort, isControlled, autoFetch, onApply]);
+
+  // 🔁 Auto-fetch once per combined (AND) filter set, after debounce (original behavior)
+  useEffect(() => {
+    if (!shouldAutoFetch(isControlled, autoFetch, onApply)) return;
     const controller = new AbortController();
 
     const fetchFilteredHistory = async () => {
@@ -61,12 +92,12 @@ export default function HistoryFilter({ onFilter }: Props) {
         }
 
         const data: HistoryItem[] = await res.json();
-        onFilter(data || []);
+        onFilter?.(data || []);
       } catch (error: any) {
         // ✅ Ignore AbortError (expected during rapid filter changes/unmount)
         if (error?.name === 'AbortError' || error?.code === 20) return;
         console.error('Failed to fetch filtered history:', error);
-        onFilter([]); // keep previous behavior for real failures
+        onFilter?.([]); // keep previous behavior for real failures
       }
     };
 
@@ -74,21 +105,33 @@ export default function HistoryFilter({ onFilter }: Props) {
     return () => {
       controller.abort(); // cleanup without logging as error
     };
-  }, [debouncedFilters, onFilter]);
+  }, [debouncedFilters, onFilter, isControlled, autoFetch, onApply]);
 
   // Fully typed key/value (no implicit any)
   const handleFilterChange = <K extends keyof Filters>(key: K, value: Filters[K]) => {
-    setFilters((prev) => ({ ...prev, [key]: value } as Filters));
+    if (isControlled) {
+      onChange?.({ ...current, [key]: value });
+    } else {
+      setUncontrolledFilters((prev) => ({ ...prev, [key]: value } as Filters));
+    }
   };
 
   const handleClearFilters = () => {
-    const clearedFilters: Filters = {
+    const cleared: Filters = {
       dateFrom: '',
       dateTo: '',
       search: '',
       sort: 'latest',
     };
-    setFilters(clearedFilters);
+    if (isControlled) {
+      onChange?.(cleared);
+    } else {
+      setUncontrolledFilters(cleared);
+    }
+  };
+
+  const handleApply = () => {
+    if (onApply) onApply(current);
   };
 
   return (
@@ -102,14 +145,26 @@ export default function HistoryFilter({ onFilter }: Props) {
             </span>
           </h2>
 
-        <button
-            onClick={handleClearFilters}
-            className="btn btn-ghost text-sm"
-            aria-label="Clear all filters"
-          >
-            <i className="ri-refresh-line" />
-            Clear Filters
-          </button>
+          <div className="flex items-center gap-2">
+            {onApply ? (
+              <button
+                onClick={handleApply}
+                className="btn btn-primary text-sm"
+                aria-label="Apply filters"
+              >
+                <i className="ri-check-line" />
+                Apply
+              </button>
+            ) : null}
+            <button
+              onClick={handleClearFilters}
+              className="btn btn-ghost text-sm"
+              aria-label="Clear all filters"
+            >
+              <i className="ri-refresh-line" />
+              Clear Filters
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -122,7 +177,7 @@ export default function HistoryFilter({ onFilter }: Props) {
               <input
                 id="dateFrom"
                 type="date"
-                value={filters.dateFrom}
+                value={current.dateFrom}
                 onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
                 className="input pr-11 bg-card"
                 aria-label="From date"
@@ -140,7 +195,7 @@ export default function HistoryFilter({ onFilter }: Props) {
               <input
                 id="dateTo"
                 type="date"
-                value={filters.dateTo}
+                value={current.dateTo}
                 onChange={(e) => handleFilterChange('dateTo', e.target.value)}
                 className="input pr-11 bg-card"
                 aria-label="To date"
@@ -158,7 +213,7 @@ export default function HistoryFilter({ onFilter }: Props) {
               <input
                 id="searchPrompts"
                 type="text"
-                value={filters.search}
+                value={current.search}
                 onChange={(e) => handleFilterChange('search', e.target.value)}
                 placeholder="React, UI/UX, 5+ years..."
                 className="input pr-11 bg-card"
@@ -176,7 +231,7 @@ export default function HistoryFilter({ onFilter }: Props) {
             <div className="relative">
               <select
                 id="sortBy"
-                value={filters.sort}
+                value={current.sort}
                 onChange={(e) => handleFilterChange('sort', e.target.value as SortKey)}
                 className="select appearance-none bg-card"
                 aria-label="Sort history"
@@ -207,4 +262,10 @@ export default function HistoryFilter({ onFilter }: Props) {
       </div>
     </div>
   );
+}
+
+/* ------------ helpers ------------ */
+function shouldAutoFetch(isControlled: boolean, autoFetch: boolean, onApply?: (f: Filters) => void) {
+  // Auto-fetch only in uncontrolled mode AND when onApply is NOT provided (preserve legacy behavior)
+  return !isControlled && autoFetch !== false && !onApply;
 }

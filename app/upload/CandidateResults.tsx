@@ -5,6 +5,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { getMatchScore } from '@/lib/score';
 
+const API_BASE: string =
+  (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
+
 type Candidate = {
   _id?: string;
   id?: string;
@@ -55,15 +58,22 @@ export default function CandidateResults({
   candidates,
   isProcessing,
   activePrompt,
+  /** Optional custom save URL; defaults to /history/save-selection */
+  saveUrl = `${API_BASE}/history/save-selection`,
 }: {
   candidates: Candidate[];
   isProcessing: boolean;
   activePrompt: string;
+  saveUrl?: string;
 }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [displayed, setDisplayed] = useState<Candidate[]>([]);
   const [promptChanging, setPromptChanging] = useState(false);
   const lastPromptRef = useRef<string>('');
+
+  // ✅ Selection state (Req. 7)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [saving, setSaving] = useState(false);
 
   const itemsPerPage = 6;
 
@@ -80,7 +90,7 @@ export default function CandidateResults({
   const isBadText = (s?: string | null) => {
     const t = String(s ?? '').trim().toLowerCase();
     return !t || t === 'n/a' || t === 'na' || t === 'none' || t === '-' || t === 'unknown' || t === 'not specified';
-  };
+    };
   const pickFirstGood = (...vals: (string | undefined | null)[]) => {
     for (const v of vals) {
       if (!isBadText(v)) return String(v).trim();
@@ -113,6 +123,7 @@ export default function CandidateResults({
       setPromptChanging(true);        // show skeleton
       setDisplayed([]);               // clear old candidates immediately
       setCurrentPage(1);
+      setSelectedIds(new Set());      // clear selection on new prompt
     }
   }, [activePrompt]);
 
@@ -121,6 +132,7 @@ export default function CandidateResults({
     if (!isProcessing) {
       setDisplayed(Array.isArray(candidates) ? candidates : []);
       setPromptChanging(false);
+      setSelectedIds(new Set()); // reset selection for new results
     }
   }, [isProcessing, candidates]);
 
@@ -254,6 +266,36 @@ export default function CandidateResults({
     return [{ role: '—' }, { role: '—' }];
   };
 
+  // ✅ Toggle selection for a candidate (Req. 7)
+  const toggleSelected = (cid: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(cid)) next.delete(cid);
+      else next.add(cid);
+      return next;
+    });
+  };
+
+  // ✅ Save selected to backend (Req. 7)
+  const saveSelected = async () => {
+    if (selectedIds.size === 0) return;
+    setSaving(true);
+    try {
+      const res = await fetch(saveUrl, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ selectedIds: Array.from(selectedIds) }),
+      });
+      // keep UI unchanged; no toast required by spec — silent success/failure
+      await res.text().catch(() => null);
+    } catch {
+      // swallow errors to avoid UI changes
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <section className="card-glass relative overflow-hidden animate-rise-in" aria-labelledby="filtered-title">
       {/* Ambient overlays */}
@@ -265,7 +307,7 @@ export default function CandidateResults({
       <div className="relative z-10">
         {/* Header */}
         <header className="px-6 py-6 border-b border-border bg-gradient-to-r from-[hsl(var(--muted)/.5)] to-[hsl(var(--muted)/.35)]">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <h3 id="filtered-title" className="text-2xl md:text-3xl font-extrabold gradient-text glow">
                 Filtered Candidates
@@ -278,6 +320,31 @@ export default function CandidateResults({
                   {`Query: “${(activePrompt || '').toString()}”`}
                 </p>
               )}
+            </div>
+
+            {/* ✅ Save selected (Req. 7) */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                {selectedIds.size} selected
+              </span>
+              <button
+                onClick={saveSelected}
+                disabled={selectedIds.size === 0 || saving}
+                className="btn btn-primary text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Save selected candidates"
+              >
+                {saving ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-[hsl(var(--primary-foreground))/0.7] border-b-transparent" />
+                    Saving…
+                  </span>
+                ) : (
+                  <>
+                    <i className="ri-save-3-line" />
+                    Save Selected
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </header>
@@ -382,12 +449,23 @@ export default function CandidateResults({
                       ? 'Close match'
                       : null;
 
+                  const checked = selectedIds.has(id);
+
                   return (
                     <article
                       key={id}
                       className="surface glass border border-border rounded-2xl p-6 hover:shadow-glow transition-all duration-300 h-full flex flex-col"
                     >
                       <div className="mb-4 flex items-start gap-4">
+                        {/* ✅ Selection checkbox (Req. 7) */}
+                        <input
+                          type="checkbox"
+                          className="mt-2 h-4 w-4 rounded border-border text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
+                          checked={checked}
+                          onChange={() => toggleSelected(id)}
+                          aria-label={`Select ${name}`}
+                        />
+
                         <Avatar name={name} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-3">

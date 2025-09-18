@@ -529,3 +529,88 @@ export function resolveInitialTheme(): ThemeMode {
   if (stored) return stored;
   return prefersLight() ? "light" : "dark";
 }
+
+/* =========================================
+   Auth & Session Helpers (Req. 2)
+   - Shared helper to clear client-side auth state
+   - Safe on SSR; no external deps
+========================================= */
+
+/** Common auth-related storage/cookie keys used across the app. */
+const AUTH_STORAGE_KEYS = [
+  "token",
+  "authToken",
+  "access_token",
+  "refresh_token",
+  "AUTH_TOKEN",
+];
+
+const AUTH_COOKIE_KEYS = [
+  "token",
+  "authToken",
+  "access_token",
+  "refresh_token",
+  "AUTH_TOKEN",
+  "session",
+  "sessionid",
+  "jwt",
+  "Authorization",
+];
+
+/** Best-effort cookie delete for current domain (and dot-prefixed). */
+function deleteCookieAllScopes(name: string) {
+  if (!isBrowser) return;
+  const expire = "Thu, 01 Jan 1970 00:00:00 GMT";
+  const base = `${name}=; expires=${expire}; path=/;`;
+  try {
+    // default (current host)
+    document.cookie = base;
+    // bare hostname
+    const host = location.hostname;
+    document.cookie = `${name}=; expires=${expire}; path=/; domain=${host};`;
+    // dot-prefixed
+    if (!host.startsWith(".")) {
+      document.cookie = `${name}=; expires=${expire}; path=/; domain=.${host};`;
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Clear all client-side auth traces:
+ * - Known localStorage/sessionStorage keys
+ * - Matching cookies at common scopes
+ * - Common in-memory globals (if app uses them)
+ */
+export function clearAuthClientState(): void {
+  if (!isBrowser) return;
+
+  // Storage
+  try {
+    for (const k of AUTH_STORAGE_KEYS) {
+      try { window.localStorage.removeItem(k); } catch {}
+      try { window.sessionStorage.removeItem(k); } catch {}
+    }
+  } catch {
+    // ignore
+  }
+
+  // Cookies
+  try {
+    for (const ck of AUTH_COOKIE_KEYS) deleteCookieAllScopes(ck);
+  } catch {
+    // ignore
+  }
+
+  // In-memory globals (defensive; harmless if absent)
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    if (w.__AUTH_TOKEN__) w.__AUTH_TOKEN__ = null;
+    if (w.__ACCESS_TOKEN__) w.__ACCESS_TOKEN__ = null;
+    if (w.__REFRESH_TOKEN__) w.__REFRESH_TOKEN__ = null;
+  } catch {
+    // ignore
+  }
+}

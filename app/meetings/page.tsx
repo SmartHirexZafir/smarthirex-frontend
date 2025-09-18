@@ -1,10 +1,11 @@
-// smarthirex-frontend-main/app/meetings/page.tsx
+// app/meetings/page.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useGlobalLoading } from '@/components/system/GlobalLoadingProvider';
 import { useToast } from '@/components/system/Toaster';
+import InterviewScheduleForm from './components/InterviewScheduleForm';
 
 type Candidate = {
   _id?: string;
@@ -123,8 +124,6 @@ export default function MeetingsPage() {
     if (!selectedCandidate) return;
     const mail = selectedCandidate.email || selectedCandidate.resume?.email || '';
     setEmail(mail || '');
-    // Keep role optional; user can type. We do not auto-fill unless present.
-    // Optionally suggest role if available but do not override existing input.
     if (!role) {
       const suggested =
         selectedCandidate.job_role || selectedCandidate.predicted_role || selectedCandidate.category || '';
@@ -142,7 +141,7 @@ export default function MeetingsPage() {
     if (!timezone) return 'Timezone is required.';
     if (!duration || duration <= 0) return 'Duration must be greater than 0.';
     return null;
-    };
+  };
 
   const onSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -226,11 +225,36 @@ export default function MeetingsPage() {
     return [detected, ...base.filter(tz => tz !== detected)];
   }, [timezone]);
 
+  // Header row values (email / role / experience)
+  const headerEmail = selectedCandidate?.email || selectedCandidate?.resume?.email || '—';
+  const headerRole =
+    selectedCandidate?.job_role || selectedCandidate?.predicted_role || selectedCandidate?.category || '—';
+  const headerYoe =
+    typeof selectedCandidate?.years_of_experience === 'number'
+      ? `${selectedCandidate.years_of_experience}`
+      : '—';
+
   return (
     <main>
       <div className="container mx-auto p-4 md:p-6">
+        {/* ===== Header row (like Test page: email / role / experience) ===== */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          <div className="p-4 rounded-xl border border-border bg-muted/50">
+            <div className="text-xs text-muted-foreground mb-1">Email</div>
+            <div className="font-medium truncate">{headerEmail}</div>
+          </div>
+          <div className="p-4 rounded-xl border border-border bg-muted/50">
+            <div className="text-xs text-muted-foreground mb-1">Job Role</div>
+            <div className="font-medium truncate">{headerRole}</div>
+          </div>
+          <div className="p-4 rounded-xl border border-border bg-muted/50">
+            <div className="text-xs text-muted-foreground mb-1">Experience (years)</div>
+            <div className="font-medium truncate">{headerYoe}</div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.2fr] gap-6">
-          {/* Left: Tested candidates list */}
+          {/* Left: Tested candidates list (unchanged) */}
           <section className="card p-4 md:p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">Tested Candidates</h2>
@@ -291,7 +315,7 @@ export default function MeetingsPage() {
             </div>
           </section>
 
-          {/* Right: Schedule form */}
+          {/* Right: Middle section = full schedule form (moved into component) */}
           <section className="card p-5">
             <div className="mb-4">
               <h2 className="text-lg font-semibold">Schedule Interview</h2>
@@ -300,148 +324,47 @@ export default function MeetingsPage() {
               </p>
             </div>
 
-            <form onSubmit={e => trackPromise(onSubmit(e))} className="space-y-4" aria-busy={submitting}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium mb-1">Candidate</label>
-                  <input
-                    className="input w-full"
-                    value={selectedCandidate?.name || ''}
-                    placeholder="Select a candidate on the left"
-                    disabled
-                  />
-                </div>
+            <InterviewScheduleForm
+              email={email}
+              setEmail={setEmail}
+              role={role}
+              setRole={setRole}
+              yoe={yoe}
+              setYoe={setYoe}
+              dateTime={dateTime}
+              setDateTime={setDateTime}
+              timezone={timezone}
+              setTimezone={setTimezone}
+              duration={duration}
+              setDuration={setDuration}
+              notes={notes}
+              setNotes={setNotes}
+              submitting={submitting}
+              onSubmit={e => trackPromise(onSubmit(e))}
+              timezoneOptions={commonTimezones}
+            />
 
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium mb-1" htmlFor="email">
-                    Email <span className="text-[hsl(var(--destructive))]">*</span>
-                  </label>
-                  <input
-                    id="email"
-                    type="email"
-                    className="input w-full"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="candidate@company.com"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1" htmlFor="role">
-                    Role
-                  </label>
-                  <input
-                    id="role"
-                    type="text"
-                    className="input w-full"
-                    value={role}
-                    onChange={e => setRole(e.target.value)}
-                    placeholder="e.g., Frontend Engineer"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1" htmlFor="yoe">
-                    Years of Experience
-                  </label>
-                  <input
-                    id="yoe"
-                    type="number"
-                    className="input w-full"
-                    value={yoe}
-                    onChange={e => setYoe(e.target.value)}
-                    min={0}
-                    step="0.1"
-                    placeholder="e.g., 3"
-                  />
-                </div>
-
-                <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1" htmlFor="dt">
-                      Date &amp; Time <span className="text-[hsl(var(--destructive))]">*</span>
-                    </label>
-                    <input
-                      id="dt"
-                      type="datetime-local"
-                      className="input w-full"
-                      value={dateTime}
-                      onChange={e => setDateTime(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1" htmlFor="tz">
-                      Timezone <span className="text-[hsl(var(--destructive))]">*</span>
-                    </label>
-                    <select
-                      id="tz"
-                      className="input w-full"
-                      value={timezone}
-                      onChange={e => setTimezone(e.target.value)}
-                      required
-                    >
-                      {commonTimezones.map(tz => (
-                        <option key={tz} value={tz}>
-                          {tz}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1" htmlFor="duration">
-                    Duration (minutes) <span className="text-[hsl(var(--destructive))]">*</span>
-                  </label>
-                  <input
-                    id="duration"
-                    type="number"
-                    className="input w-full"
-                    value={duration}
-                    onChange={e => setDuration(Number(e.target.value))}
-                    min={1}
-                    step={5}
-                    required
-                  />
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-sm font-medium mb-1" htmlFor="notes">
-                    Notes (optional)
-                  </label>
-                  <textarea
-                    id="notes"
-                    className="input w-full min-h-[90px]"
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Anything the interviewer should know…"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="btn btn-primary"
-                >
-                  {submitting ? (
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-[hsl(var(--primary-foreground))/0.7] border-b-transparent" />
-                      Scheduling…
-                    </span>
-                  ) : (
-                    <>
-                      <i className="ri-calendar-check-line mr-1" />
-                      Schedule Interview
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+            {/* Bottom: single Send button (submit) */}
+            <div className="flex items-center justify-end gap-2 pt-4">
+              <button
+                type="submit"
+                form="scheduleForm"
+                disabled={submitting}
+                className="btn btn-primary"
+              >
+                {submitting ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-[hsl(var(--primary-foreground))/0.7] border-b-transparent" />
+                    Scheduling…
+                  </span>
+                ) : (
+                  <>
+                    <i className="ri-calendar-check-line mr-1" />
+                    Schedule Interview
+                  </>
+                )}
+              </button>
+            </div>
 
             {meetingUrl && (
               <div className="mt-5 rounded-2xl border border-border p-4 bg-[hsl(var(--muted)/.35)]">

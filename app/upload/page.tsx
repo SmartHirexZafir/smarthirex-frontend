@@ -1,7 +1,7 @@
 // app/upload/page.tsx
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import UploadSection from './UploadSection';
 import ChatbotSection from './ChatbotSection';
 import CandidateResults from './CandidateResults';
@@ -55,6 +55,12 @@ export default function UploadPage() {
 
   // Tracks the prompt currently being fulfilled (prevents stale updates)
   const pendingPromptRef = useRef<string>('');
+
+  // Backend base URL for logout call (Req. 2)
+  const API_BASE = useMemo(
+    () => (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, ''),
+    []
+  );
 
   useEffect(() => {
     // reserved for future init
@@ -132,8 +138,50 @@ export default function UploadPage() {
     [isProcessing]
   );
 
+  // ✅ Logout: call backend, clear cookies/storage, and broadcast navigation intent (Req. 2)
+  const handleLogout = useCallback(async () => {
+    try {
+      // Best-effort server-side logout
+      await fetch(`${API_BASE}/logout`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch {
+      // ignore network errors; proceed with client-side cleanup
+    } finally {
+      // Clear auth cookie(s) commonly used by the app (e.g., "token")
+      const expire = 'Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = `token=; Path=/; Expires=${expire}; SameSite=Lax`;
+      // Clear local/session storage keys used
+      try {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      } catch {}
+      try {
+        sessionStorage.removeItem('token');
+        sessionStorage.removeItem('user');
+      } catch {}
+
+      // Notify any listeners that logout completed (navigation handled by whoever listens)
+      window.dispatchEvent(new Event('shx:logged-out'));
+      // Also perform a hard redirect to login to ensure no residual state
+      window.location.replace('/login');
+    }
+  }, [API_BASE]);
+
+  // Optional: listen for a global logout trigger so existing UI buttons can dispatch it (Req. 2)
+  useEffect(() => {
+    const onLogout = () => { void handleLogout(); };
+    window.addEventListener('shx:logout', onLogout);
+    return () => window.removeEventListener('shx:logout', onLogout);
+  }, [handleLogout]);
+
   // ✅ Only show results section when we’re loading OR we actually have results
   const showResults = isProcessing || (Array.isArray(candidates) && candidates.length > 0);
+
+  // (Req. 3) No auto-scroll behavior is present; ensure nothing triggers focus-based scrolling.
+  // No additional changes needed for autoscroll beyond avoiding scrollTo/scrollIntoView.
 
   return (
     <div className="min-h-screen">

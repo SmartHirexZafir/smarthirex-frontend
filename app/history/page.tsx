@@ -1,6 +1,7 @@
 // app/history/page.tsx
 'use client';
 
+import type React from 'react';
 import { useState, useEffect, useCallback } from 'react';
 import HistoryFilter from './HistoryFilter';
 import HistoryBlocks from './HistoryBlocks';
@@ -10,12 +11,15 @@ import RerunPromptModal from './RerunPromptModal';
 const API_BASE =
   (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:10000').replace(/\/$/, '');
 
+type Anchor = { x: number; y: number } | null;
+
 export default function HistoryPage() {
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [filteredData, setFilteredData] = useState<any[]>([]);
   const [selectedHistory, setSelectedHistory] = useState<any>(null);
   const [showModal, setShowModal] = useState(false);
   const [rerunFor, setRerunFor] = useState<any | null>(null);
+  const [anchor, setAnchor] = useState<Anchor>(null);
 
   // fetch history (ignores AbortError cleanly)
   const fetchHistory = async () => {
@@ -61,7 +65,13 @@ export default function HistoryPage() {
     setFilteredData(filteredResults);
   }, []);
 
-  const handleViewResults = (history: any) => {
+  // Capture click coordinates (if provided) and open Results modal
+  const handleViewResults = (history: any, ev?: MouseEvent | React.MouseEvent) => {
+    if (ev && 'clientX' in ev && 'clientY' in ev) {
+      setAnchor({ x: ev.clientX, y: ev.clientY });
+    } else {
+      setAnchor(null);
+    }
     setSelectedHistory(history);
     setShowModal(true);
   };
@@ -82,9 +92,21 @@ export default function HistoryPage() {
     }
   };
 
-  const openRerunModal = (history: any) => setRerunFor(history);
+  // Capture click coordinates (if provided) and open Re-run modal
+  const openRerunModal = (history: any, ev?: MouseEvent | React.MouseEvent) => {
+    if (ev && 'clientX' in ev && 'clientY' in ev) {
+      setAnchor({ x: ev.clientX, y: ev.clientY });
+    } else {
+      setAnchor(null);
+    }
+    setRerunFor(history);
+  };
 
   const isModalOpen = showModal || !!rerunFor;
+
+  // Allow passing anchor without changing modal prop types by casting at the use-site only.
+  const ResultsModalAny = ResultsModal as any;
+  const RerunPromptModalAny = RerunPromptModal as any;
 
   return (
     <div className="min-h-[100svh]">
@@ -144,14 +166,23 @@ export default function HistoryPage() {
       </div>
 
       {showModal && (
-        <ResultsModal history={selectedHistory} onClose={() => setShowModal(false)} />
+        <ResultsModalAny
+          history={selectedHistory}
+          anchor={anchor}
+          onClose={() => {
+            setShowModal(false);
+            setAnchor(null);
+          }}
+        />
       )}
 
       {rerunFor && (
-        <RerunPromptModal
+        <RerunPromptModalAny
           history={rerunFor}
+          anchor={anchor}
           onClose={async () => {
             setRerunFor(null);
+            setAnchor(null);
             await fetchHistory();
           }}
         />

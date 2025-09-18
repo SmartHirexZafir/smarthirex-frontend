@@ -1,8 +1,9 @@
 // app/meetings/services/scheduleInterview.ts
 // Thin, typed client for the Schedule Interview API
 // Usage:
-//   import { scheduleInterview } from "@/app/meetings/services/scheduleInterview";
-//   await scheduleInterview(payload);
+//   import { scheduleInterview, getCandidateIdFromQuery, applyCandidateIdPrefill } from "@/app/meetings/services/scheduleInterview";
+//   const candidateId = getCandidateIdFromQuery(); // read from ?candidateId=...
+//   const initial = applyCandidateIdPrefill({ candidateId }); // use to prefill your form
 
 export type ScheduleInterviewRequest = {
   candidateId: string;
@@ -38,6 +39,30 @@ const getApiBase = (): string => {
     console.warn("NEXT_PUBLIC_API_BASE_URL is not set; using relative path.");
   }
   return base;
+};
+
+/**
+ * Helper: read `candidateId` from the current URL query string (?candidateId=...)
+ * Returns empty string on server or when not present.
+ */
+export const getCandidateIdFromQuery = (): string => {
+  if (typeof window === "undefined") return "";
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    return sp.get("candidateId") || "";
+  } catch {
+    return "";
+  }
+};
+
+/**
+ * Helper: apply candidateId prefill from the URL query (if missing on the given state).
+ * This does not mutate the input; it returns a shallow-cloned object with candidateId filled.
+ */
+export const applyCandidateIdPrefill = <T extends { candidateId?: string }>(state: T): T => {
+  const cid = state?.candidateId || getCandidateIdFromQuery();
+  if (!cid) return state;
+  return { ...state, candidateId: cid };
 };
 
 /**

@@ -2,6 +2,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn, uid } from "../../lib/util";
 
 type ToastType = "success" | "error" | "info";
@@ -35,9 +36,10 @@ export default function Toaster({ children }: { children?: React.ReactNode }) {
   const [list, setList] = useState<Toast[]>([]);
   const timers = useRef<Record<string, TimerState>>({});
   const [pausedIds, setPausedIds] = useState<Set<string>>(new Set());
+  const [mounted, setMounted] = useState(false); // SSR-safe portal guard
 
-  // Cleanup on unmount
   useEffect(() => {
+    setMounted(true);
     return () => {
       Object.values(timers.current).forEach(({ timeoutId }) => clearTimeout(timeoutId));
       timers.current = {};
@@ -72,7 +74,6 @@ export default function Toaster({ children }: { children?: React.ReactNode }) {
   const pause = useCallback((id: string) => {
     const t = timers.current[id];
     if (!t) return;
-    // compute remaining time & stop timer
     const elapsed = Date.now() - t.start;
     t.remaining = Math.max(0, t.remaining - elapsed);
     clearTimer(id);
@@ -100,7 +101,6 @@ export default function Toaster({ children }: { children?: React.ReactNode }) {
     const id = uid("toast");
     const duration = input.duration ?? 3200;
 
-    // de-duplicate exact same (type+title+message): replace existing instead of stacking
     setList((prev) => {
       const dupIdx = prev.findIndex(
         (t) => t.type === input.type && (t.title || "") === (input.title || "") && (t.message || "") === (input.message || "")
@@ -108,13 +108,10 @@ export default function Toaster({ children }: { children?: React.ReactNode }) {
       let next = prev;
       if (dupIdx >= 0) {
         const existing = prev[dupIdx];
-        // clear its timer
         clearTimer(existing.id);
-        // remove old entry
         next = [...prev.slice(0, dupIdx), ...prev.slice(dupIdx + 1)];
         delete timers.current[existing.id];
       }
-      // enforce cap
       if (next.length >= MAX_TOASTS) {
         const oldest = next[0];
         clearTimer(oldest.id);
@@ -125,14 +122,12 @@ export default function Toaster({ children }: { children?: React.ReactNode }) {
       return [...next, t];
     });
 
-    // create timer state and start
     timers.current[id] = {
       timeoutId: null,
       start: Date.now(),
       remaining: duration,
       duration
     };
-    // start timer after state enqueued (small microtask delay ensures DOM paints)
     setTimeout(() => startTimer(id), 0);
   }, [clearTimer, startTimer]);
 
@@ -143,65 +138,69 @@ export default function Toaster({ children }: { children?: React.ReactNode }) {
     info:    (message, title = "Notice", duration) => show({ type: "info", message, title, duration }),
   }), [show]);
 
+  const toastsNode = (
+    <div
+      aria-live="polite"
+      aria-atomic="true"
+      className="fixed z-[1100] right-3 top-3 sm:right-6 sm:top-6 flex flex-col gap-3"
+    >
+      {list.map((t) => {
+        const timer = timers.current[t.id];
+        const paused = pausedIds.has(t.id);
+        const animDuration = (timer?.duration ?? t.duration ?? 3200);
+        const animPlayState = paused ? "paused" as const : "running" as const;
+
+        return (
+          <div
+            key={t.id}
+            role="status"
+            className={cn(
+              "card max-w-xs sm:max-w-sm w-[92vw] sm:w-[28rem] p-4 animate-rise-in shadow-glow rounded-2xl",
+              "border border-border bg-card text-card-foreground",
+              t.type === "success" && "border-[hsl(var(--success))]/40",
+              t.type === "error" && "border-[hsl(var(--destructive))]/40",
+              t.type === "info" && "border-[hsl(var(--info))]/40"
+            )}
+            onMouseEnter={() => pause(t.id)}
+            onMouseLeave={() => resume(t.id)}
+          >
+            <div className="flex items-start gap-3">
+              <Icon type={t.type} />
+              <div className="flex-1">
+                {t.title && <div className="text-sm font-semibold">{t.title}</div>}
+                {t.message && <p className="mt-0.5 text-xs text-muted-foreground">{t.message}</p>}
+              </div>
+              <button
+                aria-label="Dismiss"
+                className="icon-btn h-8 w-8"
+                onClick={() => remove(t.id)}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <div className={cn("mt-3 h-1 rounded-full overflow-hidden bg-[hsl(var(--muted)/.6)]")}>
+              <div
+                className={cn(
+                  "h-full animate-toast-progress",
+                  t.type === "success" && "bg-[hsl(var(--success))]",
+                  t.type === "error" && "bg-[hsl(var(--destructive))]",
+                  t.type === "info" && "bg-[hsl(var(--info))]"
+                )}
+                style={{ animationDuration: `${animDuration}ms`, animationPlayState: animPlayState }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <ToastCtx.Provider value={api}>
       {children}
-      <div
-        aria-live="polite"
-        aria-atomic="true"
-        className="fixed z-[1100] right-3 bottom-3 sm:right-6 sm:bottom-6 flex flex-col gap-3"
-      >
-        {list.map((t) => {
-          const timer = timers.current[t.id];
-          const paused = pausedIds.has(t.id);
-          const animDuration = (timer?.duration ?? t.duration ?? 3200);
-          const animPlayState = paused ? "paused" as const : "running" as const;
-
-          return (
-            <div
-              key={t.id}
-              role="status"
-              className={cn(
-                "card max-w-xs sm:max-w-sm w-[92vw] sm:w-[28rem] p-4 animate-rise-in shadow-glow",
-                t.type === "success" && "border-[hsl(var(--success))]/40",
-                t.type === "error" && "border-[hsl(var(--destructive))]/40",
-                t.type === "info" && "border-[hsl(var(--info))]/40"
-              )}
-              onMouseEnter={() => pause(t.id)}
-              onMouseLeave={() => resume(t.id)}
-            >
-              <div className="flex items-start gap-3">
-                <Icon type={t.type} />
-                <div className="flex-1">
-                  {t.title && <div className="text-sm font-semibold">{t.title}</div>}
-                  {t.message && <p className="mt-0.5 text-xs text-muted-foreground">{t.message}</p>}
-                </div>
-                <button
-                  aria-label="Dismiss"
-                  className="icon-btn h-8 w-8"
-                  onClick={() => remove(t.id)}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-              </div>
-              <div className={cn("mt-3 h-1 rounded-full overflow-hidden bg-[hsl(var(--muted)/.6)]")}>
-                <div
-                  className={cn(
-                    "h-full animate-toast-progress",
-                    t.type === "success" && "bg-[hsl(var(--success))]",
-                    t.type === "error" && "bg-[hsl(var(--destructive))]",
-                    t.type === "info" && "bg-[hsl(var(--info))]"
-                  )}
-                  // Sync the progress bar animation with the toast duration
-                  style={{ animationDuration: `${animDuration}ms`, animationPlayState: animPlayState }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {mounted && typeof document !== "undefined" ? createPortal(toastsNode, document.body) : null}
     </ToastCtx.Provider>
   );
 }

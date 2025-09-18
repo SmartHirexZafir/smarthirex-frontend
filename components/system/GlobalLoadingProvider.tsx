@@ -1,4 +1,3 @@
-// components/system/GlobalLoadingProvider.tsx
 "use client";
 
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -170,15 +169,25 @@ export default function GlobalLoadingProvider({ children }: { children: React.Re
 
   const value = useMemo(() => ({ isLoading: count > 0, trackPromise }), [count]);
 
+  // (Req. 5) Lock body scroll while overlay is shown; restore on hide/unmount
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const originalOverflow = document.body.style.overflow;
+    if (count > 0) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = originalOverflow || "";
+    }
+    return () => {
+      document.body.style.overflow = originalOverflow || "";
+    };
+  }, [count]);
+
   return (
     <LoadingCtx.Provider value={value}>
       {children}
-      {/* ✅ Full-screen, top-most overlay container using z-index token */}
-      {count > 0 && (
-        <div className="fixed inset-0 z-route-loader">
-          <LoaderOverlay fullscreen />
-        </div>
-      )}
+      {/* (Req. 5) Overlay mounts to a portal inside LoaderOverlay and covers viewport */}
+      {count > 0 && <LoaderOverlay fullscreen />}
     </LoadingCtx.Provider>
   );
 }

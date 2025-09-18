@@ -30,10 +30,12 @@ export default function HistoryBlocks({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 5;
 
-  const handleRerun = (history: HistoryItem) => {
+  const handleRerun = (e: any, history: HistoryItem) => {
     setRerunningId(history.id);
+    const anchor = { x: e?.clientX ?? 0, y: e?.clientY ?? 0 }; // (Req. 6) capture click coordinates
     if (onOpenRerunModal) {
-      onOpenRerunModal(history);
+      // Pass anchor to parent (parent can forward to Modal)
+      (onOpenRerunModal as any)(history, anchor);
     } else if (onRerunPrompt) {
       onRerunPrompt(history.prompt);
     }
@@ -124,7 +126,10 @@ export default function HistoryBlocks({
 
                 <div className="flex items-center gap-4">
                   <button
-                    onClick={() => onViewResults(history)}
+                    onClick={(e) => {
+                      const anchor = { x: (e as any).clientX ?? 0, y: (e as any).clientY ?? 0 }; // (Req. 6)
+                      (onViewResults as any)(history, anchor);
+                    }}
                     className="btn btn-primary flex-1 whitespace-nowrap"
                   >
                     <i className="ri-eye-line"></i>
@@ -132,7 +137,7 @@ export default function HistoryBlocks({
                   </button>
 
                   <button
-                    onClick={() => handleRerun(history)}
+                    onClick={(e) => handleRerun(e, history)}
                     disabled={rerunningId === history.id}
                     className="btn btn-outline whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed shadow-soft"
                     aria-label={`Re-run prompt for "${history.prompt}"`}

@@ -129,8 +129,8 @@ export default function ChatbotSection({
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [selected, setSelected] = useState<FilterKey[]>([]); // UI-only; logic derives from filled fields
+  const [showFilters, setShowFilters] = useState(false); // (Req. 4) toggle filters row
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Drawer/section inputs (History-style)
@@ -562,13 +562,13 @@ export default function ChatbotSection({
               </div>
             </div>
 
-            {/* Filter dropdown */}
+            {/* (Req. 4) Toggle Filters button */}
             <div className="relative">
               <button
-                onClick={() => setMenuOpen((v) => !v)}
+                onClick={() => setShowFilters((v) => !v)}
                 className="btn btn-outline flex items-center gap-2"
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
+                aria-pressed={showFilters}
+                aria-controls="filters-row"
               >
                 <i className="ri-filter-3-line" />
                 Filters
@@ -578,58 +578,51 @@ export default function ChatbotSection({
                   </span>
                 )}
               </button>
-
-              {menuOpen && (
-                <div
-                  role="menu"
-                  className="absolute right-0 mt-2 w-64 rounded-2xl border border-border surface glass shadow-xl p-2 z-50 max-h:[70vh] max-h-[70vh] flex flex-col"
-                >
-                  <div className="p-2 text-xs text-[hsl(var(--muted-foreground))]">Select one or more categories</div>
-
-                  {/* Scrollable list area */}
-                  <div
-                    className="divide-y divide-border/60 overflow-y-auto flex-1 pr-1"
-                    style={{ scrollbarGutter: 'stable' }}
-                  >
-                    {FILTERS.map((f) => {
-                      const checked = selected.includes(f.key);
-                      return (
-                        <label
-                          key={f.key}
-                          className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-[hsl(var(--muted)/.35)] rounded-xl"
-                        >
-                          {/* custom checkbox */}
-                          <input type="checkbox" className="sr-only" checked={checked} onChange={() => toggleFilter(f.key)} />
-                          <span
-                            className={[
-                              'h-5 w-5 rounded-md border flex items-center justify-center transition',
-                              checked
-                                ? 'bg-[hsl(var(--primary))] border-[hsl(var(--primary))] text-white shadow-glow'
-                                : 'bg-transparent border-border text-transparent',
-                            ].join(' ')}
-                            aria-hidden="true"
-                          >
-                            <i className="ri-check-line text-[14px]" />
-                          </span>
-                          <i className={`${f.icon} text-[hsl(var(--muted-foreground))]`} />
-                          <span className="text-sm text-foreground">{f.label}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-
-                  <div className="flex items-center justify-between px-3 pt-2">
-                    <button onClick={() => setSelected([])} className="btn btn-ghost btn-xs">
-                      Clear all
-                    </button>
-                    <button onClick={() => setMenuOpen(false)} className="btn btn-primary btn-sm">
-                      Done
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
+
+          {/* (Req. 4) Filters row directly below the button */}
+          {showFilters && (
+            <div id="filters-row" className="mt-4">
+              <div className="text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-2">Filters</div>
+              <div className="flex flex-wrap gap-2">
+                {FILTERS.map((f) => {
+                  const checked = selected.includes(f.key);
+                  return (
+                    <label
+                      key={f.key}
+                      className={[
+                        'inline-flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer select-none',
+                        checked
+                          ? 'bg-[hsl(var(--primary)/.12)] border-[hsl(var(--primary))] text-foreground shadow-glow'
+                          : 'bg-transparent border-border text-foreground',
+                      ].join(' ')}
+                    >
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={checked}
+                        onChange={() => toggleFilter(f.key)}
+                      />
+                      <span
+                        className={[
+                          'h-4 w-4 rounded-[6px] border flex items-center justify-center',
+                          checked
+                            ? 'bg-[hsl(var(--primary))] border-[hsl(var(--primary))] text-white'
+                            : 'bg-transparent border-border text-transparent',
+                        ].join(' ')}
+                        aria-hidden="true"
+                      >
+                        <i className="ri-check-line text-[12px]" />
+                      </span>
+                      <i className={`${f.icon} text-[hsl(var(--muted-foreground))]`} />
+                      <span className="text-sm">{f.label}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Guidance between filters and input panels */}
           <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">

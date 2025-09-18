@@ -7,6 +7,11 @@ export type CandidateLite = {
   id: string;
   name?: string | null;
   email: string;
+  // ✅ Added fields for schedule gating (Req. 8)
+  testTaken?: boolean;
+  hasTestResult?: boolean;
+  test_score?: number;
+  testCompleted?: boolean;
 };
 
 export type SchedulePayload = {
@@ -151,7 +156,17 @@ const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
 
   if (!open) return null;
 
+  // ✅ Centralized test-completion rule (Req. 8)
+  const testEvidence =
+    candidate?.testTaken === true ||
+    candidate?.hasTestResult === true ||
+    candidate?.testCompleted === true ||
+    (typeof candidate?.test_score === "number" && !Number.isNaN(candidate.test_score));
+
+  const scheduleBlocked = !testEvidence;
+
   const canSubmit = useMemo(() => {
+    if (scheduleBlocked) return false; // block submit if test not taken
     if (!date || !time || !candidate?.email) return false;
     try {
       const utcIso = toUtcIso(date, time, timezone);
@@ -159,7 +174,7 @@ const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
     } catch {
       return false;
     }
-  }, [date, time, timezone, candidate?.email]);
+  }, [date, time, timezone, candidate?.email, scheduleBlocked]);
 
   const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget && !loading) onClose();
@@ -168,7 +183,11 @@ const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
   const submit = async () => {
     setError(null);
     if (!canSubmit) {
-      setError("Please choose a valid future date & time and ensure the candidate email exists.");
+      setError(
+        scheduleBlocked
+          ? "This candidate hasn’t taken the test yet, so the interview can’t be scheduled."
+          : "Please choose a valid future date & time and ensure the candidate email exists."
+      );
       return;
     }
     setLoading(true);
@@ -252,6 +271,13 @@ const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
             {candidate.name ? " · " : null}
             <span>{candidate.email}</span>
           </div>
+
+          {/* ✅ Blocker message when test not taken (Req. 8) */}
+          {scheduleBlocked && (
+            <div className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+              This candidate hasn’t taken the test yet, so the interview can’t be scheduled.
+            </div>
+          )}
 
           {/* Date & Time */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -375,8 +401,13 @@ const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
             </button>
             <button
               onClick={submit}
-              disabled={!canSubmit || loading}
+              disabled={!canSubmit || loading || scheduleBlocked}
               className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+              title={
+                scheduleBlocked
+                  ? "This candidate hasn’t taken the test yet, so the interview can’t be scheduled."
+                  : undefined
+              }
             >
               {loading ? "Scheduling…" : "Send Invite"}
             </button>

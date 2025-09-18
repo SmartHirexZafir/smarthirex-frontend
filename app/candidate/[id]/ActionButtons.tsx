@@ -1,3 +1,4 @@
+// app/candidate/[id]/ActionButtons.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -84,8 +85,13 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
     setIsShortlisted(!isShortlisted);
     setIsRejected(false);
     const ok = await updateCandidateStatus(newStatus);
-    if (!ok) { setIsShortlisted(prevShortlisted); setIsRejected(prevRejected); }
-    else if (newStatus === "shortlisted") { router.push("/dashboard"); }
+    if (!ok) {
+      setIsShortlisted(prevShortlisted);
+      setIsRejected(prevRejected);
+    } else if (newStatus === "shortlisted") {
+      router.refresh(); // ✅ ensure dashboards reflect the new status immediately (Req. 10)
+      router.push("/dashboard");
+    }
   };
 
   const handleReject = async () => {
@@ -96,8 +102,13 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
     setIsRejected(!isRejected);
     setIsShortlisted(false);
     const ok = await updateCandidateStatus(newStatus);
-    if (!ok) { setIsRejected(prevRejected); setIsShortlisted(prevShortlisted); }
-    else if (newStatus === "rejected") { router.push("/dashboard"); }
+    if (!ok) {
+      setIsRejected(prevRejected);
+      setIsShortlisted(prevShortlisted);
+    } else if (newStatus === "rejected") {
+      router.refresh(); // ✅ ensure dashboards reflect the new status immediately (Req. 10)
+      router.push("/dashboard");
+    }
   };
 
   const handleSendTest = () => {

@@ -127,7 +127,7 @@ export default function InterviewScheduleForm({ candidate, onSuccess }: Props) {
 
     try {
       const run = async () => {
-        const res = await fetch(`${API_BASE}/interviews/schedule`, {
+        const res = await fetch(`${API_BASE}/candidate/interviews/schedule`, {
           method: 'POST',
           credentials: 'include',
           headers: authHeaders(),

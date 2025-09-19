@@ -7,7 +7,10 @@ import ThemeToggle from "./ui/ThemeToogle"; // same path/style as before
 import Logo from "@/components/ui/Logo";
 import { useRouter } from "next/navigation";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "";
+const API_BASE = (
+   process.env.NEXT_PUBLIC_API_BASE_URL ||
+   process.env.NEXT_PUBLIC_API_BASE || ""
+).replace(/\/$/, "");
 
 type User = {
   name: string;

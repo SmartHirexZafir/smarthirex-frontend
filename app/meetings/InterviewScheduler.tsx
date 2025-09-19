@@ -279,7 +279,7 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
         title: payload.title,
         notes: payload.notes,
       };
-      const res = await fetch(`${API_BASE}/interviews/schedule`, {
+      const res = await fetch(`${API_BASE}/candidate/interviews/schedule`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify(unified),

@@ -92,7 +92,7 @@ export default function LoginPage() {
     try {
       // Candidate context -> create candidate session
       if (isCandidateCtx) {
-        const res = await fetch(`${API_BASE}/auth/candidate/session`, {
+        const res = await fetch(`${API_BASE}/auth/candidate-session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password, token: candidateToken }),

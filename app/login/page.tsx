@@ -55,15 +55,12 @@ export default function LoginPage() {
     }
   };
 
-  // Write token where middleware can see it (cookie) + keep localStorage behavior
-  const setTokenEverywhere = (token: string) => {
+  // Store token in localStorage for Authorization header usage
+  // NOTE: The backend sets an httponly cookie automatically, which cannot be set via document.cookie
+  // We rely on the backend cookie for middleware, and localStorage for Authorization headers
+  const setTokenInStorage = (token: string) => {
     try {
       localStorage.setItem('token', token);
-    } catch {}
-    try {
-      const maxAge = 60 * 60 * 24 * 7; // 7 days
-      const secure = typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : '';
-      document.cookie = `token=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; SameSite=Lax${secure}`;
     } catch {}
   };
 
@@ -109,10 +106,12 @@ export default function LoginPage() {
           throw new Error((data as any)?.detail || 'Login failed');
         }
 
-        if ((data as any)?.token) setTokenEverywhere((data as any).token);
+        if ((data as any)?.token) setTokenInStorage((data as any).token);
         if ((data as any)?.user) localStorage.setItem('user', JSON.stringify((data as any).user));
 
-        return router.push(`/test/${encodeURIComponent(candidateToken)}`);
+        // Use full page navigation to ensure backend cookie is available for middleware
+        window.location.href = `/test/${encodeURIComponent(candidateToken)}`;
+        return;
       }
 
       // Normal user login
@@ -133,9 +132,12 @@ export default function LoginPage() {
         throw new Error((data as any)?.detail || 'Login failed');
       }
 
-      setTokenEverywhere((data as any).token);
+      setTokenInStorage((data as any).token);
       localStorage.setItem('user', JSON.stringify((data as any).user));
-      router.push('/upload');
+      
+      // Use full page navigation to ensure backend cookie is available for middleware
+      // This prevents the middleware from redirecting back to login
+      window.location.href = '/upload';
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {
@@ -188,15 +190,34 @@ export default function LoginPage() {
 
     if (!isGoogle && !tokenParam) return;
 
+    let mounted = true;
+
     (async () => {
       try {
         if (tokenParam) {
-          setTokenEverywhere(tokenParam); // <-- ensure middleware sees the cookie
+          setTokenInStorage(tokenParam); // Store in localStorage for Authorization headers
+          // Backend cookie is already set via response.set_cookie() - no need to set client-side
         }
 
         const res = await authFetch(`${API_BASE}/auth/me`, { method: 'GET' });
+        
+        if (!res.ok) {
+          // Token invalid or expired
+          if (res.status === 401 || res.status === 403) {
+            if (mounted) {
+              setError('Authentication failed. Please try logging in again.');
+              // Clear invalid token
+              setTokenInStorage('');
+            }
+            return;
+          }
+          throw new Error(`Failed to fetch user: ${res.status}`);
+        }
+
         const data = await safeJson(res);
         const user = (data as any)?.user ?? data;
+
+        if (!mounted) return;
 
         if (user?.name) setFullName(user.name);
         if (user?.role) setRole(user.role);
@@ -210,16 +231,23 @@ export default function LoginPage() {
           setProfileOpen(true);
         } else {
           localStorage.setItem('user', JSON.stringify(user));
+          
+          // Use full page navigation to ensure backend cookie is available for middleware
           if (isCandidateCtx && candidateToken) {
-            router.push(`/test/${encodeURIComponent(candidateToken)}`);
+            window.location.href = `/test/${encodeURIComponent(candidateToken)}`;
           } else {
-            router.push('/upload');
+            window.location.href = '/upload';
           }
         }
-      } catch {
-        setProfileOpen(true);
+      } catch (err: any) {
+        if (mounted) {
+          setError(err?.message || 'Failed to complete authentication. Please try again.');
+          setProfileOpen(false);
+        }
       }
     })();
+
+    return () => { mounted = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, isCandidateCtx, candidateToken]);
 
@@ -248,10 +276,11 @@ export default function LoginPage() {
       localStorage.setItem('user', JSON.stringify(user));
       setProfileOpen(false);
 
+      // Use full page navigation to ensure backend cookie is available for middleware
       if (isCandidateCtx && candidateToken) {
-        router.push(`/test/${encodeURIComponent(candidateToken)}`);
+        window.location.href = `/test/${encodeURIComponent(candidateToken)}`;
       } else {
-        router.push('/upload');
+        window.location.href = '/upload';
       }
     } catch (err: any) {
       setProfileError(err.message || 'Failed to save your profile');

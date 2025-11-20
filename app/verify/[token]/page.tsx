@@ -60,15 +60,22 @@ export default function VerifyPage({
       try {
         const res = await fetch(url, {
           method: 'GET',
-          redirect: 'follow',
+          redirect: 'manual', // Handle redirects manually to check status
           credentials: 'include',
           cache: 'no-store',
           headers: { Accept: 'application/json' },
         });
 
-        // If backend issues 3xx to FE login, navigate locally
-        if (res.redirected || (res.status >= 300 && res.status < 400)) {
-          if (!cancelled) router.replace('/login?verified=1');
+        // If backend issues 3xx redirect, navigate locally
+        if (res.status >= 300 && res.status < 400) {
+          if (!cancelled) {
+            const location = res.headers.get('Location');
+            if (location && location.includes('/login')) {
+              router.replace('/login?verified=1');
+            } else {
+              router.replace('/login?verified=1');
+            }
+          }
           return;
         }
 
@@ -77,23 +84,16 @@ export default function VerifyPage({
           const msg =
             (data as any)?.detail ||
             (data as any)?.message ||
-            'Verification failed';
+            `Verification failed (${res.status})`;
           throw new Error(msg);
         }
 
-        // 200 OK case (backend returned JSON or empty)
-        try {
-          const data = await res.json();
-          const msg = data?.message || 'Email verified successfully';
-          if (!cancelled) {
-            setResult({ ok: true, message: msg });
-            setStatus('done');
-          }
-        } catch {
-          if (!cancelled) {
-            setResult({ ok: true, message: 'Email verified successfully' });
-            setStatus('done');
-          }
+        // 200 OK case (backend returned JSON)
+        const data = await safeJson(res);
+        const msg = (data as any)?.message || (data as any)?.ok ? 'Email verified successfully' : 'Verification completed';
+        if (!cancelled) {
+          setResult({ ok: true, message: msg });
+          setStatus('done');
         }
       } catch (err: any) {
         if (!cancelled) {

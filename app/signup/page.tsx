@@ -99,7 +99,7 @@ export default function SignupPage() {
     setIsLoading(true);
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/signup`,
+        `${API_BASE}/auth/signup`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -266,7 +266,7 @@ export default function SignupPage() {
                         value={formData.firstName}
                         onChange={handleChange}
                         className="input pl-10 py-3"
-                        placeholder="Ayesha"
+                        placeholder="Zafir"
                       />
                     </div>
                   </div>
@@ -284,7 +284,7 @@ export default function SignupPage() {
                         value={formData.lastName}
                         onChange={handleChange}
                         className="input pl-10 py-3"
-                        placeholder="Khan"
+                        placeholder="Hassan"
                       />
                     </div>
                   </div>
@@ -304,7 +304,7 @@ export default function SignupPage() {
                       value={formData.email}
                       onChange={handleChange}
                       className="input pl-10 py-3"
-                      placeholder="you@company.com"
+                      placeholder="you@gmail.com"
                     />
                   </div>
                 </div>

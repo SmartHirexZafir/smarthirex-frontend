@@ -78,10 +78,10 @@ function extractPathToken(req: NextRequest, base: '/test/' | '/verify/'): string
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  // ✅ Tokenized access: /test/[token] (candidate) and /verify/[token]
-  if (pathname.startsWith('/test/') || pathname.startsWith('/verify/')) {
-    const isTest = pathname.startsWith('/test/');
-    const token = extractPathToken(req, isTest ? '/test/' as const : '/verify/' as const);
+  // ✅ Tokenized access: /test/[token] (candidate) requires JWT verification
+  // ✅ /verify/[token] (email verification) uses UUID tokens, not JWTs - pass through to backend
+  if (pathname.startsWith('/test/')) {
+    const token = extractPathToken(req, '/test/' as const);
 
     const valid = token ? await verifySignedTokenHS256(token, TEST_TOKEN_SECRET) : false;
 
@@ -91,15 +91,18 @@ export async function middleware(req: NextRequest) {
       loginUrl.searchParams.set('next', nextPath);
 
       // Preserve candidate role + token on redirects originating from test links
-      if (isTest) {
-        loginUrl.searchParams.set('as', 'candidate');
-        if (token) loginUrl.searchParams.set('token', token);
-      }
+      loginUrl.searchParams.set('as', 'candidate');
+      if (token) loginUrl.searchParams.set('token', token);
 
       return NextResponse.redirect(loginUrl);
     }
 
     // Valid signed token -> allow through without auth cookie
+    return NextResponse.next();
+  }
+
+  // Email verification tokens are UUIDs validated by backend - allow through
+  if (pathname.startsWith('/verify/')) {
     return NextResponse.next();
   }
 

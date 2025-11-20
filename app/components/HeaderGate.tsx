@@ -39,12 +39,15 @@ const MARKETING_ROUTES: RegExp[] = [
   /^\/signup(\/.*)?$/,
 ];
 
-// simple client-side check for presence of the backend auth cookie
-const AUTH_COOKIE = "token";
-function hasAuthCookie(): boolean {
-  if (typeof document === "undefined") return false;
-  // fast path: exact cookie name match
-  return document.cookie.split("; ").some((c) => c.startsWith(`${AUTH_COOKIE}=`));
+// Check for auth token in localStorage (backend sets httponly cookie, but we can't read it client-side)
+// Middleware handles actual auth checks server-side
+function hasAuthToken(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return !!localStorage.getItem("token");
+  } catch {
+    return false;
+  }
 }
 
 function useFlags() {
@@ -59,23 +62,25 @@ export function AppHeaderGate({ children }: PropsWithChildren) {
   const { isApp, pathname } = useFlags();
   const router = useRouter();
   const [authed, setAuthed] = useState<boolean>(false);
+  const [checking, setChecking] = useState<boolean>(true);
 
-  // initialize and refresh auth state on visibility changes (cookie may change after login/logout)
+  // Initialize auth state from localStorage (middleware handles actual auth server-side)
   useEffect(() => {
-    setAuthed(hasAuthCookie());
-    const onVis = () => setAuthed(hasAuthCookie());
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
+    setAuthed(hasAuthToken());
+    setChecking(false);
+    
+    // Listen for storage changes (e.g., after login/logout)
+    const onStorageChange = (e: StorageEvent) => {
+      if (e.key === "token") {
+        setAuthed(!!e.newValue);
+      }
+    };
+    window.addEventListener("storage", onStorageChange);
+    
+    return () => {
+      window.removeEventListener("storage", onStorageChange);
+    };
   }, []);
-
-  // Optional guard: if user is on an app route but not authenticated, route to /login
-  useEffect(() => {
-    if (isApp && !authed) {
-      const search = typeof window !== "undefined" ? window.location.search : "";
-      const next = `${pathname}${search}`;
-      router.replace(`/login?next=${encodeURIComponent(next)}`);
-    }
-  }, [isApp, authed, pathname, router]);
 
   if (!isApp) return null;
   if (!authed) return null; // hide restricted nav links when not authenticated

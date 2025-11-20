@@ -141,11 +141,15 @@ export default function UploadPage() {
   // ✅ Logout: call backend, clear cookies/storage, and broadcast navigation intent (Req. 2)
   const handleLogout = useCallback(async () => {
     try {
-      // Best-effort server-side logout
-      await fetch(`${API_BASE}/logout`, {
+      // Best-effort server-side logout (use auth router endpoint for proper JWT revocation)
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
+      await fetch(`${API_BASE}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
       });
     } catch {
       // ignore network errors; proceed with client-side cleanup

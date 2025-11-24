@@ -25,6 +25,7 @@ export const useGlobalLoading = () => useContext(LoadingCtx);
 export default function GlobalLoadingProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [count, setCount] = useState(0);
+  const [isNavigating, setIsNavigating] = useState(false); // ✅ State to track navigation for re-renders
 
   const navInFlight = useRef(false);
   const navTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -42,11 +43,13 @@ export default function GlobalLoadingProvider({ children }: { children: React.Re
   const startNav = () => {
     if (navInFlight.current) return;
     navInFlight.current = true;
+    setIsNavigating(true); // ✅ Update state to trigger re-render
     inc();
     if (navTimeout.current) clearTimeout(navTimeout.current);
     navTimeout.current = setTimeout(() => {
       if (navInFlight.current) {
         navInFlight.current = false;
+        setIsNavigating(false); // ✅ Update state
         dec();
       }
     }, 6000);
@@ -55,6 +58,7 @@ export default function GlobalLoadingProvider({ children }: { children: React.Re
   const endNav = () => {
     if (!navInFlight.current) return;
     navInFlight.current = false;
+    setIsNavigating(false); // ✅ Update state to trigger re-render
     if (navTimeout.current) {
       clearTimeout(navTimeout.current);
       navTimeout.current = null;
@@ -169,25 +173,27 @@ export default function GlobalLoadingProvider({ children }: { children: React.Re
 
   const value = useMemo(() => ({ isLoading: count > 0, trackPromise }), [count]);
 
-  // (Req. 5) Lock body scroll while overlay is shown; restore on hide/unmount
+  // ✅ Only lock scroll for navigation, NOT for chatbot filtering or other async operations
+  // Navigation is tracked via isNavigating state, so we only lock scroll when that's active
   useEffect(() => {
     if (typeof document === "undefined") return;
-    const originalOverflow = document.body.style.overflow;
-    if (count > 0) {
+    
+    // Only lock scroll during actual navigation, not during general loading (chatbot, etc.)
+    if (count > 0 && isNavigating) {
+      const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = originalOverflow || "";
+      return () => {
+        document.body.style.overflow = originalOverflow || "";
+      };
     }
-    return () => {
-      document.body.style.overflow = originalOverflow || "";
-    };
-  }, [count]);
+    // For non-navigation loading (chatbot filtering), allow free scrolling
+  }, [count, isNavigating]);
 
   return (
     <LoadingCtx.Provider value={value}>
       {children}
-      {/* (Req. 5) Overlay mounts to a portal inside LoaderOverlay and covers viewport */}
-      {count > 0 && <LoaderOverlay fullscreen />}
+      {/* ✅ Overlay: Don't lock scroll for chatbot filtering, only for navigation */}
+      {count > 0 && <LoaderOverlay fullscreen lockScroll={isNavigating} />}
     </LoadingCtx.Provider>
   );
 }

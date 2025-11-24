@@ -6,48 +6,73 @@ import { createPortal } from "react-dom";
 export default function LoaderOverlay({
   fullscreen = false,
   label = "Loading…",
+  lockScroll = true,
 }: {
   fullscreen?: boolean;
   label?: string;
+  lockScroll?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  // ✅ Only lock scroll if explicitly requested (not for chatbot filtering)
   useEffect(() => {
-    if (!mounted || !fullscreen) return;
+    if (!mounted || !fullscreen || !lockScroll) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
-  }, [mounted, fullscreen]);
+  }, [mounted, fullscreen, lockScroll]);
 
   const overlay = useMemo(
     () => (
-      <div className="fixed inset-0 z-[10000] grid place-items-center" role="status" aria-live="polite">
-        <div className="absolute inset-0 bg-[hsl(var(--background)/.55)] backdrop-blur-md" />
-        <div className="relative flex flex-col items-center">
-          <div className="relative h-28 w-28">
-            <span className="absolute inset-0 rounded-full animate-neon-spin"
-              style={{background:"conic-gradient(from 0deg, hsl(var(--g1)) 0 120deg, transparent 120deg 180deg, hsl(var(--g2)) 180deg 300deg, transparent 300deg 360deg)",mask:"radial-gradient(farthest-side, transparent 68%, #000 69%)",WebkitMask:"radial-gradient(farthest-side, transparent 68%, #000 69%)"}}/>
-            <span className="absolute inset-3 rounded-full animate-neon-spin-ccw"
-              style={{background:"conic-gradient(from 90deg, transparent 0 40deg, hsl(var(--g3)) 40deg 160deg, transparent 160deg 220deg, hsl(var(--g2)) 220deg 340deg, transparent 340deg 360deg)",mask:"radial-gradient(farthest-side, transparent 62%, #000 63%)",WebkitMask:"radial-gradient(farthest-side, transparent 62%, #000 63%)"}}/>
-            <span className="absolute inset-6 rounded-full animate-neon-spin"
-              style={{background:"conic-gradient(from 210deg, hsl(var(--g2)/.8) 0 20deg, transparent 20deg 200deg, hsl(var(--g1)/.8) 200deg 240deg, transparent 240deg 360deg)",mask:"radial-gradient(farthest-side, transparent 56%, #000 57%)",WebkitMask:"radial-gradient(farthest-side, transparent 56%, #000 57%)"}}/>
-            <span className="absolute inset-8 rounded-full bg-[hsl(var(--card)/.6)] ring-1 ring-[hsl(var(--border)/.6)] backdrop-blur-xl animate-neon-pulse" />
+      <div 
+        className="fixed inset-0 z-[99999] grid place-items-center" 
+        role="status" 
+        aria-live="polite"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          width: '100vw',
+          height: '100vh',
+          margin: 0,
+          padding: 0,
+        }}
+      >
+        <div 
+          className="absolute inset-0 bg-[hsl(var(--background)/.75)] backdrop-blur-sm transition-opacity duration-300" 
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100%',
+            height: '100%',
+          }}
+        />
+        <div className="relative flex flex-col items-center gap-4 z-10">
+          {/* ✅ Modern, clean spinner design */}
+          <div className="relative h-16 w-16">
+            {/* Outer ring - smooth rotation */}
+            <div 
+              className="absolute inset-0 rounded-full border-4 border-transparent border-t-[hsl(var(--primary))] border-r-[hsl(var(--primary))] animate-spin"
+              style={{ animationDuration: '1s' }}
+            />
+            {/* Inner ring - counter rotation */}
+            <div 
+              className="absolute inset-2 rounded-full border-3 border-transparent border-b-[hsl(var(--primary)/.6)] border-l-[hsl(var(--primary)/.6)] animate-spin"
+              style={{ animationDuration: '0.8s', animationDirection: 'reverse' }}
+            />
+            {/* Center dot - pulse */}
+            <div className="absolute inset-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[hsl(var(--primary))] animate-pulse" />
           </div>
-          <div className="mt-5 text-sm tracking-wide text-[hsl(var(--muted-foreground))]">
-            <span className="inline-block gradient-text">{label}</span>
+          <div className="text-sm font-medium text-[hsl(var(--foreground))] tracking-wide">
+            {label}
           </div>
         </div>
-        <style jsx>{`
-          @keyframes neonSpin { to { transform: rotate(360deg); } }
-          @keyframes neonSpinCcw { to { transform: rotate(-360deg); } }
-          @keyframes neonPulse { 0%,100%{opacity:.92} 50%{opacity:1} }
-        `}</style>
-        <style jsx global>{`
-          .animate-neon-spin { animation: neonSpin 1.15s linear infinite; }
-          .animate-neon-spin-ccw { animation: neonSpinCcw 1.6s linear infinite; }
-          .animate-neon-pulse { animation: neonPulse 1.8s ease-in-out infinite; }
-        `}</style>
       </div>
     ),
     [label]
@@ -55,6 +80,7 @@ export default function LoaderOverlay({
 
   if (fullscreen) {
     if (!mounted) return null;
+    // ✅ Always portal to body to ensure it covers entire viewport regardless of scroll
     return createPortal(overlay, document.body);
   }
   return overlay;

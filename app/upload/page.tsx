@@ -47,11 +47,45 @@ interface Candidate {
   match_type?: 'exact' | 'close';
 }
 
+const STATE_STORAGE_KEY = 'shx_upload_page_state';
+
+type SavedState = {
+  candidates: Candidate[];
+  activePrompt: string;
+  timestamp: number;
+};
+
 export default function UploadPage() {
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  
+  // ✅ Fix hydration: Always start with same initial values (server and client must match)
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [activePrompt, setActivePrompt] = useState<string>('Show all available candidates');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isMounted, setIsMounted] = useState<boolean>(false);
+
+  // ✅ Restore state from localStorage ONLY after mount (prevents hydration mismatch)
+  useEffect(() => {
+    setIsMounted(true);
+    try {
+      const saved = localStorage.getItem(STATE_STORAGE_KEY);
+      if (saved) {
+        const parsed: SavedState = JSON.parse(saved);
+        // Only restore if saved within last 24 hours
+        const now = Date.now();
+        if (now - parsed.timestamp < 24 * 60 * 60 * 1000) {
+          if (parsed.candidates && parsed.candidates.length > 0) {
+            setCandidates(parsed.candidates);
+          }
+          if (parsed.activePrompt) {
+            setActivePrompt(parsed.activePrompt);
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }, []);
 
   // Tracks the prompt currently being fulfilled (prevents stale updates)
   const pendingPromptRef = useRef<string>('');
@@ -62,8 +96,38 @@ export default function UploadPage() {
     []
   );
 
+  // Save state to localStorage whenever candidates or prompt changes
   useEffect(() => {
-    // reserved for future init
+    if (typeof window === 'undefined') return;
+    try {
+      const state: SavedState = {
+        candidates,
+        activePrompt,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      // Ignore storage errors (e.g., quota exceeded)
+    }
+  }, [candidates, activePrompt]);
+
+  // Clear saved state when component unmounts (user navigates away permanently)
+  useEffect(() => {
+    return () => {
+      // Don't clear on unmount - keep state for navigation back
+    };
+  }, []);
+
+  // ✅ Fix auto-scroll: Only scroll to top on mount, and prevent any scroll during hydration
+  useEffect(() => {
+    // Use requestAnimationFrame to ensure DOM is ready, but prevent scroll during initial render
+    if (typeof window !== 'undefined') {
+      // Small delay to ensure page is fully rendered before scrolling
+      const timeoutId = setTimeout(() => {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      }, 0);
+      return () => clearTimeout(timeoutId);
+    }
   }, []);
 
   const handleFileUpload = useCallback((files: any[]) => {

@@ -89,10 +89,45 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
     const allDone = totalCount > 0 && processingFiles.every((f) => f.status !== 'processing');
     if (!allDone) return;
 
-    // build one clear summary toast
-    const summary = `Uploaded ${agg.inserted} of ${agg.received} · Duplicates: ${agg.duplicates} · Unsupported: ${agg.unsupported} · Empty: ${agg.empty} · Too large: ${agg.too_large} · Parse errors: ${agg.parse_error}`;
+    // Build comprehensive summary with complete breakdown
+    const totalCVs = agg.received;
+    const successful = agg.inserted;
+    const failed = totalCVs - successful;
+    const duplicates = agg.duplicates;
+    const invalidFormats = agg.unsupported;
+    const oversized = agg.too_large;
+    const parseErrors = agg.parse_error;
+    const empty = agg.empty;
+    const otherErrors = failed - duplicates - invalidFormats - oversized - parseErrors - empty;
 
-    success(summary, undefined, 3000);
+    // Determine toast type: error if any failures, warning if partial success, success if all succeeded
+    const toastType = failed > 0 ? (successful === 0 ? 'error' : 'warning') : 'success';
+    
+    // Build detailed message
+    let summaryParts: string[] = [];
+    summaryParts.push(`Total CVs: ${totalCVs}`);
+    summaryParts.push(`Successfully uploaded: ${successful}`);
+    
+    if (failed > 0) {
+      summaryParts.push(`Failed uploads: ${failed}`);
+      if (duplicates > 0) summaryParts.push(`Duplicates: ${duplicates}`);
+      if (invalidFormats > 0) summaryParts.push(`Invalid formats: ${invalidFormats}`);
+      if (oversized > 0) summaryParts.push(`Oversized files: ${oversized}`);
+      if (parseErrors > 0) summaryParts.push(`Parse errors: ${parseErrors}`);
+      if (empty > 0) summaryParts.push(`Empty files: ${empty}`);
+      if (otherErrors > 0) summaryParts.push(`Other errors: ${otherErrors}`);
+    }
+
+    const summary = summaryParts.join(' | ');
+
+    // Show toast with appropriate type and 3 second duration
+    if (toastType === 'error') {
+      error(summary, 'Upload Failed', 3000);
+    } else if (toastType === 'warning') {
+      success(summary, 'Upload Completed with Issues', 3000);
+    } else {
+      success(summary, 'Upload Successful', 3000);
+    }
 
     const t2 = window.setTimeout(() => {
       setShowProgress(false);
@@ -113,7 +148,7 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
       timersRef.current.forEach((id) => window.clearTimeout(id));
       timersRef.current = [];
     };
-  }, [processingFiles, totalCount, agg, success]);
+  }, [processingFiles, totalCount, agg, success, error]);
 
   // ---------- DnD ----------
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
@@ -181,10 +216,10 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
             // all tried
             setProcessingFiles((prev) =>
               prev.map((f) =>
-                f.id === row.id ? { ...f, status: 'error', progress: 0, errorMsg: 'Upload endpoint not reachable' } : f
+                f.id === row.id ? { ...f, status: 'error', progress: 0, errorMsg: 'Network error' } : f
               )
             );
-            error(`Upload failed for ${file.name}`);
+            // Don't show individual error toasts - wait for final summary
             return resolve();
           }
 
@@ -218,13 +253,13 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
             }
 
             const ok = status >= 200 && status < 300;
-            if (!ok) {
+              if (!ok) {
               setProcessingFiles((prev) =>
                 prev.map((f) =>
                   f.id === row.id ? { ...f, status: 'error', progress: 0, errorMsg: 'Upload failed' } : f
                 )
               );
-              error(`Upload failed for ${file.name}`);
+              // Don't show individual error toasts - wait for final summary
               return resolve();
             }
 
@@ -250,24 +285,21 @@ export default function UploadSection({ onFileUpload }: UploadSectionProps) {
               setProcessingFiles((prev) =>
                 prev.map((f) => (f.id === row.id ? { ...f, status: 'completed', progress: 100 } : f))
               );
-              if (!firstSuccessToastRef.current) {
-                firstSuccessToastRef.current = true;
-                success('Upload started. Processing…', undefined, 2000);
-              }
+              // Don't show intermediate success toast - wait for final summary
             } else {
               // show reason if we have it
               const reason =
-                dup ? 'duplicate' :
-                unsup ? 'unsupported' :
-                empty ? 'empty' :
-                tooLarge ? 'too large' :
-                parseErr ? 'parse error' : 'skipped';
+                dup ? 'Duplicate CV' :
+                unsup ? 'Wrong file format' :
+                empty ? 'Empty file' :
+                tooLarge ? 'File too large' :
+                parseErr ? 'Parse error' : 'Upload failed';
               setProcessingFiles((prev) =>
                 prev.map((f) =>
                   f.id === row.id ? { ...f, status: 'error', progress: 0, errorMsg: reason } : f
                 )
               );
-              error(`Upload failed for ${file.name}`);
+              // Don't show individual error toasts - wait for final summary
             }
             return resolve();
           };

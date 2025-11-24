@@ -170,19 +170,103 @@ export default function ChatbotSection({
   const { trackPromise } = useGlobalLoading();
 
   const formatTime = () => new Date().toLocaleTimeString();
-  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  useEffect(
-    () => setMessages((prev) => prev.map((m) => (m.timestamp ? m : { ...m, timestamp: formatTime() }))),
-    []
-  );
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  
+  // ✅ Fix auto-scroll: Scroll only within messages container, not entire page
+  const scrollToBottom = () => {
+    // Only scroll the messages container, not the entire page
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    } else if (messagesEndRef.current) {
+      // Fallback: use scrollIntoView but with block: 'nearest' to prevent page scroll
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  };
+  
+  const initialMountRef = useRef(true);
+  const lastMessageCountRef = useRef(0);
+  
+  // ✅ Fix hydration: Only set timestamps after mount to prevent server/client mismatch
+  const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    setIsMounted(true);
+    // Set timestamps only after mount
+    if (typeof window !== 'undefined') {
+      setMessages((prev) => prev.map((m) => (m.timestamp ? m : { ...m, timestamp: formatTime() })));
+    }
+  }, []);
+  
+  // ✅ Fix auto-scroll: Only scroll when NEW messages are added (not on initial mount or restore)
+  useEffect(() => {
+    if (!isMounted) return;
+    
+    const currentCount = messages.length;
+    const previousCount = lastMessageCountRef.current;
+    
+    // Only scroll if:
+    // 1. Not the initial mount (initialMountRef.current === false)
+    // 2. Message count actually increased (new message added)
+    if (!initialMountRef.current && currentCount > previousCount) {
+      scrollToBottom();
+    }
+    
+    // Update refs
+    lastMessageCountRef.current = currentCount;
+    if (initialMountRef.current) {
+      // Mark initial mount as complete after first render
+      initialMountRef.current = false;
+    }
+  }, [messages, isMounted]);
 
-  // Seed the prompt field when provided (for “Re-run Prompt” flow)
+  // Seed the prompt field when provided (for "Re-run Prompt" flow)
+  // Also restore filter state from localStorage (only after mount to prevent hydration issues)
   useEffect(() => {
+    if (!isMounted) return;
+    
     if (activePrompt) setInputValue(activePrompt);
-  }, [activePrompt]);
+    
+    // Restore filter state from localStorage (only after mount)
+    try {
+      const saved = localStorage.getItem('shx_chatbot_filters');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.roleInput) setRoleInput(parsed.roleInput);
+        if (parsed.expMin) setExpMin(parsed.expMin);
+        if (parsed.expMax) setExpMax(parsed.expMax);
+        if (parsed.educationInput) setEducationInput(parsed.educationInput);
+        if (parsed.skillsInput) setSkillsInput(parsed.skillsInput);
+        if (parsed.projectsInput) setProjectsInput(parsed.projectsInput);
+        if (parsed.locationInput) setLocationInput(parsed.locationInput);
+        if (parsed.phrasesInclude) setPhrasesInclude(parsed.phrasesInclude);
+        if (parsed.phrasesExclude) setPhrasesExclude(parsed.phrasesExclude);
+        if (parsed.phrasesExact) setPhrasesExact(parsed.phrasesExact);
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }, [activePrompt, isMounted]);
+
+  // Save filter state to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const filterState = {
+        roleInput,
+        expMin,
+        expMax,
+        educationInput,
+        skillsInput,
+        projectsInput,
+        locationInput,
+        phrasesInclude,
+        phrasesExclude,
+        phrasesExact,
+      };
+      localStorage.setItem('shx_chatbot_filters', JSON.stringify(filterState));
+    } catch (e) {
+      // Ignore storage errors
+    }
+  }, [roleInput, expMin, expMax, educationInput, skillsInput, projectsInput, locationInput, phrasesInclude, phrasesExclude, phrasesExact]);
 
   // checkbox change (preserve selection order; remove on uncheck)
   const toggleFilter = (k: FilterKey) => {
@@ -794,7 +878,13 @@ export default function ChatbotSection({
         </div>
 
         {/* Messages */}
-        <div className="px-6 py-6 space-y-4 max-h-96 overflow-y-auto" role="log" aria-live="polite" aria-relevant="additions">
+        <div 
+          ref={messagesContainerRef}
+          className="px-6 py-6 space-y-4 max-h-96 overflow-y-auto" 
+          role="log" 
+          aria-live="polite" 
+          aria-relevant="additions"
+        >
           {messages.map((message) => (
             <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div

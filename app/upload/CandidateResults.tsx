@@ -1,7 +1,7 @@
 // smarthirex-frontend-main/app/upload/CandidateResults.tsx
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { getMatchScore } from '@/lib/score';
 
@@ -71,9 +71,9 @@ export default function CandidateResults({
   const [promptChanging, setPromptChanging] = useState(false);
   const lastPromptRef = useRef<string>('');
 
-  // ✅ Selection state (Req. 7)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [saving, setSaving] = useState(false);
+  // Auto-save state (no manual selection needed)
+  const [lastSavedPrompt, setLastSavedPrompt] = useState<string>('');
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
 
   const itemsPerPage = 6;
 
@@ -123,18 +123,67 @@ export default function CandidateResults({
       setPromptChanging(true);        // show skeleton
       setDisplayed([]);               // clear old candidates immediately
       setCurrentPage(1);
-      setSelectedIds(new Set());      // clear selection on new prompt
+      setLastSavedPrompt('');        // reset saved prompt tracking
     }
   }, [activePrompt]);
 
-  // When processing ends, commit the latest candidates to UI
-  useEffect(() => {
-    if (!isProcessing) {
-      setDisplayed(Array.isArray(candidates) ? candidates : []);
-      setPromptChanging(false);
-      setSelectedIds(new Set()); // reset selection for new results
+  // Auto-save function: saves all displayed candidates to history
+  const autoSaveCandidates = useCallback(async (candidatesToSave: Candidate[], prompt: string) => {
+    if (isAutoSaving || !prompt || prompt === lastSavedPrompt) return;
+    
+    setIsAutoSaving(true);
+    try {
+      // Extract all candidate IDs
+      const candidateIds = candidatesToSave
+        .map((c) => String(c._id ?? c.id))
+        .filter((id) => id && id !== 'undefined' && id !== 'null');
+      
+      if (candidateIds.length === 0) {
+        setIsAutoSaving(false);
+        return;
+      }
+
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const res = await fetch(saveUrl, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          selectedIds: candidateIds,
+          prompt: prompt,
+        }),
+      });
+
+      if (res.ok) {
+        setLastSavedPrompt(prompt);
+      }
+    } catch (error) {
+      // Silently fail - auto-save should not disrupt user experience
+      console.error('Auto-save failed:', error);
+    } finally {
+      setIsAutoSaving(false);
     }
-  }, [isProcessing, candidates]);
+  }, [isAutoSaving, lastSavedPrompt, saveUrl]);
+
+  // When processing ends, commit the latest candidates to UI and auto-save
+  useEffect(() => {
+    if (!isProcessing && Array.isArray(candidates) && candidates.length > 0) {
+      setDisplayed(candidates);
+      setPromptChanging(false);
+      
+      // Auto-save: Save all displayed candidates to history if prompt changed
+      if (activePrompt && activePrompt !== lastSavedPrompt) {
+        autoSaveCandidates(candidates, activePrompt);
+      }
+    } else if (!isProcessing) {
+      setDisplayed([]);
+      setPromptChanging(false);
+    }
+  }, [isProcessing, candidates, activePrompt, lastSavedPrompt, autoSaveCandidates]);
 
   // Clean/sort candidates for rendering
   const cleanedCandidates = useMemo(() => {
@@ -266,35 +315,6 @@ export default function CandidateResults({
     return [{ role: '—' }, { role: '—' }];
   };
 
-  // ✅ Toggle selection for a candidate (Req. 7)
-  const toggleSelected = (cid: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(cid)) next.delete(cid);
-      else next.add(cid);
-      return next;
-    });
-  };
-
-  // ✅ Save selected to backend (Req. 7)
-  const saveSelected = async () => {
-    if (selectedIds.size === 0) return;
-    setSaving(true);
-    try {
-      const res = await fetch(saveUrl, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ selectedIds: Array.from(selectedIds) }),
-      });
-      // keep UI unchanged; no toast required by spec — silent success/failure
-      await res.text().catch(() => null);
-    } catch {
-      // swallow errors to avoid UI changes
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <section className="card-glass relative overflow-hidden animate-rise-in" aria-labelledby="filtered-title">
@@ -322,30 +342,15 @@ export default function CandidateResults({
               )}
             </div>
 
-            {/* ✅ Save selected (Req. 7) */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                {selectedIds.size} selected
-              </span>
-              <button
-                onClick={saveSelected}
-                disabled={selectedIds.size === 0 || saving}
-                className="btn btn-primary text-sm whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                aria-label="Save selected candidates"
-              >
-                {saving ? (
-                  <span className="inline-flex items-center gap-2">
-                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-[hsl(var(--primary-foreground))/0.7] border-b-transparent" />
-                    Saving…
-                  </span>
-                ) : (
-                  <>
-                    <i className="ri-save-3-line" />
-                    Save Selected
-                  </>
-                )}
-              </button>
-            </div>
+            {/* Auto-save indicator (no manual save button) */}
+            {isAutoSaving && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                  <span className="animate-spin inline-block h-3 w-3 border-2 border-[hsl(var(--primary))] border-b-transparent rounded-full mr-1" />
+                  Auto-saving...
+                </span>
+              </div>
+            )}
           </div>
         </header>
 
@@ -449,23 +454,12 @@ export default function CandidateResults({
                       ? 'Close match'
                       : null;
 
-                  const checked = selectedIds.has(id);
-
                   return (
                     <article
                       key={id}
                       className="surface glass border border-border rounded-2xl p-6 hover:shadow-glow transition-all duration-300 h-full flex flex-col"
                     >
                       <div className="mb-4 flex items-start gap-4">
-                        {/* ✅ Selection checkbox (Req. 7) */}
-                        <input
-                          type="checkbox"
-                          className="mt-2 h-4 w-4 rounded border-border text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]"
-                          checked={checked}
-                          onChange={() => toggleSelected(id)}
-                          aria-label={`Select ${name}`}
-                        />
-
                         <Avatar name={name} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-3">

@@ -71,10 +71,6 @@ export default function CandidateResults({
   const [promptChanging, setPromptChanging] = useState(false);
   const lastPromptRef = useRef<string>('');
 
-  // Auto-save state (no manual selection needed)
-  const [lastSavedPrompt, setLastSavedPrompt] = useState<string>('');
-  const [isAutoSaving, setIsAutoSaving] = useState(false);
-
   const itemsPerPage = 6;
 
   // Helpers
@@ -123,67 +119,23 @@ export default function CandidateResults({
       setPromptChanging(true);        // show skeleton
       setDisplayed([]);               // clear old candidates immediately
       setCurrentPage(1);
-      setLastSavedPrompt('');        // reset saved prompt tracking
     }
   }, [activePrompt]);
 
-  // Auto-save function: saves all displayed candidates to history
-  const autoSaveCandidates = useCallback(async (candidatesToSave: Candidate[], prompt: string) => {
-    if (isAutoSaving || !prompt || prompt === lastSavedPrompt) return;
-    
-    setIsAutoSaving(true);
-    try {
-      // Extract all candidate IDs
-      const candidateIds = candidatesToSave
-        .map((c) => String(c._id ?? c.id))
-        .filter((id) => id && id !== 'undefined' && id !== 'null');
-      
-      if (candidateIds.length === 0) {
-        setIsAutoSaving(false);
-        return;
-      }
-
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const res = await fetch(saveUrl, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          selectedIds: candidateIds,
-          prompt: prompt,
-        }),
-      });
-
-      if (res.ok) {
-        setLastSavedPrompt(prompt);
-      }
-    } catch (error) {
-      // Silently fail - auto-save should not disrupt user experience
-      console.error('Auto-save failed:', error);
-    } finally {
-      setIsAutoSaving(false);
-    }
-  }, [isAutoSaving, lastSavedPrompt, saveUrl]);
-
-  // When processing ends, commit the latest candidates to UI and auto-save
+  // When processing ends, commit the latest candidates to UI
+  // NOTE: Auto-save is disabled here because the backend already saves history
+  // automatically in the /chatbot/query endpoint when intent is "filter_cv".
+  // This prevents duplicate history entries.
   useEffect(() => {
     if (!isProcessing && Array.isArray(candidates) && candidates.length > 0) {
       setDisplayed(candidates);
       setPromptChanging(false);
-      
-      // Auto-save: Save all displayed candidates to history if prompt changed
-      if (activePrompt && activePrompt !== lastSavedPrompt) {
-        autoSaveCandidates(candidates, activePrompt);
-      }
+      // Backend handles history saving, so we don't auto-save here
     } else if (!isProcessing) {
       setDisplayed([]);
       setPromptChanging(false);
     }
-  }, [isProcessing, candidates, activePrompt, lastSavedPrompt, autoSaveCandidates]);
+  }, [isProcessing, candidates]);
 
   // Clean/sort candidates for rendering
   const cleanedCandidates = useMemo(() => {
@@ -342,15 +294,6 @@ export default function CandidateResults({
               )}
             </div>
 
-            {/* Auto-save indicator (no manual save button) */}
-            {isAutoSaving && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                  <span className="animate-spin inline-block h-3 w-3 border-2 border-[hsl(var(--primary))] border-b-transparent rounded-full mr-1" />
-                  Auto-saving...
-                </span>
-              </div>
-            )}
           </div>
         </header>
 

@@ -66,12 +66,10 @@ export default function HistoryPage() {
   }, []);
 
   // Capture click coordinates (if provided) and open Results modal
+  // ✅ Always center large modals - don't use anchor positioning for ResultsModal
   const handleViewResults = (history: any, ev?: MouseEvent | React.MouseEvent) => {
-    if (ev && 'clientX' in ev && 'clientY' in ev) {
-      setAnchor({ x: ev.clientX, y: ev.clientY });
-    } else {
-      setAnchor(null);
-    }
+    // Always center the ResultsModal (it's large, so anchor positioning causes cutoff)
+    setAnchor(null);
     setSelectedHistory(history);
     setShowModal(true);
   };

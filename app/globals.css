@@ -164,7 +164,12 @@ html, body { transform: none !important; }
   *,*::before,*::after { box-sizing: border-box; }
   * { @apply border-border; }
   html, body { height: 100%; width: 100%; }
-  html, body { overflow-x: hidden; }
+  html, body { 
+    overflow-x: hidden; 
+    /* ✅ Prevent scroll-related layout shifts */
+    scroll-behavior: smooth;
+    overscroll-behavior-y: contain;
+  }
   html { scrollbar-gutter: stable; }
   body {
     @apply bg-background text-foreground antialiased;
@@ -462,11 +467,18 @@ html, body { transform: none !important; }
   .modal {
     @apply fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 card p-6 shadow-glow max-w-lg w-[92vw] animate-rise-in;
     z-index: var(--z-modal);
+    /* ✅ Prevent scroll-related layout shifts */
+    overscroll-behavior: contain;
+    will-change: transform;
   }
 
   /* Nav — glassy */
   .nav {
     @apply sticky top-0 border-b border-border;
+    /* ✅ Prevent scroll-related layout shifts */
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
     background-color: hsl(var(--background)/.60);
     backdrop-filter: blur(16px) saturate(120%);
     -webkit-backdrop-filter: blur(16px) saturate(120%);

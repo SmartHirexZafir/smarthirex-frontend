@@ -363,19 +363,9 @@ export function createFocusTrap(container: HTMLElement) {
   return () => container.removeEventListener("keydown", onKeydown);
 }
 
-/** Lock body scroll (for modals/drawers). Returns cleanup. */
+/** Lock body scroll - NO-OP: All scroll locking removed */
 export function lockBodyScroll(): () => void {
-  if (!isBrowser) return () => {};
-  const { body } = document;
-  const prevOverflow = body.style.overflow;
-  const prevPaddingRight = body.style.paddingRight;
-  const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
-  body.style.overflow = "hidden";
-  if (scrollBarWidth > 0) body.style.paddingRight = `${scrollBarWidth}px`;
-  return () => {
-    body.style.overflow = prevOverflow;
-    body.style.paddingRight = prevPaddingRight;
-  };
+  return () => {}; // No-op: scroll locking disabled
 }
 
 /* =========================================

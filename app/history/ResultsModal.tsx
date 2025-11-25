@@ -1,7 +1,7 @@
 // app/history/ResultsModal.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Modal from '@/components/ui/Modal';
@@ -21,6 +21,11 @@ type Candidate = {
   skills?: string[];
   title?: string;
   role?: string;
+  predicted_role?: string;
+  category?: string;
+  currentRole?: string;
+  ml_predicted_role?: string;
+  job_role?: string;
 };
 
 type ResultsPayload = {
@@ -113,6 +118,29 @@ export default function ResultsModal({ history, onClose, anchor }: Props) {
     return 'bg-[hsl(var(--destructive)/.15)] text-[hsl(var(--destructive))] border-[hsl(var(--destructive)/.35)]';
   };
 
+  // ✅ Sort candidates by match score (descending - highest first)
+  const sortedCandidates = useMemo(() => {
+    if (!results?.candidates) return [];
+    return [...results.candidates].sort((a, b) => {
+      const scoreA = getMatchScore(a) ?? 0;
+      const scoreB = getMatchScore(b) ?? 0;
+      return scoreB - scoreA; // Descending order
+    });
+  }, [results?.candidates]);
+
+  // ✅ Get predicted role for display
+  const getPredictedRole = (candidate: Candidate): string => {
+    return (
+      candidate.predicted_role ||
+      candidate.job_role ||
+      candidate.role ||
+      candidate.category ||
+      candidate.currentRole ||
+      candidate.ml_predicted_role ||
+      ''
+    ).trim();
+  };
+
   if (!results) return null;
 
   return (
@@ -120,17 +148,17 @@ export default function ResultsModal({ history, onClose, anchor }: Props) {
       open={!!results}
       onClose={onClose}
       labelledBy="results-modal-title"
-      className="p-4 z-modal"
-      anchor={anchor}
+      className="!p-0 z-modal !max-w-none !w-auto"
+      anchor={undefined}
     >
-      <div className="relative max-h-[90vh] overflow-y-auto rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border w-[92vw] max-w-4xl">
-        {/* Header */}
-        <div className="relative p-6">
+      <div className="relative flex flex-col rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border w-[95vw] sm:w-[85vw] lg:w-[80vw] max-w-[56rem]" style={{ maxHeight: '92vh' }}>
+        {/* Header - Fixed */}
+        <div className="relative p-6 border-b border-border shrink-0">
           <div className="absolute inset-0 -z-10 opacity-[.22] bg-[radial-gradient(900px_400px_at_-10%_-20%,hsl(var(--g1)/.6),transparent_60%),radial-gradient(800px_500px_at_120%_-20%,hsl(var(--g2)/.5),transparent_55%),radial-gradient(700px_700px_at_80%_120%,hsl(var(--g3)/.45),transparent_60%)]" />
           <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h2 id="results-modal-title" className="text-2xl font-bold mb-1 gradient-text">Search Results</h2>
-              <p className="truncate text-sm text-muted-foreground">“{results.prompt}”</p>
+              <p className="break-words text-sm text-muted-foreground">"{results.prompt}"</p>
               <p className="mt-1 text-xs text-muted-foreground/90">
                 <i className="ri-time-line mr-1" />
                 {results.timestamp}
@@ -147,13 +175,13 @@ export default function ResultsModal({ history, onClose, anchor }: Props) {
           </div>
         </div>
 
-        {/* Content */}
-        <div className="px-6 pb-2 overflow-y-auto max-h-[60vh]">
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold">{results.totalMatches} Candidates Found</h3>
           </div>
 
-          {results.candidates.length === 0 ? (
+          {sortedCandidates.length === 0 ? (
             <div className="py-14 max-w-2xl mx-auto text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[hsl(var(--g1))] to-[hsl(var(--g3))] text-[hsl(var(--primary-foreground))] shadow-glow">
                 <i className="ri-user-search-line text-2xl" />
@@ -165,7 +193,7 @@ export default function ResultsModal({ history, onClose, anchor }: Props) {
             </div>
           ) : (
             <div className="space-y-4">
-              {results.candidates.map((candidate) => {
+              {sortedCandidates.map((candidate) => {
                 const cid = candidate._id || candidate.id || '';
                 const ms = getMatchScore(candidate);
                 const normalized = Math.round(ms ?? 0);
@@ -173,7 +201,7 @@ export default function ResultsModal({ history, onClose, anchor }: Props) {
                 return (
                   <div
                     key={cid}
-                    className={`rounded-2xl p-4 border transition-all duration-200 bg-card ${
+                    className={`rounded-2xl p-4 border transition-all duration-200 bg-card overflow-hidden ${
                       selectedCandidates.has(cid)
                         ? 'border-[hsl(var(--primary)/.45)] ring-1 ring-[hsl(var(--primary)/.25)] shadow-glow'
                         : 'border-border hover:border-[hsl(var(--border)/.9)]'
@@ -198,6 +226,11 @@ export default function ResultsModal({ history, onClose, anchor }: Props) {
                         <div className="mb-2 flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <h4 className="text-lg font-semibold truncate">{candidate.name}</h4>
+                            {getPredictedRole(candidate) && (
+                              <p className="text-sm font-medium text-[hsl(var(--info))] truncate mt-0.5">
+                                {getPredictedRole(candidate)}
+                              </p>
+                            )}
                             <p className="text-sm text-muted-foreground truncate">{candidate.email}</p>
                           </div>
 
@@ -212,27 +245,22 @@ export default function ResultsModal({ history, onClose, anchor }: Props) {
                         </div>
 
                         {candidate.matchReasons?.length ? (
-                          <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
-                            {candidate.matchReasons.map((r, idx) => (
-                              <li key={idx}>{r}</li>
+                          <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1 mt-2 break-words">
+                            {candidate.matchReasons.slice(0, 3).map((r, idx) => (
+                              <li key={idx} className="break-words">{String(r)}</li>
                             ))}
+                            {candidate.matchReasons.length > 3 && (
+                              <li className="text-xs opacity-70">+{candidate.matchReasons.length - 3} more reasons</li>
+                            )}
                           </ul>
-                        ) : null}
-
-                        {candidate.skills?.length ? (
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {candidate.skills.map((s, idx) => (
-                              <span key={idx} className="chip">{s}</span>
-                            ))}
-                          </div>
                         ) : null}
                       </div>
                     </div>
 
-                    <div className="mt-4 flex items-center gap-2">
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
                       <Link
                         href={`/candidate/${cid}`}
-                        className="btn btn-primary text-sm whitespace-nowrap"
+                        className="btn btn-primary text-sm whitespace-nowrap shrink-0"
                         aria-label={`View ${candidate.name}`}
                       >
                         <i className="ri-eye-line mr-1" />
@@ -241,7 +269,7 @@ export default function ResultsModal({ history, onClose, anchor }: Props) {
 
                       <button
                         onClick={() => goSendTest(candidate)}
-                        className="btn btn-primary text-sm whitespace-nowrap"
+                        className="btn btn-primary text-sm whitespace-nowrap shrink-0"
                         aria-label={`Send Test to ${candidate.name}`}
                       >
                         <i className="ri-file-list-line mr-1" />
@@ -249,7 +277,7 @@ export default function ResultsModal({ history, onClose, anchor }: Props) {
                       </button>
                       <button
                         onClick={() => goScheduleInterview(candidate)}
-                        className="btn btn-primary text-sm whitespace-nowrap"
+                        className="btn btn-primary text-sm whitespace-nowrap shrink-0"
                         aria-label={`Schedule Interview with ${candidate.name}`}
                       >
                         <i className="ri-calendar-event-line mr-1" />
@@ -263,17 +291,17 @@ export default function ResultsModal({ history, onClose, anchor }: Props) {
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-border bg-card">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              {selectedCandidates.size} of {results.candidates.length} candidates selected
+        {/* Footer - Fixed */}
+        <div className="px-6 py-4 border-t border-border bg-card shrink-0">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground whitespace-nowrap">
+              {selectedCandidates.size} of {sortedCandidates.length} candidates selected
             </p>
-            <div className="flex items-center gap-2">
-              <button onClick={onClose} className="btn btn-outline text-sm">
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button onClick={onClose} className="btn btn-outline text-sm shrink-0">
                 Close
               </button>
-              <button className="btn btn-primary text-sm">Save Selection</button>
+              <button className="btn btn-primary text-sm shrink-0">Save Selection</button>
             </div>
           </div>
         </div>

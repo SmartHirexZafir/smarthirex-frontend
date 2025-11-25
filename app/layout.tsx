@@ -16,13 +16,11 @@ import AppHeader from "@/components/AppHeader";
 // Single footer
 import Footer from "@/components/Footer";
 
-// Toast + route progress + suspense fallback
+// Toast
 import Toaster from "@/components/system/Toaster";
-import RouteLoader from "@/components/system/RouteLoader";
-import LoaderOverlay from "@/components/system/LoaderOverlay";
+import GlobalLoadingProvider from "@/components/system/GlobalLoadingProvider";
 
 import { Suspense } from "react";
-import GlobalLoadingProvider from "@/components/system/GlobalLoadingProvider"; // client provider
 
 /** Google fonts */
 const inter = Inter({
@@ -112,15 +110,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to content
         </a>
 
-        {/* Global loader provider — uses its own default excludes (no RegExp props passed) */}
+        {/* Global loader provider */}
         <GlobalLoadingProvider>
           {/* App wrappers */}
           <Toaster>
-            {/* ✅ Wrap RouteLoader in Suspense (required) */}
-            <Suspense fallback={null}>
-              <RouteLoader />
-            </Suspense>
-
             {/* Headers via gates */}
             <MarketingHeaderGate>
               <MarketingHeader />
@@ -131,7 +124,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
             {/* Page content */}
             <main id="main" className="flex-1 w-full">
-              <Suspense fallback={<LoaderOverlay fullscreen />}>
+              <Suspense fallback={null}>
                 {children}
               </Suspense>
             </main>

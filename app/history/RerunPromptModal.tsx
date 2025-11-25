@@ -238,15 +238,15 @@ export default function RerunPromptModal({ history, onClose }: Props) {
         onWheel={stopBgScroll}
         onTouchMove={stopBgScroll}
       >
-        <div className="relative w-[92vw] max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border">
-          {/* Header */}
-          <div className="relative p-6 border-b border-border">
+        <div className="relative flex flex-col w-[95vw] sm:w-[85vw] lg:w-[80vw] max-w-[56rem] max-h-[92vh] rounded-2xl bg-card text-card-foreground border border-border shadow-2xl gradient-border">
+          {/* Header - Fixed */}
+          <div className="relative p-6 border-b border-border shrink-0">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold gradient-text">Re-run (Filters Only)</h2>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl font-semibold gradient-text">Re-run (Filters Only)</h2>
                 {originalPrompt ? (
-                  <p className="text-xs text-muted-foreground/90 mt-1">
-                    <i className="ri-message-2-line mr-1" /> Original: “{originalPrompt}”
+                  <p className="text-xs text-muted-foreground/90 mt-1 break-words">
+                    <i className="ri-message-2-line mr-1" /> Original: "{originalPrompt}"
                   </p>
                 ) : null}
               </div>
@@ -261,8 +261,8 @@ export default function RerunPromptModal({ history, onClose }: Props) {
             </div>
           </div>
 
-          {/* Body: Filters only (no free prompt) */}
-          <div className="p-6 space-y-4">
+          {/* Body: Filters only (no free prompt) - Scrollable */}
+          <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-4">
             {/* Filters toggle row */}
             <div>
               <div className="text-xs font-semibold text-[hsl(var(--muted-foreground))] mb-2">Filters</div>
@@ -457,7 +457,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
             <div className="mt-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-semibold">Results</h3>
-                <span className="text-xs text-muted-foreground">{results.length} found</span>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">{results.length} found</span>
               </div>
 
               {results.length === 0 ? (
@@ -465,7 +465,7 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                   No results yet. Adjust filters and click <span className="font-medium">Apply Filters</span>.
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1" style={{ scrollbarGutter: 'stable' }}>
+                <div className="space-y-3 max-h-[35vh] overflow-y-auto pr-1" style={{ scrollbarGutter: 'stable' }}>
                   {results.map((c) => {
                     const cid = (c._id || c.id || '').toString();
                     const checked = selectedIds.has(cid);
@@ -510,9 +510,12 @@ export default function RerunPromptModal({ history, onClose }: Props) {
                             </div>
                             {Array.isArray(c.skills) && c.skills.length > 0 ? (
                               <div className="mt-2 flex flex-wrap gap-2">
-                                {c.skills.slice(0, 8).map((s, i) => (
-                                  <span key={i} className="chip">{s}</span>
+                                {c.skills.slice(0, 10).map((s, i) => (
+                                  <span key={i} className="chip text-xs">{String(s)}</span>
                                 ))}
+                                {c.skills.length > 10 && (
+                                  <span className="chip text-xs opacity-60">+{c.skills.length - 10} more</span>
+                                )}
                               </div>
                             ) : null}
                             {Array.isArray(c.matchReasons) && c.matchReasons.length > 0 ? (
@@ -532,26 +535,28 @@ export default function RerunPromptModal({ history, onClose }: Props) {
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="px-6 py-4 border-t border-border bg-card flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{selectedIds.size} selected</p>
-            <div className="flex items-center gap-2">
-              <button onClick={onClose} className="btn btn-outline text-sm">
-                Close
-              </button>
-              <button onClick={saveSelection} disabled={processing || selectedIds.size === 0} className="btn btn-primary text-sm">
-                {processing ? (
-                  <span className="inline-flex items-center gap-2">
-                    <span className="animate-spin rounded-full h-4 w-4 border-2 border-[hsl(var(--primary-foreground))/0.7] border-b-transparent" />
-                    Saving…
-                  </span>
-                ) : (
-                  <>
-                    <i className="ri-save-3-line" />
-                    Save selected
-                  </>
-                )}
-              </button>
+          {/* Footer - Fixed */}
+          <div className="px-6 py-4 border-t border-border bg-card shrink-0">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <p className="text-sm text-muted-foreground whitespace-nowrap">{selectedIds.size} selected</p>
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button onClick={onClose} className="btn btn-outline text-sm shrink-0">
+                  Close
+                </button>
+                <button onClick={saveSelection} disabled={processing || selectedIds.size === 0} className="btn btn-primary text-sm shrink-0">
+                  {processing ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="animate-spin rounded-full h-4 w-4 border-2 border-[hsl(var(--primary-foreground))/0.7] border-b-transparent" />
+                      Saving…
+                    </span>
+                  ) : (
+                    <>
+                      <i className="ri-save-3-line" />
+                      Save selected
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

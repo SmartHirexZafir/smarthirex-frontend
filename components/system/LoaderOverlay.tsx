@@ -15,13 +15,7 @@ export default function LoaderOverlay({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // ✅ Only lock scroll if explicitly requested (not for chatbot filtering)
-  useEffect(() => {
-    if (!mounted || !fullscreen || !lockScroll) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, [mounted, fullscreen, lockScroll]);
+  // Scroll locking removed
 
   const overlay = useMemo(
     () => (

@@ -55,9 +55,6 @@ export default function Modal({
 
     document.addEventListener("keydown", onKey);
 
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
     // Initial focus
     requestAnimationFrame(() => {
       if (!modalRef.current) return;
@@ -67,35 +64,21 @@ export default function Modal({
 
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
       // restore focus
       if (prevActiveEl.current) prevActiveEl.current.focus();
     };
   }, [open, onClose]);
 
   // (Req. 6) Compute anchored coordinates, clamped to viewport
+  // ✅ Always center modals perfectly - ignore anchor for centering
   useLayoutEffect(() => {
     if (!open || !anchor || !modalRef.current) {
       setPos(null);
       return;
     }
-    // Place roughly at anchor first, then clamp after measuring
-    setPos({ top: anchor.y, left: anchor.x });
-
-    const raf = requestAnimationFrame(() => {
-      const el = modalRef.current!;
-      const rect = el.getBoundingClientRect();
-      const margin = 8;
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-
-      const clampedLeft = clamp(anchor.x, margin, Math.max(margin, vw - rect.width - margin));
-      const clampedTop = clamp(anchor.y, margin, Math.max(margin, vh - rect.height - margin));
-
-      setPos({ top: clampedTop, left: clampedLeft });
-    });
-
-    return () => cancelAnimationFrame(raf);
+    
+    // Always center modals regardless of anchor
+    setPos(null);
   }, [open, anchor]);
 
   if (!open) return null;
@@ -119,7 +102,24 @@ export default function Modal({
         aria-labelledby={labelledBy}
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
-        style={anchor ? ({ position: "fixed", top: pos?.top ?? anchor.y, left: pos?.left ?? anchor.x } as React.CSSProperties) : undefined}
+        style={
+          anchor && pos
+            ? ({
+                position: "fixed",
+                top: `${Math.max(16, Math.min(pos.top, window.innerHeight - 16))}px`,
+                left: `${Math.max(16, Math.min(pos.left, window.innerWidth - 16))}px`,
+                transform: "none", // Override default centering when using anchor
+              } as React.CSSProperties)
+            : {
+                // ✅ Always perfectly center modals
+                position: "fixed",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                maxWidth: "95vw",
+                maxHeight: "95vh",
+              }
+        }
       >
         {children}
       </div>

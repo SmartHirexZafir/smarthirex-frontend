@@ -16,8 +16,15 @@ type Candidate = {
   prompt_matching_score?: number | string;
   testScore?: number | string;  // frontend camelCase
   test_score?: number | string; // backend snake_case
-  years_experience?: number | string;    // preferred backend field
-  experience_years?: number | string;    // alt spelling
+  // Experience fields - check all possible aliases
+  years_experience?: number | string;
+  experience_years?: number | string;
+  experience?: number | string;
+  total_experience_years?: number | string;
+  years_of_experience?: number | string;
+  yoe?: number | string;
+  experience_display?: string;
+  experience_rounded?: number | string;
   email?: string;
   phone?: string;
   location?: string;
@@ -27,6 +34,20 @@ type Candidate = {
   predicted_role?: string;      // ✅ ML label
   category?: string;            // ✅ fallback role/category
   resume?: { email?: string; workHistory?: unknown[] }; // optional nested email
+  // Dynamic labels/metadata from backend
+  labels?: {
+    profileTitle?: string;
+    experience?: string;
+    matchScore?: string;
+    testScore?: string;
+    email?: string;
+    phone?: string;
+    location?: string;
+    company?: string;
+    role?: string;
+    notAvailable?: string;
+    notSpecified?: string;
+  };
 };
 
 const FALLBACK_SVG =
@@ -58,15 +79,49 @@ function num(v: unknown): number | undefined {
   return undefined;
 }
 
+/** Extract experience from candidate data - checks all possible field aliases */
+function extractExperience(candidate: Candidate): number | undefined {
+  // Try all possible experience field names in order of preference
+  const experienceFields = [
+    candidate.years_experience,
+    candidate.experience_years,
+    candidate.experience_rounded,
+    candidate.total_experience_years,
+    candidate.years_of_experience,
+    candidate.yoe,
+    candidate.experience,
+  ];
+
+  for (const field of experienceFields) {
+    const value = num(field);
+    if (value !== undefined) {
+      return value;
+    }
+  }
+
+  // If experience_display is a string like "2 years", try to extract number
+  if (candidate.experience_display && typeof candidate.experience_display === "string") {
+    const match = candidate.experience_display.match(/(\d+(?:\.\d+)?)/);
+    if (match) {
+      const value = num(match[1]);
+      if (value !== undefined) {
+        return value;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 export default function CandidateProfile({ candidate }: { candidate: Candidate }) {
   if (!candidate) return null;
 
   const {
-    name = "Unnamed Candidate",
+    name,
     avatar,
     avatar_url,
     currentRole,
-    company = "Not specified",
+    company,
     // scores
     score,
     match_score,
@@ -75,16 +130,30 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
     test_score,
     testScore: testScoreCamel,
     // misc
-    years_experience,
-    experience_years,
     email,
     phone,
-    location = "N/A",
+    location,
     resume,
     job_role,
     predicted_role,
     category,
+    labels,
   } = candidate;
+
+  // Dynamic labels from candidate data or fallback to defaults
+  const profileLabels = {
+    profileTitle: labels?.profileTitle || "Candidate Profile",
+    experience: labels?.experience || "Experience",
+    matchScore: labels?.matchScore || "Match Score",
+    testScore: labels?.testScore || "Test Score",
+    email: labels?.email || "Email",
+    phone: labels?.phone || "Phone",
+    location: labels?.location || "Location",
+    company: labels?.company || "Company",
+    role: labels?.role || "Role",
+    notAvailable: labels?.notAvailable || "—",
+    notSpecified: labels?.notSpecified || "",
+  };
 
   // ✅ Match Score: centralized via lib/score (accepts "85%", "85", 0.85); clamped 0..100
   const matchScoreValue =
@@ -94,8 +163,8 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
   const testScoreValue =
     toPctNumber(test_score) ?? toPctNumber(testScoreCamel);
 
-  // Experience years: prefer dedicated numeric fields (accept numeric strings)
-  const experienceYears = num(years_experience) ?? num(experience_years);
+  // Experience years: extract from all possible field aliases
+  const experienceYears = extractExperience(candidate);
 
   const normalizedEmail = email || resume?.email || undefined;
 
@@ -113,7 +182,7 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
       ? cleanedRole.length > 48
         ? `${cleanedRole.slice(0, 48)}…`
         : cleanedRole
-      : "N/A";
+      : profileLabels.notAvailable;
 
   // Avatar / initials fallback handling
   const [imgError, setImgError] = useState(false);
@@ -130,7 +199,7 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
     <div className="panel glass gradient-border relative overflow-hidden p-4 md:p-5">
       {/* Title — tidy top line using existing tokens (no redesign) */}
       <h2 className="text-2xl md:text-3xl font-extrabold gradient-text text-center mb-4">
-        Candidate Profile
+        {profileLabels.profileTitle}
       </h2>
 
       {/* header */}
@@ -167,17 +236,17 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
               <i className="ri-check-line text-xs text-[hsl(var(--success-foreground))]" aria-hidden />
             </div>
           </div>
-          <h3 className="mb-1 text-xl font-bold">{name}</h3>
+          <h3 className="mb-1 text-xl font-bold">{name || profileLabels.notAvailable}</h3>
 
           {/* ✅ Single-line concise role (Data Scientist, Frontend Engineer, etc.) */}
           <p
             className="mb-1 text-sm font-medium text-[hsl(var(--info))] truncate max-w-[240px] mx-auto"
-            title={cleanedRole || "N/A"}
+            title={cleanedRole || profileLabels.notAvailable}
           >
             {roleLabel}
           </p>
 
-          <p className="text-xs text-muted-foreground">{company}</p>
+          {company && <p className="text-xs text-muted-foreground">{company}</p>}
         </div>
 
         {/* Quick Stats: Experience, Match Score, Test Score (only if present) */}
@@ -186,9 +255,9 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
           <div className="surface rounded-2xl p-3 ring-1 ring-border/60">
             <div className="text-center">
               <div className="mb-1 text-xl font-bold text-[hsl(var(--accent))]">
-                {typeof experienceYears === "number" ? `${experienceYears}y` : "—"}
+                {typeof experienceYears === "number" ? `${experienceYears}y` : profileLabels.notAvailable}
               </div>
-              <div className="text-xs font-medium text-muted-foreground">Experience</div>
+              <div className="text-xs font-medium text-muted-foreground">{profileLabels.experience}</div>
             </div>
           </div>
 
@@ -196,9 +265,9 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
           <div className="surface rounded-2xl p-3 ring-1 ring-border/60">
             <div className="text-center" aria-live="polite">
               <div className="mb-1 text-xl font-bold text-[hsl(var(--info))]">
-                {typeof matchScoreValue === "number" ? `${Math.round(matchScoreValue)}%` : "—"}
+                {typeof matchScoreValue === "number" ? `${Math.round(matchScoreValue)}%` : profileLabels.notAvailable}
               </div>
-              <div className="text-xs font-medium text-muted-foreground">Match Score</div>
+              <div className="text-xs font-medium text-muted-foreground">{profileLabels.matchScore}</div>
             </div>
           </div>
 
@@ -209,7 +278,7 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
                 <div className="mb-1 text-xl font-bold text-[hsl(var(--success))]">
                   {`${Math.round(testScoreValue)}%`}
                 </div>
-                <div className="text-xs font-medium text-muted-foreground">Test Score</div>
+                <div className="text-xs font-medium text-muted-foreground">{profileLabels.testScore}</div>
               </div>
             </div>
           )}
@@ -217,9 +286,27 @@ export default function CandidateProfile({ candidate }: { candidate: Candidate }
 
         {/* Contact Info */}
         <div className="mb-2 space-y-2">
-          <ContactInfo label="Email" icon="ri-mail-line" color="info" value={email || resume?.email} />
-          <ContactInfo label="Phone" icon="ri-phone-line" color="success" value={phone} />
-          <ContactInfo label="Location" icon="ri-map-pin-line" color="accent" value={location} />
+          <ContactInfo 
+            label={profileLabels.email} 
+            icon="ri-mail-line" 
+            color="info" 
+            value={email || resume?.email}
+            notAvailableLabel={profileLabels.notAvailable}
+          />
+          <ContactInfo 
+            label={profileLabels.phone} 
+            icon="ri-phone-line" 
+            color="success" 
+            value={phone}
+            notAvailableLabel={profileLabels.notAvailable}
+          />
+          <ContactInfo 
+            label={profileLabels.location} 
+            icon="ri-map-pin-line" 
+            color="accent" 
+            value={location}
+            notAvailableLabel={profileLabels.notAvailable}
+          />
         </div>
 
         {/* NOTE: As requested, remove Top Skills from the left rail.
@@ -238,11 +325,13 @@ function ContactInfo({
   icon,
   color,
   value,
+  notAvailableLabel = "—",
 }: {
   label: string;
   icon: string;
   color: Tone;
   value?: string | null;
+  notAvailableLabel?: string;
 }) {
   // Map semantic tones to token-powered classes
   const tones: Record<Tone, { box: string; icon: string }> = {
@@ -252,6 +341,8 @@ function ContactInfo({
   };
 
   const t = tones[color];
+  const isEmail = label.toLowerCase().includes("email");
+  const isPhone = label.toLowerCase().includes("phone");
 
   return (
     <div className="flex items-center gap-2 rounded-xl surface p-2 ring-1 ring-border/60">
@@ -260,7 +351,7 @@ function ContactInfo({
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium">{label}</p>
-        {label === "Email" && value ? (
+        {isEmail && value ? (
           <a
             href={`mailto:${value}`}
             className="truncate text-xs text-[hsl(var(--primary))] underline"
@@ -268,7 +359,7 @@ function ContactInfo({
           >
             {value}
           </a>
-        ) : label === "Phone" && value ? (
+        ) : isPhone && value ? (
           <a
             href={`tel:${value}`}
             className="truncate text-xs text-[hsl(var(--primary))] underline"
@@ -277,7 +368,7 @@ function ContactInfo({
             {value}
           </a>
         ) : (
-          <p className="truncate text-xs text-muted-foreground">{value || "N/A"}</p>
+          <p className="truncate text-xs text-muted-foreground">{value || notAvailableLabel}</p>
         )}
       </div>
     </div>

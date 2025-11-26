@@ -85,90 +85,128 @@ export default function ScoreAnalysis({
     return true;
   });
 
-  return (
-    <div className="panel glass gradient-border p-4">
-      <h3 className="text-lg font-semibold mb-3">Score &amp; Analysis</h3>
+  // For detailed view (Analysis tab), use a different layout
+  if (detailed) {
+    return (
+      <div className="p-6">
+        <h3 className="text-2xl font-bold mb-6 gradient-text">Score &amp; Analysis</h3>
 
-      {/* Assessment Score = average(Match Score, Test Score) */}
-      <div className="mb-4 rounded-xl ring-1 ring-inset ring-border bg-card/70 p-3 backdrop-blur-md shadow-soft">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <i className="ri-bar-chart-line text-[hsl(var(--info))]" aria-hidden />
-            <span className="text-sm font-medium">Assessment Score</span>
-            <span className="text-xs text-muted-foreground">(avg of Match + Test)</span>
-          </div>
-          <span
-            className={[
-              "inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold",
-              isNum(assessment)
-                ? "bg-[hsl(var(--success)/0.18)] text-[hsl(var(--success))] ring-1 ring-[hsl(var(--success)/0.35)]"
-                : "bg-muted text-muted-foreground ring-1 ring-border",
-            ].join(" ")}
-            title="Average of Match Score and Test Score"
-          >
-            {isNum(assessment) ? `${assessment}%` : "N/A"}
-          </span>
-        </div>
-
-        {/* Tiny context row (keeps UI tidy, no extra functionality) */}
-        <div className="mt-2 flex flex-wrap gap-2 text-xs">
-          <span className="badge">Match: {isNum(match) ? `${match}%` : "N/A"}</span>
-          <span className="badge">Test: {isNum(test) ? `${test}%` : "N/A"}</span>
-        </div>
-      </div>
-
-      {/* Skills Overview (dynamic; Technical Skills removed elsewhere) */}
-      <div className="mb-2">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">Skills Overview</span>
-          <span className="text-xs text-muted-foreground">
-            {matched.length}/{skills.length || 0} matched
-          </span>
-        </div>
-      </div>
-
-      {/* Compact pills always; more details when detailed=true */}
-      <div className="flex flex-wrap gap-2">
-        {skills.slice(0, detailed ? skills.length : 10).map((skill, i) => {
-          const isMatch = matched.includes(skill);
-          return (
-            <span
-              key={`${skill}-${i}`}
-              className={[
-                "badge",
-                isMatch
-                  ? "bg-[hsl(var(--success)/0.15)] text-[hsl(var(--success))] ring-[hsl(var(--success)/0.35)]"
-                  : "bg-muted text-foreground/80 ring-border",
-              ].join(" ")}
-              aria-label={`Skill: ${skill}${isMatch ? " (matched)" : ""}`}
-              title={isMatch ? "Matched for this role" : undefined}
-            >
-              {skill}
-              {isMatch && <i className="ri-check-line ml-1" aria-hidden />}
-            </span>
-          );
-        })}
-        {skills.length > 10 && !detailed && (
-          <span className="text-xs text-muted-foreground">+{skills.length - 10} more</span>
-        )}
-      </div>
-
-      {/* Extra section only when detailed view is active (tab = Analysis) */}
-      {detailed && (
-        <div className="mt-4 space-y-3">
-          <div className="rounded-xl bg-muted/40 p-3 ring-1 ring-inset ring-border">
-            <div className="mb-1 flex items-center gap-2">
-              <i className="ri-compass-3-line text-foreground/80" aria-hidden />
-              <span className="text-sm font-medium">Observations</span>
+        {/* Two-column layout: Scores on left, Skills on right */}
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Left Column: Scores - Big and Prominent */}
+          <div className="space-y-4">
+            {/* Match Score - Big and Prominent */}
+            <div className="rounded-2xl ring-2 ring-inset ring-border bg-card/80 p-6 backdrop-blur-md shadow-soft">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[hsl(var(--info)/0.15)]">
+                  <i className="ri-target-line text-2xl text-[hsl(var(--info))]" aria-hidden />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Match Score</p>
+                  <p className="text-3xl font-bold text-[hsl(var(--info))]">
+                    {isNum(match) ? `${match}%` : "N/A"}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Based on resume matching and role alignment
+              </p>
             </div>
-            <p className="text-xs text-foreground/80 leading-relaxed">
-              Assessment is computed as the average of Match Score and Test Score. Skills are
-              extracted dynamically from the candidate&rsquo;s resume and highlighted when matched
-              to the target role.
-            </p>
+
+            {/* Test Score - Big and Prominent */}
+            <div className="rounded-2xl ring-2 ring-inset ring-border bg-card/80 p-6 backdrop-blur-md shadow-soft">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[hsl(var(--success)/0.15)]">
+                  <i className="ri-file-list-3-line text-2xl text-[hsl(var(--success))]" aria-hidden />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Test Score</p>
+                  <p className="text-3xl font-bold text-[hsl(var(--success))]">
+                    {isNum(test) ? `${test}%` : "N/A"}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Assessment test performance
+              </p>
+            </div>
+
+            {/* Assessment Score (if both exist) */}
+            {isNum(assessment) && (
+              <div className="rounded-2xl ring-2 ring-inset ring-[hsl(var(--success)/0.35)] bg-[hsl(var(--success)/0.08)] p-6 backdrop-blur-md shadow-soft">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[hsl(var(--success)/0.2)]">
+                    <i className="ri-bar-chart-line text-2xl text-[hsl(var(--success))]" aria-hidden />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Assessment Score</p>
+                    <p className="text-3xl font-bold text-[hsl(var(--success))]">
+                      {assessment}%
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Average of Match Score and Test Score
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Right Column: Skills - Clean and Aligned */}
+          <div className="space-y-4">
+            <div className="rounded-2xl ring-2 ring-inset ring-border bg-card/80 p-6 backdrop-blur-md shadow-soft">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-lg font-semibold">Skills Overview</h4>
+                <span className="text-sm text-muted-foreground">
+                  {matched.length}/{skills.length || 0} matched
+                </span>
+              </div>
+              
+              {/* Skills grid - clean and aligned */}
+              <div className="flex flex-wrap gap-2">
+                {skills.map((skill, i) => {
+                  const isMatch = matched.includes(skill);
+                  return (
+                    <span
+                      key={`${skill}-${i}`}
+                      className={[
+                        "badge text-sm px-3 py-1.5",
+                        isMatch
+                          ? "bg-[hsl(var(--success)/0.15)] text-[hsl(var(--success))] ring-1 ring-[hsl(var(--success)/0.35)]"
+                          : "bg-muted text-foreground/80 ring-1 ring-border",
+                      ].join(" ")}
+                      aria-label={`Skill: ${skill}${isMatch ? " (matched)" : ""}`}
+                      title={isMatch ? "Matched for this role" : undefined}
+                    >
+                      {skill}
+                      {isMatch && <i className="ri-check-line ml-1.5" aria-hidden />}
+                    </span>
+                  );
+                })}
+                {skills.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No skills listed</p>
+                )}
+              </div>
+            </div>
+
+            {/* Observations */}
+            <div className="rounded-xl bg-muted/40 p-4 ring-1 ring-inset ring-border">
+              <div className="mb-2 flex items-center gap-2">
+                <i className="ri-information-line text-foreground/80" aria-hidden />
+                <span className="text-sm font-medium">About These Scores</span>
+              </div>
+              <p className="text-xs text-foreground/80 leading-relaxed">
+                Match Score reflects how well the candidate&rsquo;s resume aligns with the target role. 
+                Test Score measures performance on assessment tests. Skills are extracted dynamically 
+                from the candidate&rsquo;s resume and highlighted when matched to the target role.
+              </p>
+            </div>
           </div>
         </div>
-      )}
-    </div>
-  );
+      </div>
+    );
+  }
+
+  // Non-detailed view (should not be used anymore, but keeping for safety)
+  return null;
 }

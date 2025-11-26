@@ -60,21 +60,46 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
   const candidateEmail = candidate.email || candidate.resume?.email || "";
 
   const updateCandidateStatus = async (newStatus: string): Promise<boolean> => {
-    if (!candidate?._id) { setErrorMsg("Unable to update status. Candidate ID is missing."); return false; }
+    if (!candidate?._id) { 
+      setErrorMsg("Unable to update status. Candidate ID is missing."); 
+      return false; 
+    }
     try {
       setLoading(true);
+      setErrorMsg(null);
       const res = await fetch(`${API_BASE}/candidate/${candidate._id}/status`, {
         method: "PATCH",
         headers: authHeaders(),
         body: JSON.stringify({ status: newStatus }),
       });
-      if (res.ok) { onStatusChange(newStatus); return true; }
-      setErrorMsg("Failed to update status. Please try again.");
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        const errorMessage = errorData?.detail || errorData?.message || "Failed to update status. Please try again.";
+        setErrorMsg(errorMessage);
+        return false;
+      }
+      
+      // Update local state immediately
+      onStatusChange(newStatus);
+      
+      // Trigger dashboard refresh via localStorage event
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("candidate_status_changed", Date.now().toString());
+        window.dispatchEvent(new StorageEvent("storage", {
+          key: "candidate_status_changed",
+          newValue: Date.now().toString(),
+        }));
+      }
+      
+      return true;
+    } catch (err: any) {
+      const errorMessage = err?.message || "A network error occurred while updating status.";
+      setErrorMsg(errorMessage);
       return false;
-    } catch {
-      setErrorMsg("A network error occurred while updating status.");
-      return false;
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleShortlist = async () => {
@@ -82,15 +107,20 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
     const prevShortlisted = isShortlisted;
     const prevRejected = isRejected;
     const newStatus = isShortlisted ? "new" : "shortlisted";
+    
+    // Optimistically update UI
     setIsShortlisted(!isShortlisted);
     setIsRejected(false);
+    
     const ok = await updateCandidateStatus(newStatus);
     if (!ok) {
+      // Revert on failure
       setIsShortlisted(prevShortlisted);
       setIsRejected(prevRejected);
     } else if (newStatus === "shortlisted") {
-      router.refresh(); // ✅ ensure dashboards reflect the new status immediately (Req. 10)
+      // Navigate to dashboard - status update will be reflected when dashboard refreshes
       router.push("/dashboard");
+      router.refresh();
     }
   };
 
@@ -99,21 +129,38 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
     const prevShortlisted = isShortlisted;
     const prevRejected = isRejected;
     const newStatus = isRejected ? "new" : "rejected";
+    
+    // Optimistically update UI
     setIsRejected(!isRejected);
     setIsShortlisted(false);
+    
     const ok = await updateCandidateStatus(newStatus);
     if (!ok) {
+      // Revert on failure
       setIsRejected(prevRejected);
       setIsShortlisted(prevShortlisted);
     } else if (newStatus === "rejected") {
-      router.refresh(); // ✅ ensure dashboards reflect the new status immediately (Req. 10)
-      router.push("/dashboard");
+      // Navigate to dashboard and ensure it shows rejected candidates
+      router.push("/dashboard?tab=rejected");
+      router.refresh();
     }
   };
 
   const handleSendTest = () => {
-    if (!candidate?._id) { setErrorMsg("Unable to open Test page — candidate ID is missing."); return; }
-    router.push(`/test?candidateId=${candidate._id}`);
+    if (!candidate?._id) { 
+      setErrorMsg("Unable to open Test page — candidate ID is missing."); 
+      return; 
+    }
+    
+    // Ensure candidate email is available (required for test)
+    const candidateEmail = candidate.email || candidate.resume?.email;
+    if (!candidateEmail) {
+      setErrorMsg("Candidate email is required to send a test. Please update the candidate profile.");
+      return;
+    }
+    
+    // Navigate to test page with candidate ID - the test page will fetch full candidate details
+    router.push(`/test?candidateId=${encodeURIComponent(candidate._id)}`);
   };
 
   const hasEmail = !!candidateEmail;
@@ -123,14 +170,33 @@ export default function ActionButtons({ candidate, onStatusChange }: ActionButto
   const scheduleHardDisabled = !hasEmail;
 
   const handleSchedule = () => {
-    if (!candidate?._id) { setErrorMsg("Unable to schedule — candidate ID is missing."); return; }
-    if (scheduleHardDisabled) return;
-    if (scheduleSoftBlocked) {
-      setErrorMsg("This user has to attempt the test first for the interview.");
+    if (!candidate?._id) { 
+      setErrorMsg("Unable to schedule — candidate ID is missing."); 
+      return; 
+    }
+    
+    if (scheduleHardDisabled) {
+      setErrorMsg("Candidate email is required to schedule a meeting.");
       return;
     }
+    
+    if (scheduleSoftBlocked) {
+      setErrorMsg("This candidate must complete a test before scheduling an interview.");
+      return;
+    }
+    
+    // Ensure we have candidate email (required for scheduling)
+    const candidateEmail = candidate.email || candidate.resume?.email;
+    if (!candidateEmail) {
+      setErrorMsg("Candidate email is required to schedule a meeting.");
+      return;
+    }
+    
     setScheduleRouting(true);
-    router.push(`/meetings?candidateId=${candidate._id}`);
+    setErrorMsg(null);
+    
+    // Navigate to meetings page with candidate ID - the meetings page will load and preselect the candidate
+    router.push(`/meetings?candidateId=${encodeURIComponent(candidate._id)}`);
   };
 
   const baseBtn = "btn btn-outline w-full";

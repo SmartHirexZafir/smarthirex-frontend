@@ -43,6 +43,9 @@ type Resume = {
 
 type Candidate = {
   resume?: Resume;
+  resume_url?: string;
+  resumeUrl?: string;
+  filename?: string;
 };
 
 /* ===================== Helpers ===================== */
@@ -57,14 +60,55 @@ function toAbsoluteUrl(url?: string): string {
   return `${API_BASE}${trimmed.startsWith("/") ? trimmed : `/${trimmed}`}`;
 }
 
+/** Extract resume URL from candidate - checks all possible locations */
+function getResumeUrl(candidate: Candidate): string {
+  // Check nested resume.url first
+  if (candidate.resume?.url) {
+    return candidate.resume.url;
+  }
+  // Check top-level resume_url (snake_case)
+  if (candidate.resume_url) {
+    return candidate.resume_url;
+  }
+  // Check top-level resumeUrl (camelCase)
+  if (candidate.resumeUrl) {
+    return candidate.resumeUrl;
+  }
+  return "";
+}
+
+/** Extract resume filename from candidate - checks all possible locations */
+function getResumeFilename(candidate: Candidate): string {
+  if (candidate.resume?.filename) {
+    return candidate.resume.filename;
+  }
+  if (candidate.filename) {
+    return candidate.filename;
+  }
+  return "Resume.pdf";
+}
+
 /* ===================== Component ===================== */
 export default function ResumePreview({ candidate }: { candidate: Candidate }) {
-  if (!candidate?.resume) return null;
+  // Get resume URL from all possible locations
+  const resumeUrl = useMemo(() => getResumeUrl(candidate), [candidate]);
+  const openUrl = useMemo(() => toAbsoluteUrl(resumeUrl), [resumeUrl]);
+  const fileName = useMemo(() => getResumeFilename(candidate), [candidate]);
 
-  const { resume } = candidate;
-  const fileName = resume.filename || "Resume.pdf";
-
-  const openUrl = useMemo(() => toAbsoluteUrl(resume.url), [resume.url]);
+  // Get resume data - check nested resume object or use candidate directly
+  // The backend ensures resume object exists with defaults, but we check for actual data
+  const resume = candidate.resume || {};
+  
+  // Extract parsed data from resume object (from parsed CV)
+  const summary = resume.summary;
+  const education = Array.isArray(resume.education) ? resume.education : [];
+  const workHistory = Array.isArray(resume.workHistory) ? resume.workHistory : [];
+  const projects = Array.isArray(resume.projects) ? resume.projects : [];
+  
+  // If no resume data at all and no URL, don't render
+  if (!summary && education.length === 0 && workHistory.length === 0 && projects.length === 0 && !resumeUrl) {
+    return null;
+  }
 
   return (
     <div className="p-4">
@@ -115,43 +159,49 @@ export default function ResumePreview({ candidate }: { candidate: Candidate }) {
         </a>
       </div>
 
-      {/* Professional Summary (show full text; no truncation) */}
-      {resume.summary ? (
+      {/* Professional Summary (show full text; no truncation) - from parsed CV data */}
+      {summary && summary.trim() ? (
         <section className="mb-4">
           <h4 className="mb-2 text-base font-semibold text-card-foreground">
             Professional Summary
           </h4>
           <div className="rounded-xl bg-muted/40 p-3 ring-1 ring-inset ring-border">
             <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/90">
-              {resume.summary}
+              {summary}
             </p>
           </div>
         </section>
       ) : null}
 
-      {/* Education */}
-      {Array.isArray(resume.education) && resume.education.length > 0 ? (
+      {/* Education - from parsed CV data */}
+      {education.length > 0 ? (
         <section className="mb-4">
           <h4 className="mb-2 text-base font-semibold text-card-foreground">Education</h4>
           <div className="space-y-2">
-            {resume.education.map((edu: Education, index: number) => (
+            {education.map((edu: Education, index: number) => (
               <div key={index} className="panel p-3 ring-1 ring-border/60">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h5 className="text-sm font-medium text-card-foreground">{edu.degree}</h5>
-                    <p className="text-sm font-medium text-primary">{edu.school}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {edu.year ? <>Graduated {edu.year}</> : null}
-                    </p>
+                  <div className="flex-1">
+                    {edu.degree && (
+                      <h5 className="text-sm font-medium text-card-foreground">{edu.degree}</h5>
+                    )}
+                    {edu.school && (
+                      <p className="text-sm font-medium text-primary">{edu.school}</p>
+                    )}
+                    {edu.year && (
+                      <p className="text-xs text-muted-foreground">
+                        Graduated {edu.year}
+                      </p>
+                    )}
                   </div>
 
-                  {edu.gpa ? (
-                    <div className="text-right">
+                  {edu.gpa && (
+                    <div className="text-right flex-shrink-0">
                       <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary ring-1 ring-inset ring-primary/20">
                         GPA: {edu.gpa}
                       </span>
                     </div>
-                  ) : null}
+                  )}
                 </div>
               </div>
             ))}
@@ -159,51 +209,71 @@ export default function ResumePreview({ candidate }: { candidate: Candidate }) {
         </section>
       ) : null}
 
-      {/* Work Experience — small heading + details in a box + Read More if long */}
-      {Array.isArray(resume.workHistory) && resume.workHistory.length > 0 ? (
+      {/* Work Experience — from parsed CV data */}
+      {workHistory.length > 0 ? (
         <section className="mb-4">
           <h4 className="mb-2 text-base font-semibold text-card-foreground">Work Experience</h4>
           <div className="space-y-3">
-            {resume.workHistory.map((work: WorkItem, index: number) => (
+            {workHistory.map((work: WorkItem, index: number) => (
               <WorkItemCard key={index} work={work} />
             ))}
           </div>
         </section>
       ) : null}
 
-      {/* Projects */}
-      {Array.isArray(resume.projects) && resume.projects.length > 0 ? (
+      {/* Key Projects - from parsed CV data, no duplication */}
+      {projects.length > 0 ? (
         <section className="mb-2">
           <h4 className="mb-2 text-base font-semibold text-card-foreground">Key Projects</h4>
           <div className="space-y-3">
-            {resume.projects.map((project: string | ProjectObj, index: number) => {
+            {projects.map((project: string | ProjectObj, index: number) => {
               const isString = typeof project === "string";
-              const rawName = isString ? (project as string) : (project as ProjectObj)?.name || "Project";
-
-              const displayName =
-                typeof rawName === "string" && rawName.length > 60 ? `${rawName.slice(0, 60)}…` : rawName;
-
-              const desc = isString ? (project as string) : (project as ProjectObj)?.description || "";
+              
+              // For string projects, use the string as description only (no title duplication)
+              // For object projects, extract name and description separately
+              let projectName: string | undefined;
+              let projectDesc: string | undefined;
+              
+              if (isString) {
+                // String project: use as description, no title
+                projectDesc = project as string;
+              } else {
+                // Object project: extract name and description
+                const projObj = project as ProjectObj;
+                projectName = projObj.name;
+                projectDesc = projObj.description;
+              }
 
               const tech = Array.isArray((project as ProjectObj)?.tech)
                 ? ((project as ProjectObj).tech as string[])
                 : [];
 
+              // Only show title if we have a distinct name (not when it's just a string)
+              const hasTitle = projectName && projectName.trim() !== "";
+
               return (
                 <div key={index} className="panel p-3 ring-1 ring-border/60">
-                  <h5 className="mb-1 text-sm font-medium text-card-foreground">{displayName}</h5>
+                  {hasTitle && (
+                    <h5 className="mb-1 text-sm font-semibold text-card-foreground">
+                      {projectName.length > 60 ? `${projectName.slice(0, 60)}…` : projectName}
+                    </h5>
+                  )}
 
-                  {desc ? <p className="mb-2 whitespace-pre-line text-xs text-foreground/80">{desc}</p> : null}
+                  {projectDesc && projectDesc.trim() && (
+                    <p className={`whitespace-pre-line text-xs text-foreground/80 ${hasTitle ? "mb-2" : ""}`}>
+                      {projectDesc}
+                    </p>
+                  )}
 
-                  {tech.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
+                  {tech.length > 0 && (
+                    <div className={`flex flex-wrap gap-1 ${projectDesc ? "mt-2" : ""}`}>
                       {tech.map((t: string, i: number) => (
                         <span key={`${t}-${i}`} className="badge">
                           {t}
                         </span>
                       ))}
                     </div>
-                  ) : null}
+                  )}
                 </div>
               );
             })}

@@ -49,9 +49,15 @@ type Attempt = {
   submittedAt?: string;
   score?: number;
   pdfUrl?: string;
+  type?: string; // "smart" | "custom"
+  needs_marking?: boolean;
+  custom?: {
+    title?: string;
+  };
 };
 
-const TABS: TabDef[] = [
+// TABS will be dynamically generated from candidate data or use defaults
+const DEFAULT_TABS: TabDef[] = [
   { id: "profile", label: "Resume", icon: "ri-file-text-line" },
   { id: "analysis", label: "Analysis", icon: "ri-bar-chart-line" },
   { id: "history", label: "History", icon: "ri-history-line" },
@@ -133,6 +139,9 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
           submittedAt: a.submittedAt ?? a.createdAt ?? a.created_at ?? a.timestamp,
           score: parsedScore,
           pdfUrl: a.pdfUrl ?? a.pdf_url ?? a.reportUrl ?? a.report_url,
+          type: a.type ?? "smart",
+          needs_marking: a.needs_marking ?? false,
+          custom: a.custom,
         };
       });
 
@@ -212,39 +221,57 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
       : `${API_BASE}${pdfUrl.startsWith("/") ? pdfUrl : `/${pdfUrl}`}`;
   };
 
+  // Removed local loader - global loader and Suspense fallback handle loading state
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center surface glass rounded-2xl px-8 py-10 animate-rise-in">
-          <div className="w-16 h-16 rounded-full border-4 border-primary/70 border-t-transparent animate-spin mx-auto mb-5 glow" />
-          <p className="text-muted-foreground">Loading candidate profile...</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   if (error || !candidate) {
+    const errorLabels = (candidate as any)?.labels || {};
+    const notFoundLabel = errorLabels.notFound || "Candidate not found";
+    const backLabel = errorLabels.backToCandidates || "Back to candidates";
+    
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="surface glass rounded-2xl p-8 text-center max-w-md animate-rise-in">
           <i className="ri-user-line text-6xl text-muted-foreground mb-4 glow" />
-          <p className="text-foreground/90 text-lg">{error || "Candidate not found"}</p>
+          <p className="text-foreground/90 text-lg">{error || notFoundLabel}</p>
           <Link
             href="/upload"
             className="btn btn-primary mt-4 inline-flex items-center gap-2"
-            aria-label="Back to candidates"
+            aria-label={backLabel}
           >
             <i className="ri-arrow-left-line" />
-            Back to candidates
+            {backLabel}
           </Link>
         </div>
       </div>
     );
   }
 
-  const category = candidate.category || candidate.predicted_role || "Unknown";
+  // Dynamic labels from candidate data
+  const labels = (candidate as any)?.labels || {};
+  const categoryLabel = labels.category || "Category";
+  const matchReasonLabel = labels.matchReason || "Match Reason";
+  const profileTitle = labels.profileTitle || "Candidate Profile";
+  const profileSubtitle = labels.profileSubtitle || "Detailed view and assessment";
+  const backToUploadLabel = labels.backToUpload || "Back to upload";
+  const testHistoryLabel = labels.testHistory || "Test History";
+  const noAttemptsLabel = labels.noAttempts || "No test attempts found for this candidate yet.";
+  const openLabel = labels.open || "Open";
+  const reportLabel = labels.report || "Report";
+  const attemptLabel = labels.attempt || "Attempt";
+  const submittedLabel = labels.submitted || "Submitted";
+  const scoreLabel = labels.score || "Score";
+  
+  // Dynamic tabs from candidate data or use defaults
+  const tabs: TabDef[] = (candidate as any)?.tabs || DEFAULT_TABS;
+  
+  const category = candidate.category || candidate.predicted_role || labels.unknown || "";
   const matchReason =
-    candidate.match_reason === "Prompt filtered" ? "Filtered by prompt" : "ML classified";
+    candidate.match_reason === "Prompt filtered" 
+      ? (labels.filteredByPrompt || "Filtered by prompt")
+      : (labels.mlClassified || "ML classified");
 
   // helpers
   const fmtDate = (iso?: string) => {
@@ -268,16 +295,16 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                 <Link
                   href="/upload"
                   className="icon-btn"
-                  aria-label="Back to upload"
-                  title="Back"
+                  aria-label={backToUploadLabel}
+                  title={backToUploadLabel}
                 >
                   <i className="ri-arrow-left-line" />
                 </Link>
                 <div>
                   <h1 className="text-2xl font-bold leading-tight">
-                    <span className="gradient-text">Candidate Profile</span>
+                    <span className="gradient-text">{profileTitle}</span>
                   </h1>
-                  <p className="text-muted-foreground">Detailed view and assessment</p>
+                  <p className="text-muted-foreground">{profileSubtitle}</p>
                 </div>
               </div>
 
@@ -304,7 +331,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
           <div className="lg:col-span-1 space-y-4">
             <CandidateProfile candidate={candidate} />
             <ActionButtons candidate={candidate} onStatusChange={handleStatusChange} />
-            <ScoreAnalysis candidate={candidate} />
+            {/* Score & Analysis removed - available in Analysis tab */}
           </div>
 
           {/* Right Column */}
@@ -313,7 +340,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
             <div className="surface glass rounded-t-2xl border border-border/60 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="tabs">
-                  {TABS.map((tab) => (
+                  {tabs.map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTab(tab.id)}
@@ -340,7 +367,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
               {activeTab === "history" && (
                 <div className="p-4">
                   <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold">Test History</h3>
+                    <h3 className="text-lg font-semibold">{testHistoryLabel}</h3>
                   </div>
 
                   {/* Loading state */}
@@ -369,7 +396,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                   {!attemptsLoading && !attemptsError && Array.isArray(attempts) && attempts.length === 0 && (
                     <div className="rounded-xl bg-muted/30 border border-border p-4">
                       <p className="text-sm text-muted-foreground">
-                        No test attempts found for this candidate yet.
+                        {noAttemptsLabel}
                       </p>
                     </div>
                   )}
@@ -379,28 +406,44 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                     <div className="space-y-3">
                       {attempts.map((a) => {
                         const pdf = fullPdfUrl(a.pdfUrl);
+                        // Get test name/type
+                        const testType = a.type || "smart";
+                        const testName = 
+                          testType === "custom" && a.custom?.title
+                            ? a.custom.title
+                            : testType === "smart"
+                            ? "Smart Test"
+                            : "Custom Test";
+                        const isPending = a.needs_marking && (a.score === 0 || a.score === undefined || a.score === null);
+                        
                         return (
                           <div
                             key={a.id}
                             className="flex items-center justify-between gap-3 p-3 rounded-xl bg-card/70 border border-border backdrop-blur-md"
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 flex-1">
                               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-info/10">
                                 <i className="ri-clipboard-line text-[hsl(var(--info))]" />
                               </div>
-                              <div>
+                              <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium">
-                                  Attempt <span className="text-muted-foreground">#{a.id.slice(-6)}</span>
+                                  {testName}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
-                                  Submitted: {fmtDate(a.submittedAt)}
+                                  {submittedLabel}: {fmtDate(a.submittedAt)}
                                 </p>
+                                {isPending && (
+                                  <p className="text-xs text-[hsl(var(--warning))] mt-1">
+                                    <i className="ri-time-line mr-1" />
+                                    Awaiting manual grading
+                                  </p>
+                                )}
                               </div>
                             </div>
 
                             <div className="flex items-center gap-2">
                               <span className="badge">
-                                Score: {typeof a.score === "number" ? `${a.score}%` : "N/A"}
+                                {scoreLabel}: {typeof a.score === "number" ? `${a.score}%` : labels.notAvailable || "—"}
                               </span>
 
                               {/* ✅ Ensure each item has a working link: View in Tests (app route) */}
@@ -409,10 +452,10 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                                   candidateId
                                 )}`}
                                 className="btn btn-outline text-xs px-3 py-1.5"
-                                title="Open in Tests"
+                                title={labels.openInTests || "Open in Tests"}
                               >
                                 <i className="ri-external-link-line mr-1" />
-                                Open
+                                {openLabel}
                               </Link>
 
                               {/* ✅ PDF report (absolute URL-safe) if available */}
@@ -422,10 +465,10 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                                   target="_blank"
                                   rel="noreferrer"
                                   className="btn btn-outline text-xs px-3 py-1.5"
-                                  title="Open PDF report"
+                                  title={labels.openPdfReport || "Open PDF report"}
                                 >
                                   <i className="ri-file-pdf-line mr-1" />
-                                  Report
+                                  {reportLabel}
                                 </a>
                               ) : null}
                             </div>

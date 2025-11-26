@@ -14,8 +14,15 @@ type CandidateDoc = {
   email?: string;
   resume?: { email?: string };
   job_role?: string;
+  // Experience fields - check all possible aliases
   years_experience?: number | string;
   experience_years?: number | string;
+  experience?: number | string;
+  total_experience_years?: number | string;
+  years_of_experience?: number | string;
+  yoe?: number | string;
+  experience_display?: string;
+  experience_rounded?: number | string;
   score?: number;       // match score
   test_score?: number;  // latest test score
 };
@@ -95,9 +102,46 @@ export default function TestAssignment() {
     () => candidate?.job_role || '—',
     [candidate]
   );
+  // Extract experience from all possible field aliases
   const experience = useMemo(() => {
-    const v = candidate?.years_experience ?? candidate?.experience_years;
-    return (v ?? '—').toString();
+    if (!candidate) return '—';
+    
+    // Try all possible experience field names in order of preference
+    const experienceFields = [
+      candidate.years_experience,
+      candidate.experience_years,
+      candidate.experience_rounded,
+      candidate.total_experience_years,
+      candidate.years_of_experience,
+      candidate.yoe,
+      candidate.experience,
+    ];
+
+    for (const field of experienceFields) {
+      if (field !== null && field !== undefined) {
+        if (typeof field === 'number') {
+          return field.toString();
+        }
+        if (typeof field === 'string' && field.trim() !== '') {
+          // Try to extract number from string like "2 years" or "3.5"
+          const match = field.match(/(\d+(?:\.\d+)?)/);
+          if (match) {
+            return match[1];
+          }
+          return field;
+        }
+      }
+    }
+
+    // If experience_display is a string like "2 years", try to extract number
+    if (candidate.experience_display && typeof candidate.experience_display === 'string') {
+      const match = candidate.experience_display.match(/(\d+(?:\.\d+)?)/);
+      if (match) {
+        return match[1];
+      }
+    }
+
+    return '—';
   }, [candidate]);
 
   /** -------- load candidate -------- */

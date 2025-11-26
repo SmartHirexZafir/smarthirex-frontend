@@ -17,7 +17,15 @@ type Candidate = {
   job_role?: string;
   predicted_role?: string;
   category?: string;
+  // Experience fields - check all possible aliases
   years_of_experience?: number;
+  years_experience?: number | string;
+  experience_years?: number | string;
+  experience?: number | string;
+  total_experience_years?: number | string;
+  yoe?: number | string;
+  experience_display?: string;
+  experience_rounded?: number | string;
 };
 
 type ScheduleBody = {
@@ -84,8 +92,9 @@ export default function MeetingsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [meetingUrl, setMeetingUrl] = useState<string | null>(null);
 
-  // Load candidates with tests
+  // Load candidates with tests - only run once on mount, not on preselectId change
   useEffect(() => {
+    let mounted = true;
     const load = async () => {
       setLoadingList(true);
       try {
@@ -101,23 +110,122 @@ export default function MeetingsPage() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as Candidate[] | { candidates?: Candidate[] };
         const list = Array.isArray(data) ? data : Array.isArray(data?.candidates) ? data.candidates : [];
-        setCandidates(list);
+        
+        if (!mounted) return;
+        
+        // Deduplicate candidates by ID to prevent duplicate keys
+        const uniqueCandidates = new Map<string, Candidate>();
+        list.forEach(c => {
+          const id = String(c._id || c.id || '');
+          if (id && !uniqueCandidates.has(id)) {
+            uniqueCandidates.set(id, c);
+          }
+        });
+        const deduplicatedList = Array.from(uniqueCandidates.values());
+        setCandidates(deduplicatedList);
 
-        // Preselect if query param present
-        if (preselectId) {
-          const found = list.find(c => String(c._id || c.id) === preselectId);
-          if (found) setSelectedId(String(found._id || found.id));
+        // Preselect if query param present - try to find candidate in list
+        if (preselectId && mounted) {
+          const found = deduplicatedList.find(c => String(c._id || c.id) === preselectId);
+          if (found) {
+            setSelectedId(String(found._id || found.id));
+          } else {
+            // If candidate not in list, try to fetch directly (might be newly added)
+            try {
+              const candRes = await fetch(`${API_BASE}/candidate/${preselectId}`, {
+                headers: {
+                  Accept: 'application/json',
+                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+              });
+              if (candRes.ok && mounted) {
+                const candData = await candRes.json().catch(() => null);
+                if (candData && (candData.test_score != null || candData.testScore != null)) {
+                  // Candidate has test score, add to list and select
+                  // Extract experience from all possible field aliases
+                  const extractExperience = (data: any): number | undefined => {
+                    const fields = [
+                      data.years_experience,
+                      data.experience_years,
+                      data.experience_rounded,
+                      data.total_experience_years,
+                      data.years_of_experience,
+                      data.yoe,
+                      data.experience,
+                    ];
+                    for (const field of fields) {
+                      if (typeof field === 'number') return field;
+                      if (typeof field === 'string' && field.trim() !== '') {
+                        const match = field.match(/(\d+(?:\.\d+)?)/);
+                        if (match) return parseFloat(match[1]);
+                      }
+                    }
+                    return undefined;
+                  };
+
+                  const newCandidate: Candidate = {
+                    _id: candData._id || preselectId,
+                    id: candData._id || preselectId,
+                    name: candData.name,
+                    email: candData.email || candData.resume?.email,
+                    resume: candData.resume,
+                    job_role: candData.job_role || candData.predicted_role || candData.category,
+                    predicted_role: candData.predicted_role,
+                    category: candData.category,
+                    years_of_experience: extractExperience(candData),
+                    years_experience: candData.years_experience,
+                    experience_years: candData.experience_years,
+                    experience_rounded: candData.experience_rounded,
+                    total_experience_years: candData.total_experience_years,
+                    yoe: candData.yoe,
+                    experience: candData.experience,
+                    experience_display: candData.experience_display,
+                  };
+                  
+                  if (mounted) {
+                    setCandidates(prev => {
+                      // Check if candidate already exists to prevent duplicates
+                      const exists = prev.some(c => String(c._id || c.id) === String(newCandidate._id || newCandidate.id));
+                      return exists ? prev : [...prev, newCandidate];
+                    });
+                    setSelectedId(String(newCandidate._id || newCandidate.id));
+                  }
+                }
+              }
+            } catch {
+              // Silently fail - candidate might not have test yet
+            }
+          }
         }
       } catch (e) {
-        error('Failed to load candidates');
-        setCandidates([]);
+        if (mounted) {
+          error('Failed to load candidates');
+          setCandidates([]);
+        }
       } finally {
-        setLoadingList(false);
+        if (mounted) {
+          setLoadingList(false);
+        }
       }
     };
     trackPromise(load());
+    
+    return () => {
+      mounted = false;
+    };
+    // Only run once on mount - preselectId is handled separately
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Handle preselectId changes separately (only when it changes, not on every render)
+  useEffect(() => {
+    if (!preselectId || !candidates.length) return;
+    
+    const found = candidates.find(c => String(c._id || c.id) === preselectId);
+    if (found) {
+      setSelectedId(String(found._id || found.id));
+    }
+  }, [preselectId, candidates]);
 
   // Prefill form when selection changes
   useEffect(() => {
@@ -129,10 +237,46 @@ export default function MeetingsPage() {
         selectedCandidate.job_role || selectedCandidate.predicted_role || selectedCandidate.category || '';
       if (suggested) setRole(suggested);
     }
-    if (!yoe && typeof selectedCandidate.years_of_experience === 'number') {
-      setYoe(String(selectedCandidate.years_of_experience));
+    // Extract experience from all possible field aliases
+    if (!yoe) {
+      const experienceFields = [
+        selectedCandidate.years_of_experience,
+        selectedCandidate.years_experience,
+        selectedCandidate.experience_years,
+        selectedCandidate.experience_rounded,
+        selectedCandidate.total_experience_years,
+        selectedCandidate.yoe,
+        selectedCandidate.experience,
+      ];
+
+      for (const field of experienceFields) {
+        if (field !== null && field !== undefined) {
+          if (typeof field === 'number') {
+            setYoe(String(field));
+            break;
+          }
+          if (typeof field === 'string' && field.trim() !== '') {
+            // Try to extract number from string like "2 years" or "3.5"
+            const match = field.match(/(\d+(?:\.\d+)?)/);
+            if (match) {
+              setYoe(match[1]);
+              break;
+            }
+            setYoe(field);
+            break;
+          }
+        }
+      }
+
+      // If experience_display is a string like "2 years", try to extract number
+      if (!yoe && selectedCandidate.experience_display && typeof selectedCandidate.experience_display === 'string') {
+        const match = selectedCandidate.experience_display.match(/(\d+(?:\.\d+)?)/);
+        if (match) {
+          setYoe(match[1]);
+        }
+      }
     }
-  }, [selectedCandidate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedCandidate, yoe]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const validate = (): string | null => {
     if (!selectedId) return 'Please select a candidate.';
@@ -278,12 +422,14 @@ export default function MeetingsPage() {
               ) : filtered.length === 0 ? (
                 <div className="p-4 text-sm text-muted-foreground">No candidates found.</div>
               ) : (
-                filtered.map((c) => {
-                  const id = String(c._id || c.id);
+                filtered.map((c, index) => {
+                  const id = String(c._id || c.id || '');
+                  // Ensure unique key - use index as fallback if ID is missing or duplicate
+                  const uniqueKey = id || `candidate-${index}`;
                   const active = id === selectedId;
                   return (
                     <button
-                      key={id}
+                      key={`${uniqueKey}-${index}`}
                       type="button"
                       onClick={() => setSelectedId(id)}
                       className={[

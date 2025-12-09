@@ -26,6 +26,10 @@ export type Attempt = {
   candidateId?: string;
   candidate_id?: string;
   candidate?: CandidateShape;
+  // ✅ Complete test data for per-question marking
+  questions?: Array<any>;
+  answers?: Array<any>;
+  details?: Array<any>;
 };
 
 type HistoryResponse = {
@@ -122,6 +126,9 @@ export default function ManualMarkingPanel({
 
   // local grade inputs
   const [grades, setGrades] = useState<Record<string, number>>({});
+  const [questionGrades, setQuestionGrades] = useState<Record<string, Record<number, { score: number; feedback: string }>>>({});
+  const [expandedAttempts, setExpandedAttempts] = useState<Set<string>>(new Set());
+  const [fullAttemptData, setFullAttemptData] = useState<Record<string, any>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
 
   // toasts
@@ -174,26 +181,88 @@ export default function ManualMarkingPanel({
     [highlightCandidateId]
   );
 
+  // ✅ Fetch full attempt data (questions, answers, details)
+  const fetchFullAttemptData = async (attemptId: string) => {
+    if (fullAttemptData[attemptId]) return; // Already loaded
+    
+    try {
+      const res = await fetch(`${API_BASE}/tests/history/all`, { headers: authHeaders() });
+      const data = (await res.json().catch(() => ({}))) as HistoryResponse;
+      
+      // Find the attempt in the full list
+      const allAttempts = [
+        ...(Array.isArray(data?.attempts) ? data.attempts : []),
+        ...(Array.isArray(data?.needs_marking) ? data.needs_marking : []),
+      ];
+      const attempt = allAttempts.find((a: any) => a._id === attemptId || a.id === attemptId);
+      
+      if (attempt) {
+        setFullAttemptData((prev) => ({
+          ...prev,
+          [attemptId]: {
+            questions: attempt.questions || [],
+            answers: attempt.answers || [],
+            details: attempt.details || [],
+          },
+        }));
+      }
+    } catch (e) {
+      console.warn("Failed to fetch full attempt data:", e);
+    }
+  };
+
+  const toggleExpand = (attemptId: string) => {
+    setExpandedAttempts((prev) => {
+      const next = new Set(prev);
+      if (next.has(attemptId)) {
+        next.delete(attemptId);
+      } else {
+        next.add(attemptId);
+        fetchFullAttemptData(attemptId);
+      }
+      return next;
+    });
+  };
+
   const onSaveGrade = async (attemptId: string) => {
     const score = Number(grades[attemptId]);
     if (Number.isNaN(score) || score < 0 || score > 100) {
       showToast("Score must be a number between 0 and 100.");
       return;
     }
+    
+    // ✅ Build per-question grades if provided
+    const qGrades = questionGrades[attemptId];
+    const questionGradesList = qGrades
+      ? Object.entries(qGrades).map(([idx, g]) => ({
+          question_index: Number(idx),
+          score: g.score,
+          feedback: g.feedback || undefined,
+        }))
+      : undefined;
+
     try {
       setSavingId(attemptId);
       const res = await fetch(`${API_BASE}/tests/grade/${attemptId}`, {
         method: "POST",
         headers: authHeaders(),
-        body: JSON.stringify({ score }),
+        body: JSON.stringify({ 
+          score,
+          question_grades: questionGradesList,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error((data && (data.detail || data.error)) || "Could not save grade.");
       }
-      showToast("Custom test graded.");
+      showToast("Custom test graded successfully.");
       setGrades((g) => {
         const n = { ...g };
+        delete n[attemptId];
+        return n;
+      });
+      setQuestionGrades((qg) => {
+        const n = { ...qg };
         delete n[attemptId];
         return n;
       });
@@ -243,6 +312,15 @@ export default function ManualMarkingPanel({
             const cid = getCandId(a);
             const pdfHref = cid ? `/tests/history/${cid}/${a._id}/report.pdf` : undefined;
             const highlighted = cid && highlightSet.has(cid);
+            const isExpanded = expandedAttempts.has(a._id);
+            const attemptData = fullAttemptData[a._id] || {
+              questions: a.questions || [],
+              answers: a.answers || [],
+              details: a.details || [],
+            };
+            const questions = attemptData.questions || [];
+            const answers = attemptData.answers || [];
+            const details = attemptData.details || [];
 
             return (
               <div
@@ -268,7 +346,7 @@ export default function ManualMarkingPanel({
                       min={0}
                       max={100}
                       className="input w-24"
-                      placeholder="Score"
+                      placeholder="Total Score"
                       value={grades[a._id] ?? ""}
                       onChange={(e) =>
                         setGrades((s) => ({
@@ -277,6 +355,15 @@ export default function ManualMarkingPanel({
                         }))
                       }
                     />
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(a._id)}
+                      className="btn btn-outline btn-sm"
+                      title={isExpanded ? "Collapse questions" : "Expand to score per question"}
+                    >
+                      <i className={`ri-${isExpanded ? "arrow-up" : "arrow-down"}-s-line mr-1`} />
+                      {isExpanded ? "Collapse" : "Questions"}
+                    </button>
                     <button
                       type="button"
                       onClick={() => onSaveGrade(a._id)}
@@ -311,6 +398,80 @@ export default function ManualMarkingPanel({
                     )}
                   </div>
                 </div>
+
+                {/* ✅ Expanded per-question scoring */}
+                {isExpanded && questions.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-border space-y-3">
+                    <div className="text-xs font-medium text-muted-foreground mb-2">
+                      Score each question (0-100):
+                    </div>
+                    {questions.map((q: any, idx: number) => {
+                      const questionText = q.question || `Question ${idx + 1}`;
+                      const questionType = q.type || "text";
+                      const candidateAnswer = answers[idx]?.answer || details[idx]?.answer || "No answer provided";
+                      const qGrade = questionGrades[a._id]?.[idx] || { score: 0, feedback: "" };
+
+                      return (
+                        <div key={idx} className="p-3 rounded-lg bg-background/50 border border-border">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs font-medium">Q{idx + 1}</span>
+                                <span className="badge text-xs">{questionType.toUpperCase()}</span>
+                              </div>
+                              <div className="text-sm font-medium mb-1">{questionText}</div>
+                              <div className="text-xs text-muted-foreground">
+                                <span className="font-medium">Answer: </span>
+                                <span className="break-words">{candidateAnswer}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              className="input w-20 text-xs"
+                              placeholder="Score"
+                              value={qGrade.score || ""}
+                              onChange={(e) => {
+                                const score = Number(e.target.value);
+                                setQuestionGrades((qg) => ({
+                                  ...qg,
+                                  [a._id]: {
+                                    ...(qg[a._id] || {}),
+                                    [idx]: {
+                                      ...qGrade,
+                                      score: isNaN(score) ? 0 : score,
+                                    },
+                                  },
+                                }));
+                              }}
+                            />
+                            <input
+                              type="text"
+                              className="input flex-1 text-xs"
+                              placeholder="Feedback (optional)"
+                              value={qGrade.feedback || ""}
+                              onChange={(e) => {
+                                setQuestionGrades((qg) => ({
+                                  ...qg,
+                                  [a._id]: {
+                                    ...(qg[a._id] || {}),
+                                    [idx]: {
+                                      ...qGrade,
+                                      feedback: e.target.value,
+                                    },
+                                  },
+                                }));
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}

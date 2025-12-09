@@ -42,6 +42,8 @@ type Props = {
   onCancel: () => void;
   onError?: (msg: string) => void;
   apiBase?: string; // optional override; defaults to env
+  expiresAt?: string | null; // ✅ Test expiration time (ISO string)
+  durationMinutes?: number | null; // ✅ Test duration in minutes
 };
 
 // Resolve API base safely, supporting both env names
@@ -80,11 +82,14 @@ export default function TestRunner({
   onCancel,
   onError,
   apiBase,
+  expiresAt,
+  durationMinutes,
 }: Props) {
   const API_BASE = useMemo(() => resolveApiBase(apiBase), [apiBase]);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<string>("");
 
   // answers kept by index (string for backward-compat). Separate per-question code language if needed.
   const [answers, setAnswers] = useState<Record<number, string>>({});
@@ -97,6 +102,9 @@ export default function TestRunner({
     window.clearTimeout((nudge as any)._t);
     (nudge as any)._t = window.setTimeout(() => setToast(null), 1600);
   }
+
+  // ✅ Auto-submit timer ref - will be set after handleSubmit is defined
+  const handleSubmitRef = React.useRef<((e: React.FormEvent) => Promise<void>) | null>(null);
 
   const safeQuestions = useMemo<Question[]>(
     () => (Array.isArray(questions) ? questions : []),
@@ -149,7 +157,8 @@ export default function TestRunner({
     setCodeLang(prev => ({ ...prev, [i]: lang }));
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  // Store handleSubmit ref for auto-submit timer
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
     setLoading(true);
@@ -202,7 +211,65 @@ export default function TestRunner({
       window.clearTimeout(t);
       setLoading(false);
     }
-  }
+  };
+  
+  // Update ref after handleSubmit is defined
+  handleSubmitRef.current = handleSubmit;
+
+  // ✅ Auto-submit when duration expires
+  useEffect(() => {
+    if (!expiresAt) {
+      setTimeRemaining("");
+      return;
+    }
+
+    const updateTimer = () => {
+      try {
+        const expires = new Date(expiresAt);
+        const now = new Date();
+        
+        // Validate date
+        if (isNaN(expires.getTime())) {
+          console.error("Invalid expiresAt date:", expiresAt);
+          setTimeRemaining("");
+          return;
+        }
+        
+        const diff = expires.getTime() - now.getTime();
+
+        // Only auto-submit if time has actually expired (with small buffer to avoid race conditions)
+        if (diff <= -1000) {
+          // Time expired - auto-submit (only if not already loading/submitting)
+          if (!loading && handleSubmitRef.current && !err) {
+            const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+            handleSubmitRef.current(fakeEvent);
+          }
+          return;
+        }
+
+        const minutes = Math.floor(diff / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeRemaining(`${minutes}:${String(seconds).padStart(2, "0")}`);
+
+        // Warning at 5 minutes
+        if (minutes === 5 && seconds === 0) {
+          nudge("⚠️ 5 minutes remaining! Test will auto-submit when time expires.");
+        }
+        // Warning at 1 minute
+        if (minutes === 1 && seconds === 0) {
+          nudge("⚠️ 1 minute remaining! Test will auto-submit soon.");
+        }
+      } catch (e) {
+        console.error("Timer error:", e);
+        setTimeRemaining("");
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [expiresAt, loading, nudge, err]);
 
   // --- Light “surveillance/security” guards on this form only ---
   useEffect(() => {
@@ -252,8 +319,21 @@ export default function TestRunner({
     };
     window.addEventListener("keydown", onKey, { capture: true });
 
-    // Try to clear clipboard on blur (best-effort, silent on failure)
+    // ✅ Tab switch detection with warning
+    let tabSwitchCount = 0;
     const onBlur = () => {
+      tabSwitchCount++;
+      // Capture screenshot on tab switch (suspicious activity)
+      if (typeof window !== "undefined") {
+        // Trigger screenshot capture via ProctorGuard if available
+        window.dispatchEvent(new CustomEvent("proctor-suspicious-activity", {
+          detail: { type: "tab_switch", count: tabSwitchCount }
+        }));
+      }
+      
+      // Show warning
+      nudge("⚠️ Switching tabs may lead to test failure. Please stay on this page.");
+      
       try {
         if (typeof navigator !== "undefined" && (navigator as any).clipboard?.writeText) {
           (navigator as any).clipboard.writeText(" ").catch(() => {});
@@ -263,6 +343,18 @@ export default function TestRunner({
       }
     };
     window.addEventListener("blur", onBlur);
+    
+    // ✅ Visibility change detection
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        tabSwitchCount++;
+        window.dispatchEvent(new CustomEvent("proctor-suspicious-activity", {
+          detail: { type: "page_hidden", count: tabSwitchCount }
+        }));
+        nudge("⚠️ Page hidden detected. Switching tabs may lead to test failure.");
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       document.removeEventListener("contextmenu", onContext);
@@ -271,6 +363,7 @@ export default function TestRunner({
       document.removeEventListener("paste", onPaste);
       window.removeEventListener("keydown", onKey, { capture: true } as any);
       window.removeEventListener("blur", onBlur);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, []);
 
@@ -333,8 +426,30 @@ export default function TestRunner({
   }
 
   return (
-    <form
-      className="space-y-6 rounded-2xl border border-border bg-card text-foreground p-6 shadow-sm select-none"
+    <div className="space-y-4">
+      {/* ✅ Timer display - polished and professional */}
+      {timeRemaining && (
+        <div className="sticky top-4 z-10 flex items-center justify-center">
+          <div className={`px-6 py-3 rounded-xl border shadow-lg backdrop-blur-sm transition-all duration-300 ${
+            timeRemaining.startsWith("0:") || (timeRemaining.startsWith("1:") && parseInt(timeRemaining.split(":")[1]) < 5)
+              ? "bg-warning/20 border-warning/50 text-warning animate-pulse"
+              : timeRemaining.startsWith("1:")
+              ? "bg-warning/10 border-warning/30 text-warning"
+              : "bg-info/20 border-info/50 text-info"
+          }`}>
+            <div className="flex items-center gap-3">
+              <i className={`ri-${timeRemaining.startsWith("0:") || (timeRemaining.startsWith("1:") && parseInt(timeRemaining.split(":")[1]) < 5) ? "alarm-warning" : "timer-line"} text-lg`} />
+              <div>
+                <div className="text-xs font-medium opacity-80">Time Remaining</div>
+                <div className="font-mono font-bold text-lg tracking-wider">{timeRemaining}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <form
+        className="space-y-6 rounded-2xl border border-border bg-card text-foreground p-6 shadow-sm select-none"
       onSubmit={handleSubmit}
       // double safety nets (browser won’t always obey all):
       onCopy={(e) => {
@@ -484,6 +599,7 @@ export default function TestRunner({
           {toast}
         </div>
       )}
-    </form>
+      </form>
+    </div>
   );
 }

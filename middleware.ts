@@ -78,26 +78,12 @@ function extractPathToken(req: NextRequest, base: '/test/' | '/verify/'): string
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  // ✅ Tokenized access: /test/[token] (candidate) requires JWT verification
-  // ✅ /verify/[token] (email verification) uses UUID tokens, not JWTs - pass through to backend
+  // ✅ Tokenized access: /test/[token] (candidate) - NO LOGIN REQUIRED
+  // Candidates can access tests directly via token link - backend will validate the token
+  // /verify/[token] (email verification) uses UUID tokens - pass through to backend
   if (pathname.startsWith('/test/')) {
-    const token = extractPathToken(req, '/test/' as const);
-
-    const valid = token ? await verifySignedTokenHS256(token, TEST_TOKEN_SECRET) : false;
-
-    if (!valid) {
-      const loginUrl = new URL('/login', req.url);
-      const nextPath = req.nextUrl.pathname + req.nextUrl.search;
-      loginUrl.searchParams.set('next', nextPath);
-
-      // Preserve candidate role + token on redirects originating from test links
-      loginUrl.searchParams.set('as', 'candidate');
-      if (token) loginUrl.searchParams.set('token', token);
-
-      return NextResponse.redirect(loginUrl);
-    }
-
-    // Valid signed token -> allow through without auth cookie
+    // ✅ Allow all test token access - backend validates token validity
+    // No login required - candidates go straight to test
     return NextResponse.next();
   }
 

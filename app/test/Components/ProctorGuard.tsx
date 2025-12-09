@@ -490,6 +490,25 @@ export default function ProctorGuard({
     };
   }, [sessionId, enableSnapshots, snapshotIntervalSec, captureAndUploadSnapshot]);
 
+  // ✅ Listen for suspicious activity events and auto-capture screenshots
+  useEffect(() => {
+    const handleSuspiciousActivity = (event: CustomEvent) => {
+      const activityType = event.detail?.type;
+      if (enableSnapshots && sessionId) {
+        // Auto-capture screenshot on suspicious activity
+        captureAndUploadSnapshot();
+        
+        // Log suspicious activity
+        console.warn("Suspicious activity detected:", activityType, event.detail);
+      }
+    };
+
+    window.addEventListener("proctor-suspicious-activity" as any, handleSuspiciousActivity as EventListener);
+    return () => {
+      window.removeEventListener("proctor-suspicious-activity" as any, handleSuspiciousActivity as EventListener);
+    };
+  }, [enableSnapshots, sessionId, captureAndUploadSnapshot]);
+
   // Cleanup on page unload + unmount
   useEffect(() => {
     const onBeforeUnload = () => {

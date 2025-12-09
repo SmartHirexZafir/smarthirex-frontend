@@ -38,12 +38,16 @@ export default function TestTokenPage() {
   const [candidateId, setCandidateId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [result, setResult] = useState<SubmitResponse | null>(null);
+  const [testExpiresAt, setTestExpiresAt] = useState<string | null>(null);
+  const [durationMinutes, setDurationMinutes] = useState<number | null>(null);
 
   // From TestReady -> move into running step
   const handleStarted = (data: ReadyStartResponse) => {
     setTestId(data.test_id);
     setCandidateId(data.candidate_id);
     setQuestions((data.questions || []) as Question[]);
+    setTestExpiresAt(data.expires_at || null);
+    setDurationMinutes(data.duration_minutes || null);
     setApiError(null);
     setStep("running");
   };
@@ -57,16 +61,21 @@ export default function TestTokenPage() {
     }
   }
 
-  return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
-      {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">SmartHirex Assessment</h1>
-        {testId && <span className="text-xs text-muted-foreground">Test ID: {testId}</span>}
-      </div>
+  // Check if we're showing countdown (TestReady will handle this internally)
+  const [showingCountdown, setShowingCountdown] = useState(false);
 
-      {/* Error banner */}
-      {apiError && (
+  return (
+    <div className={showingCountdown ? "" : "mx-auto max-w-3xl px-4 py-10"}>
+      {/* Header - hide when showing countdown */}
+      {!showingCountdown && (
+        <div className="mb-8 flex items-center justify-between">
+          <h1 className="text-xl font-semibold">SmartHirex Assessment</h1>
+          {testId && <span className="text-xs text-muted-foreground">Test ID: {testId}</span>}
+        </div>
+      )}
+
+      {/* Error banner - hide when showing countdown */}
+      {!showingCountdown && apiError && (
         <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {apiError}
         </div>
@@ -80,6 +89,7 @@ export default function TestTokenPage() {
           onCancel={() => router.push("/")}
           onError={(m) => setApiError(m)}
           apiBase={API_BASE}
+          onCountdownChange={setShowingCountdown}
         />
       )}
 
@@ -106,6 +116,8 @@ export default function TestTokenPage() {
             token={token}
             questions={questions}
             apiBase={API_BASE}
+            expiresAt={testExpiresAt}
+            durationMinutes={durationMinutes}
             onSubmitted={(data) => {
               setResult(data);
               setStep("result");

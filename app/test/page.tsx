@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import DateTimePicker from './Components/DateTimePicker';
 
 /** ========================
  *  Types
@@ -71,14 +72,26 @@ const authHeaders = () => {
 export default function TestAssignment() {
   const qp = useSearchParams();
   const candidateId = qp.get('candidateId') || '';
+  const attemptId = qp.get('attemptId') || '';
 
   // Candidate context (auto-fetched)
   const [candidate, setCandidate] = useState<CandidateDoc | null>(null);
   const [loadingCandidate, setLoadingCandidate] = useState(false);
+  
+  // Test result view (when attemptId is provided)
+  const [testResult, setTestResult] = useState<any>(null);
+  const [loadingResult, setLoadingResult] = useState(false);
 
   // Assignment state
   const [testType, setTestType] = useState<TestType>('smart');
   const [questionCount, setQuestionCount] = useState<number>(4);
+  // Smart AI Test composition controls
+  const [mcqCount, setMcqCount] = useState<number>(2);
+  const [scenarioCount, setScenarioCount] = useState<number>(2);
+
+  // ✅ NEW: Scheduled timing and duration
+  const [scheduledDateTime, setScheduledDateTime] = useState<string>('');
+  const [testDurationMinutes, setTestDurationMinutes] = useState<number>(60);
 
   // Custom authoring
   type CustomQ = { question: string; type: 'mcq' | 'text'; options?: string[]; correct_answer?: string | null };
@@ -236,6 +249,54 @@ export default function TestAssignment() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateId]);
 
+  // ✅ Load test result when attemptId is provided (for viewing results from profile)
+  useEffect(() => {
+    if (!attemptId || !candidateId) {
+      setTestResult(null);
+      return;
+    }
+    
+    let mounted = true;
+    (async () => {
+      try {
+        setLoadingResult(true);
+        // Fetch candidate history to get the specific attempt
+        const res = await fetch(`${API_BASE}/tests/history/${candidateId}`, { headers: authHeaders() });
+        if (!res.ok) {
+          setErr('Failed to load test result.');
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        const attempts = Array.isArray(data?.attempts) ? data.attempts : [];
+        const attempt = attempts.find((a: any) => a.id === attemptId);
+        
+        if (mounted && attempt) {
+          // Format as TestResult expects
+          setTestResult({
+            test_id: attempt.id,
+            candidate_id: candidateId,
+            score: attempt.score || 0,
+            details: attempt.details || [],
+          });
+        } else if (mounted) {
+          setErr('Test result not found.');
+        }
+      } catch (e) {
+        if (mounted) {
+          setErr('Failed to load test result.');
+        }
+      } finally {
+        if (mounted) {
+          setLoadingResult(false);
+        }
+      }
+    })();
+    
+    return () => {
+      mounted = false;
+    };
+  }, [attemptId, candidateId]);
+
   /** -------- send invite (Smart/Custom) -------- */
   const sendInvite = async () => {
     if (!candidateId) return;
@@ -243,10 +304,19 @@ export default function TestAssignment() {
       setIsSending(true);
       const payload: any = {
         candidate_id: candidateId,
-        question_count: questionCount,
+        question_count: testType === 'custom' ? questionCount : mcqCount + scenarioCount,
         test_type: testType,
+        // ✅ NEW: Scheduled timing and duration
+        scheduled_date_time: scheduledDateTime || undefined,
+        test_duration_minutes: testDurationMinutes,
       };
-      if (testType === 'custom') {
+      if (testType === 'smart') {
+        // Send composition parameters for Smart AI Test
+        payload.composition = {
+          mcq_count: mcqCount,
+          scenario_count: scenarioCount,
+        };
+      } else if (testType === 'custom') {
         payload.custom = { title: customTitle || 'Custom Test', questions: customQuestions };
       }
 
@@ -538,7 +608,7 @@ export default function TestAssignment() {
                 <div>
                   <p className="font-medium">Smart AI Test</p>
                   <p className="text-sm text-muted-foreground">
-                    Auto-generated based on candidate profile
+                    AI-generated questions - you choose the question types
                   </p>
                 </div>
               </label>
@@ -565,21 +635,53 @@ export default function TestAssignment() {
             <label className="block text-sm font-medium text-muted-foreground mb-3">
               Settings
             </label>
-            <div className="flex items-center gap-3">
-              <span className="text-sm">Questions:</span>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={questionCount}
-                onChange={(e) => setQuestionCount(Number(e.target.value))}
-                className="w-24 p-2 rounded-lg bg-background border border-input"
-              />
-              <div className="ml-auto">
+            <div className="space-y-3">
+              {testType === 'smart' ? (
+                <>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm w-32">MCQ Questions:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={50}
+                      value={mcqCount}
+                      onChange={(e) => setMcqCount(Math.max(0, Number(e.target.value)))}
+                      className="w-24 p-2 rounded-lg bg-background border border-input"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm w-32">Scenario Questions:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={50}
+                      value={scenarioCount}
+                      onChange={(e) => setScenarioCount(Math.max(0, Number(e.target.value)))}
+                      className="w-24 p-2 rounded-lg bg-background border border-input"
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Total: {mcqCount + scenarioCount} questions
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm">Questions:</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={questionCount}
+                    onChange={(e) => setQuestionCount(Number(e.target.value))}
+                    className="w-24 p-2 rounded-lg bg-background border border-input"
+                  />
+                </div>
+              )}
+              <div className="flex justify-end">
                 <button
                   onClick={sendInvite}
                   type="button"
-                  disabled={!candidateId || isSending}
+                  disabled={!candidateId || isSending || (testType === 'smart' && mcqCount + scenarioCount === 0)}
                   className="btn btn-primary"
                   aria-busy={isSending}
                 >
@@ -595,6 +697,119 @@ export default function TestAssignment() {
                     </>
                   )}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ✅ Enhanced: Scheduled timing and duration controls */}
+        <div className="mt-6 rounded-2xl border border-border bg-card/50 backdrop-blur-sm p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <i className="ri-time-line text-lg text-primary" />
+            <h3 className="text-base font-semibold text-foreground">Test Scheduling & Duration</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Scheduled Date & Time */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <i className="ri-calendar-line text-muted-foreground" />
+                Scheduled Date & Time
+                <span className="text-xs font-normal text-muted-foreground">(Optional)</span>
+              </label>
+              <DateTimePicker
+                value={scheduledDateTime}
+                onChange={(isoString) => setScheduledDateTime(isoString)}
+                min={new Date().toISOString()}
+                placeholder="Select date and time"
+              />
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <i className="ri-information-line" />
+                {scheduledDateTime 
+                  ? `Test will be available at: ${new Date(scheduledDateTime).toLocaleString()}`
+                  : 'Leave empty for immediate access. Test will be available as soon as the link is clicked.'}
+              </p>
+            </div>
+            
+            {/* Test Duration */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <i className="ri-timer-line text-muted-foreground" />
+                Test Duration
+                <span className="text-xs font-normal text-muted-foreground">(minutes)</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={5}
+                  max={300}
+                  step={1}
+                  className="w-full px-4 py-3 pr-16 rounded-xl bg-background border border-input text-foreground
+                           focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary
+                           transition-all duration-200 hover:border-primary/50
+                           [&::-webkit-inner-spin-button]:opacity-100 [&::-webkit-outer-spin-button]:opacity-100"
+                  value={testDurationMinutes}
+                  onChange={(e) => {
+                    const inputVal = e.target.value;
+                    // Allow empty input while typing
+                    if (inputVal === '') {
+                      return; // Don't update state, allow user to clear and type
+                    }
+                    const val = parseInt(inputVal, 10);
+                    if (!isNaN(val)) {
+                      // Allow any value while typing, clamp on blur
+                      setTestDurationMinutes(val);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // Ensure value is within bounds on blur
+                    const val = parseInt(e.target.value, 10);
+                    if (isNaN(val) || val < 5) {
+                      setTestDurationMinutes(5);
+                    } else if (val > 300) {
+                      setTestDurationMinutes(300);
+                    }
+                  }}
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none">
+                  min
+                </div>
+              </div>
+              
+              {/* Quick preset buttons */}
+              <div className="flex flex-wrap gap-2">
+                {[15, 30, 45, 60, 90, 120].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setTestDurationMinutes(preset)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      testDurationMinutes === preset
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    {preset}m
+                  </button>
+                ))}
+              </div>
+              
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <i className="ri-information-line" />
+                  Range: 5-300 minutes
+                </span>
+                <span className="text-foreground font-medium">
+                  {testDurationMinutes >= 60 
+                    ? `${Math.floor(testDurationMinutes / 60)}h ${testDurationMinutes % 60 > 0 ? `${testDurationMinutes % 60}m` : ''}`.trim()
+                    : `${testDurationMinutes}m`}
+                </span>
+              </div>
+              <div className="mt-2 p-2.5 rounded-lg bg-info/10 border border-info/20">
+                <p className="text-xs text-info flex items-center gap-1.5">
+                  <i className="ri-alert-line" />
+                  Test will automatically submit after {testDurationMinutes} minute{testDurationMinutes !== 1 ? 's' : ''}
+                </p>
               </div>
             </div>
           </div>

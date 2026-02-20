@@ -207,7 +207,7 @@ const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
       if (onSubmit) {
         resp = await onSubmit(payload);
       } else {
-        const r = await fetch(`${API_BASE}/candidate/interviews/schedule`, {
+        const r = await fetch(`${API_BASE}/interviews/schedule`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),

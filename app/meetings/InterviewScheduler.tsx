@@ -253,9 +253,7 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
    *  Actions
    *  ======================== */
 
-  // Core schedule call:
-  // 1) try /interviews/schedule (new unified endpoint; expects different keys)
-  // 2) fallback to /candidate/{id}/schedule (legacy candidate-scoped endpoint)
+  // Core schedule call against the canonical interviews route.
   const scheduleInterview = async (payload: {
     candidateId: string;
     email: string;
@@ -266,42 +264,16 @@ export default function InterviewScheduler({ prefilled, onToast }: Props) {
     notes?: string;
     candidate_name?: string;
   }): Promise<ScheduleResponse> => {
-    // Attempt 1: unified endpoint expects { candidateEmail, candidateName, when, ... }
-    try {
-      const unified = {
-        candidateId: payload.candidateId,
-        candidateEmail: payload.email,
-        candidateName: payload.candidate_name,
-        role: payload.title?.replace(/^Interview\s*[-–]\s*/i, '') || payload.title,
-        when: payload.startsAt,
-        timezone: payload.timezone,
-        durationMins: payload.durationMins,
-        title: payload.title,
-        notes: payload.notes,
-      };
-      const res = await fetch(`${API_BASE}/candidate/interviews/schedule`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify(unified),
-      });
-      const data = (await res.json().catch(() => ({}))) as ScheduleResponse;
-      if (res.ok) return data;
-      // else fall through
-    } catch {
-      // fall through
-    }
-
-    // Fallback 2: candidate-scoped endpoint accepts the original payload
-    const res2 = await fetch(`${API_BASE}/candidate/${payload.candidateId}/schedule`, {
+    const res = await fetch(`${API_BASE}/interviews/schedule`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify(payload),
     });
-    const data2 = (await res2.json().catch(() => ({}))) as ScheduleResponse;
-    if (!res2.ok) {
-      throw new Error((data2 as any)?.detail || 'Failed to schedule interview');
+    const data = (await res.json().catch(() => ({}))) as ScheduleResponse;
+    if (!res.ok) {
+      throw new Error((data as any)?.detail || 'Failed to schedule interview');
     }
-    return data2;
+    return data;
   };
 
   const handleSchedule = async () => {

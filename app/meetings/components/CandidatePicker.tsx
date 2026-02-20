@@ -111,23 +111,25 @@ export default function InterviewScheduleForm({ candidate, onSuccess }: Props) {
       return;
     }
 
-    const payload = {
-      candidateId: candidate?._id || candidate?.id || '',
-      email: email.trim(),
-      role: role.trim(),
-      yearsOfExperience: yoe ? Number(yoe) : undefined,
-      startAt, // ISO-like from datetime-local (browser local) – backend should interpret with timezone below
-      timezone,
-      duration: Number(duration),
-      notes: notes.trim() || undefined,
-    };
+      const localIso = new Date(startAt).toISOString();
+      const payload = {
+        candidateId: candidate?._id || candidate?.id || '',
+        email: email.trim(),
+        startsAt: localIso,
+        timezone,
+        durationMins: Number(duration),
+        title: `Interview - ${role.trim() || 'Interview'}`,
+        role: role.trim() || undefined,
+        notes: notes.trim() || undefined,
+        candidateName: candidate?.name,
+      };
 
     setSubmitting(true);
     setMeetingUrl('');
 
     try {
       const run = async () => {
-        const res = await fetch(`${API_BASE}/candidate/interviews/schedule`, {
+        const res = await fetch(`${API_BASE}/interviews/schedule`, {
           method: 'POST',
           credentials: 'include',
           headers: authHeaders(),

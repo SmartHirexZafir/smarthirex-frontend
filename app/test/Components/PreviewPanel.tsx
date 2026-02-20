@@ -218,7 +218,7 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
                 const scoreStr =
                   a.score === null || a.score === undefined ? "—" : `${a.score}%`;
                 const pdfHref = cid
-                  ? `/tests/history/${cid}/${a._id}/report.pdf`
+                  ? `${API_BASE}/tests/history/${cid}/${a._id}/report.pdf`
                   : undefined;
 
                 return (
@@ -315,7 +315,7 @@ export default function PreviewPanel({ highlightCandidateId }: { highlightCandid
               {needsMarking.map((a) => {
                 const cid = getCandId(a);
                 const pdfHref = cid
-                  ? `/tests/history/${cid}/${a._id}/report.pdf`
+                  ? `${API_BASE}/tests/history/${cid}/${a._id}/report.pdf`
                   : undefined;
                 return (
                   <div

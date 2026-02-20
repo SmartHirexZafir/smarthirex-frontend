@@ -310,7 +310,7 @@ export default function ManualMarkingPanel({
         <div className="space-y-2">
           {attempts.map((a) => {
             const cid = getCandId(a);
-            const pdfHref = cid ? `/tests/history/${cid}/${a._id}/report.pdf` : undefined;
+            const pdfHref = cid ? `${API_BASE}/tests/history/${cid}/${a._id}/report.pdf` : undefined;
             const highlighted = cid && highlightSet.has(cid);
             const isExpanded = expandedAttempts.has(a._id);
             const attemptData = fullAttemptData[a._id] || {

@@ -16,6 +16,9 @@ function TestHistoryItem({
   isPending,
   score,
   submittedAt,
+  status,
+  durationMinutes,
+  recruiterName,
   pdf,
   candidateId,
   questions,
@@ -35,6 +38,9 @@ function TestHistoryItem({
   isPending: boolean;
   score?: number;
   submittedAt?: string;
+  status?: string;
+  durationMinutes?: number;
+  recruiterName?: string;
   pdf?: string;
   candidateId: string;
   questions: Array<any>;
@@ -49,6 +55,7 @@ function TestHistoryItem({
   fmtDate: (date: any) => string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const statusLabel = (status || "completed").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
     <div className="rounded-xl bg-card/70 border border-border backdrop-blur-md overflow-hidden">
@@ -62,10 +69,15 @@ function TestHistoryItem({
             <p className="text-xs text-muted-foreground">
               {submittedLabel}: {fmtDate(submittedAt)}
             </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Duration: {typeof durationMinutes === "number" ? `${durationMinutes} min` : "—"} ·
+              {" "}Status: {statusLabel} ·
+              {" "}Recruiter: {recruiterName || "—"}
+            </p>
             {isPending && (
               <p className="text-xs text-[hsl(var(--warning))] mt-1">
                 <i className="ri-time-line mr-1" />
-                Awaiting manual grading
+                Pending Evaluation
               </p>
             )}
             {hasFullData && (
@@ -356,7 +368,7 @@ function TestScreeningTab({ candidateId }: { candidateId: string }) {
                     {session.snapshots.map((snap: any, idx: number) => (
                       <div key={snap.id || idx} className="relative rounded border border-border overflow-hidden">
                         <img
-                          src={`data:image/jpeg;base64,${snap.image_base64}`}
+                          src={snap.snapshot_url ? `${API_BASE}${snap.snapshot_url}` : undefined}
                           alt={`Snapshot ${idx + 1}`}
                           className="w-full h-auto"
                           style={{ maxHeight: "120px", objectFit: "cover" }}
@@ -369,10 +381,131 @@ function TestScreeningTab({ candidateId }: { candidateId: string }) {
                   </div>
                 </div>
               )}
+
+              {/* ✅ Test Video Recording */}
+              {session.video_id && (
+                <div className="mt-4 p-3 rounded-lg bg-blue-50/50 border border-blue-200/30">
+                  <div className="text-xs font-medium text-blue-700 mb-2 flex items-center gap-2">
+                    <i className="ri-video-line" />
+                    Test Video Recording
+                  </div>
+                  <VideoPlaybackComponent
+                    videoId={session.video_id}
+                    testId={session.test_id}
+                    candidateId={session.candidate_id}
+                    uploadedAt={session.video_uploaded_at}
+                    infoUrl={session.video_info_url ? `${API_BASE}${session.video_info_url}` : undefined}
+                    downloadUrl={session.video_download_url ? `${API_BASE}${session.video_download_url}` : undefined}
+                  />
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * ✅ Video Playback Component
+ * Displays recorded test video with secure token-based access
+ */
+function VideoPlaybackComponent({ videoId, testId, candidateId, uploadedAt, infoUrl, downloadUrl }: {
+  videoId: string;
+  testId: string;
+  candidateId: string;
+  uploadedAt?: string;
+  infoUrl?: string;
+  downloadUrl?: string;
+}) {
+  const [videoInfo, setVideoInfo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchVideoInfo = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        if (!infoUrl) {
+          throw new Error("Missing secure video info URL");
+        }
+        const headers: Record<string, string> = { "Cache-Control": "no-cache" };
+        const token = getAuthToken();
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const res = await fetch(infoUrl, {
+          method: "GET",
+          headers,
+        });
+
+        const data = await safeJson(res);
+        if (!res.ok) throw new Error((data as any)?.detail || "Failed to fetch video info");
+
+        setVideoInfo(data);
+      } catch (err: any) {
+        setError(err?.message || "Failed to load video");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchVideoInfo();
+  }, [videoId, infoUrl]);
+
+  if (loading) {
+    return <div className="text-xs text-muted-foreground">Loading video...</div>;
+  }
+
+  if (error) {
+    return <div className="text-xs text-destructive">{error}</div>;
+  }
+
+  if (!videoInfo) {
+    return <div className="text-xs text-muted-foreground">No video information available</div>;
+  }
+
+  const fileSizeMB = (videoInfo.file_size / (1024 * 1024)).toFixed(2);
+  const videoUrl = downloadUrl || "";
+
+  return (
+    <div className="space-y-2">
+      <video
+        controls
+        style={{
+          width: "100%",
+          maxWidth: "600px",
+          borderRadius: "8px",
+          background: "#000",
+        }}
+      >
+        <source src={videoUrl} type={videoInfo.mime_type || "video/webm"} />
+        Your browser does not support the video tag.
+      </video>
+
+      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+        <div>
+          <span className="text-xs font-medium">File Size:</span><br />
+          {fileSizeMB} MB
+        </div>
+        <div>
+          <span className="text-xs font-medium">Uploaded:</span><br />
+          {videoInfo.uploaded_at ? new Date(videoInfo.uploaded_at).toLocaleString() : "—"}
+        </div>
+      </div>
+
+      <div className="flex gap-2 pt-2">
+        <a
+          href={videoUrl}
+          download={`test_${testId}_recording.webm`}
+          className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium shadow-sm transition-all duration-200 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
+          <i className="ri-download-line" />
+          Download
+        </a>
+      </div>
     </div>
   );
 }
@@ -416,11 +549,17 @@ type TabDef = {
 type Attempt = {
   id: string;
   submittedAt?: string;
+  submitted_at?: string;
   score?: number;
   pdfUrl?: string;
   type?: string; // "smart" | "custom"
   testType?: string;
   needs_marking?: boolean;
+  status?: string;
+  duration_minutes?: number;
+  durationMinutes?: number;
+  recruiter_name?: string;
+  recruiterName?: string;
   custom?: {
     title?: string;
   };
@@ -512,12 +651,18 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
 
         return {
           id: String(a.id ?? a._id ?? a.attemptId ?? a.attempt_id ?? ""),
-          submittedAt: a.submittedAt ?? a.createdAt ?? a.created_at ?? a.timestamp,
+          submittedAt: a.submittedAt ?? a.submitted_at ?? a.createdAt ?? a.created_at ?? a.timestamp,
+          submitted_at: a.submitted_at ?? a.submittedAt ?? a.created_at ?? a.createdAt ?? a.timestamp,
           score: parsedScore,
           pdfUrl: a.pdfUrl ?? a.pdf_url ?? a.reportUrl ?? a.report_url,
           type: a.type ?? "smart",
           testType: a.testType ?? a.type ?? "smart",
           needs_marking: a.needs_marking ?? false,
+          status: a.status ?? ((a.needs_marking ?? false) ? "pending_evaluation" : "completed"),
+          duration_minutes: a.duration_minutes ?? a.durationMinutes,
+          durationMinutes: a.durationMinutes ?? a.duration_minutes,
+          recruiter_name: a.recruiter_name ?? a.recruiterName,
+          recruiterName: a.recruiterName ?? a.recruiter_name,
           custom: a.custom,
           // ✅ Include complete test data
           questions: a.questions ?? [],
@@ -526,8 +671,19 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
           questionCount: a.questionCount ?? (a.questions?.length ?? 0),
         };
       });
-
-      setAttempts(norm);
+      const byTimeDesc = (x: Attempt, y: Attempt) => {
+        const tx = new Date(x.submittedAt || x.submitted_at || 0).getTime();
+        const ty = new Date(y.submittedAt || y.submitted_at || 0).getTime();
+        return ty - tx;
+      };
+      const deduped: Attempt[] = [];
+      const seen = new Set<string>();
+      for (const item of [...norm].sort(byTimeDesc)) {
+        if (!item.id || seen.has(item.id)) continue;
+        seen.add(item.id);
+        deduped.push(item);
+      }
+      setAttempts(deduped);
     } catch (err: any) {
       setAttemptsError(err?.message || "Failed to load history");
       setAttempts(null);
@@ -800,7 +956,12 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                             : testType === "smart"
                             ? "Smart AI Test"
                             : "Custom Test";
-                        const isPending = a.needs_marking && (a.score === 0 || a.score === undefined || a.score === null);
+                        const isPending = Boolean(
+                          a.status === "pending_evaluation" ||
+                          (a.needs_marking && (a.score === 0 || a.score === undefined || a.score === null))
+                        );
+                        const durationMinutes = a.duration_minutes ?? a.durationMinutes;
+                        const recruiterName = a.recruiter_name ?? a.recruiterName;
                         
                         // ✅ Get complete test data
                         const questions = Array.isArray(a.questions) ? a.questions : [];
@@ -816,7 +977,10 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                             testType={testType}
                             isPending={isPending}
                             score={a.score}
-                            submittedAt={a.submittedAt}
+                            submittedAt={a.submittedAt ?? a.submitted_at}
+                            status={a.status}
+                            durationMinutes={durationMinutes}
+                            recruiterName={recruiterName}
                             pdf={pdf}
                             candidateId={candidateId}
                             questions={questions}

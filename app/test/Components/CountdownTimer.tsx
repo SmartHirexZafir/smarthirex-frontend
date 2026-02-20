@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from "react";
 
 type Props = {
-  scheduledDateTime: string; // ISO string
+  scheduledDateTime: string; // ISO string (from server)
   onTimeReached: () => void;
 };
 
@@ -20,8 +20,10 @@ export default function CountdownTimer({ scheduledDateTime, onTimeReached }: Pro
   useEffect(() => {
     const updateCountdown = () => {
       try {
-        const scheduled = new Date(scheduledDateTime);
+        const scheduled = parseUtcDate(scheduledDateTime);
         const now = new Date();
+
+        // UX-only countdown. Server remains the authority when starting/submitting.
         const diff = scheduled.getTime() - now.getTime();
 
         if (diff <= 0) {
@@ -154,11 +156,17 @@ export default function CountdownTimer({ scheduledDateTime, onTimeReached }: Pro
         {/* Scheduled Time Display */}
         <div className="mt-6 text-center">
           <p className="text-xs text-muted-foreground">
-            Scheduled for: <span className="font-semibold text-foreground">{new Date(scheduledDateTime).toLocaleString()}</span>
+            Scheduled for: <span className="font-semibold text-foreground">{parseUtcDate(scheduledDateTime).toLocaleString()}</span>
           </p>
         </div>
       </div>
     </div>
   );
+}
+
+function parseUtcDate(input: string): Date {
+  const raw = String(input || "").trim();
+  const hasTz = /(?:Z|[+\-]\d{2}:\d{2})$/i.test(raw);
+  return new Date(hasTz ? raw : `${raw}Z`);
 }
 

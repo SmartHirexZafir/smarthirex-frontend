@@ -15,6 +15,7 @@ import TestRunner, {
 
 import TestResult from "@/app/test/Components/TestResult";
 import ProctorGuard from "@/app/test/Components/ProctorGuard";
+import TestExpired from "@/app/test/Components/TestExpired";
 
 type SubmitResponse = RunnerSubmitResponse;
 type Question = RunnerQuestion;
@@ -31,8 +32,9 @@ export default function TestTokenPage() {
     [tokenParam]
   );
 
-  const [step, setStep] = useState<"ready" | "running" | "result">("ready");
+  const [step, setStep] = useState<"ready" | "running" | "result" | "expired">("ready");
   const [apiError, setApiError] = useState<string | null>(null);
+  const [expiredMessage, setExpiredMessage] = useState<string | null>(null);
 
   const [testId, setTestId] = useState<string | null>(null);
   const [candidateId, setCandidateId] = useState<string | null>(null);
@@ -64,6 +66,22 @@ export default function TestTokenPage() {
   // Check if we're showing countdown (TestReady will handle this internally)
   const [showingCountdown, setShowingCountdown] = useState(false);
 
+  // ✅ NEW: Handle test expiration errors
+  const handleTestError = (errorMsg: string) => {
+    setApiError(errorMsg);
+    
+    // Check if error is about test expiration (410 status or specific message)
+    if (
+      errorMsg.includes("expired") ||
+      errorMsg.includes("submission time") ||
+      errorMsg.includes("time has expired") ||
+      errorMsg.includes("deadline passed")
+    ) {
+      setExpiredMessage(errorMsg);
+      setStep("expired");
+    }
+  };
+
   return (
     <div className={showingCountdown ? "" : "mx-auto max-w-3xl px-4 py-10"}>
       {/* Header - hide when showing countdown */}
@@ -75,10 +93,18 @@ export default function TestTokenPage() {
       )}
 
       {/* Error banner - hide when showing countdown */}
-      {!showingCountdown && apiError && (
+      {!showingCountdown && apiError && step !== "expired" && (
         <div className="mb-6 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {apiError}
         </div>
+      )}
+
+      {/* Step: Expired */}
+      {step === "expired" && (
+        <TestExpired
+          message={expiredMessage || undefined}
+          onBack={resetAndExit}
+        />
       )}
 
       {/* Step: Ready */}
@@ -123,7 +149,7 @@ export default function TestTokenPage() {
               setStep("result");
             }}
             onCancel={resetAndExit}
-            onError={(m) => setApiError(m)}
+            onError={handleTestError}
           />
         </>
       )}

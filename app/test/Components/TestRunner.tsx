@@ -97,6 +97,7 @@ export default function TestRunner({
 
   // small, unobtrusive toast when we block a restricted action / info nudge
   const [toast, setToast] = useState<string | null>(null);
+  const submittingRef = React.useRef(false);
   function nudge(msg: string) {
     setToast(msg);
     window.clearTimeout((nudge as any)._t);
@@ -148,6 +149,26 @@ export default function TestRunner({
     }
   }, [answers, codeLang, LS_KEY]);
 
+  // Keep multiple tabs in sync if the same token is open.
+  useEffect(() => {
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key !== LS_KEY || !ev.newValue) return;
+      try {
+        const parsed = JSON.parse(ev.newValue);
+        if (parsed?.answers && typeof parsed.answers === "object") {
+          setAnswers(parsed.answers);
+        }
+        if (parsed?.codeLang && typeof parsed.codeLang === "object") {
+          setCodeLang(parsed.codeLang);
+        }
+      } catch {
+        // ignore malformed sync payload
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [LS_KEY]);
+
   function updateAnswer(i: number, value: string, maxWords?: number) {
     const capped = clampWords(value, maxWords);
     setAnswers((prev) => ({ ...prev, [i]: capped.text }));
@@ -159,9 +180,11 @@ export default function TestRunner({
 
   // Store handleSubmit ref for auto-submit timer
   const handleSubmit = async (e: React.FormEvent) => {
+    if (submittingRef.current) return;
     e.preventDefault();
     setErr(null);
     setLoading(true);
+    submittingRef.current = true;
 
     // Abort after 20s to avoid hanging UI on network issues
     const controller = new AbortController();
@@ -189,6 +212,13 @@ export default function TestRunner({
       });
 
       if (!res.ok) {
+        // ✅ Handle 410 (test expired) with user-friendly message
+        if (res.status === 410) {
+          const errorData = await res.json().catch(() => ({}));
+          const msg = (errorData as any)?.detail || "Your test time has expired. You can no longer submit answers.";
+          throw new Error(msg);
+        }
+        
         const txt = await res.text().catch(() => "");
         throw new Error(txt || `Failed to submit test (status ${res.status})`);
       }
@@ -210,6 +240,7 @@ export default function TestRunner({
     } finally {
       window.clearTimeout(t);
       setLoading(false);
+      submittingRef.current = false;
     }
   };
   
@@ -225,7 +256,7 @@ export default function TestRunner({
 
     const updateTimer = () => {
       try {
-        const expires = new Date(expiresAt);
+        const expires = parseUtcDate(expiresAt);
         const now = new Date();
         
         // Validate date
@@ -270,6 +301,66 @@ export default function TestRunner({
 
     return () => clearInterval(interval);
   }, [expiresAt, loading, nudge, err]);
+
+  const payloadAnswers = useMemo(
+    () =>
+      safeQuestions.map((q, i) => {
+        const type = String(q.type || "").toLowerCase();
+        const lang = type === "code" ? (codeLang[i] || q.language || "python") : undefined;
+        return {
+          answer: (answers[i] ?? "").toString(),
+          type: q.type || undefined,
+          language: lang,
+          question_id: q.id ?? undefined,
+        };
+      }),
+    [safeQuestions, codeLang, answers]
+  );
+
+  // Backend autosave is the source of truth. localStorage remains a best-effort fallback cache.
+  useEffect(() => {
+    if (!token) return;
+    const save = async () => {
+      try {
+        await fetch(`${API_BASE}/tests/autosave`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, answers: payloadAnswers }),
+        });
+      } catch {
+        // keep typing flow uninterrupted; next autosave retry will run soon
+      }
+    };
+    const id = window.setInterval(save, 8000);
+    return () => window.clearInterval(id);
+  }, [token, payloadAnswers]);
+
+  useEffect(() => {
+    const flushAutosave = () => {
+      if (!token) return;
+      const body = JSON.stringify({ token, answers: payloadAnswers });
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: "application/json" });
+        navigator.sendBeacon(`${API_BASE}/tests/autosave`, blob);
+        return;
+      }
+      fetch(`${API_BASE}/tests/autosave`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: true,
+      }).catch(() => {});
+    };
+    const onVisibility = () => {
+      if (document.hidden) flushAutosave();
+    };
+    window.addEventListener("beforeunload", flushAutosave);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("beforeunload", flushAutosave);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [token, payloadAnswers]);
 
   // --- Light “surveillance/security” guards on this form only ---
   useEffect(() => {
@@ -602,4 +693,11 @@ export default function TestRunner({
       </form>
     </div>
   );
+}
+
+function parseUtcDate(input?: string | null): Date {
+  const raw = String(input || "").trim();
+  if (!raw) return new Date(NaN);
+  const hasTz = /(?:Z|[+\-]\d{2}:\d{2})$/i.test(raw);
+  return new Date(hasTz ? raw : `${raw}Z`);
 }

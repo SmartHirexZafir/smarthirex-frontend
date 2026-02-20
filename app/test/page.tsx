@@ -106,6 +106,8 @@ export default function TestAssignment() {
   const [isSending, setIsSending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [inviteBlockedReason, setInviteBlockedReason] = useState<string | null>(null);
+  const [checkingInviteEligibility, setCheckingInviteEligibility] = useState(false);
 
   const email = useMemo(
     () => candidate?.email || candidate?.resume?.email || '',
@@ -180,30 +182,55 @@ export default function TestAssignment() {
   }, [candidateId]);
 
   /** -------- load test history (for preview) -------- */
+  const byTimeDesc = (a: Attempt, b: Attempt) => {
+    const ta = new Date(a.created_at || a.submitted_at || 0).getTime();
+    const tb = new Date(b.created_at || b.submitted_at || 0).getTime();
+    return tb - ta;
+  };
+
+  const toAttempt = (a: any, fallbackCandidateId = candidateId): Attempt => ({
+    _id: String(a?._id || a?.id || ''),
+    candidate_id: a?.candidate_id || a?.candidateId || fallbackCandidateId || '',
+    candidateId: a?.candidateId || a?.candidate_id || fallbackCandidateId || '',
+    candidate: a?.candidate,
+    score:
+      typeof a?.score === 'number'
+        ? a.score
+        : typeof a?.total_score === 'number'
+        ? a.total_score
+        : null,
+    type: (a?.type || a?.testType || 'smart'),
+    status: a?.status || ((a?.needs_marking || false) ? 'pending_evaluation' : 'completed'),
+    submitted_at: a?.submitted_at || a?.submittedAt || a?.created_at || a?.createdAt || null,
+    created_at: a?.created_at || a?.createdAt || a?.submitted_at || a?.submittedAt || null,
+  });
+
+  const dedupeAttempts = (arr: Attempt[]): Attempt[] => {
+    const seen = new Set<string>();
+    const out: Attempt[] = [];
+    for (const item of [...arr].sort(byTimeDesc)) {
+      const id = String(item?._id || '');
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push(item);
+    }
+    return out;
+  };
+
   const normalizeAllHistory = (payload: any): { attempts: Attempt[]; needs: Attempt[] } => {
-    const attempts: Attempt[] = Array.isArray(payload?.attempts)
-      ? payload.attempts
-      : [];
-    const needs: Attempt[] = Array.isArray(payload?.needs_marking)
-      ? payload.needs_marking
-      : [];
-    return { attempts, needs };
+    const attemptsRaw = Array.isArray(payload?.attempts) ? payload.attempts : [];
+    const needsRaw = Array.isArray(payload?.needs_marking) ? payload.needs_marking : [];
+    return {
+      attempts: dedupeAttempts(attemptsRaw.map((a: any) => toAttempt(a))),
+      needs: dedupeAttempts(needsRaw.map((a: any) => toAttempt(a))),
+    };
   };
 
   const normalizeCandidateHistory = (payload: any): { attempts: Attempt[] } => {
     // /tests/history/{candidateId} returns: { candidateId, attempts: [{ id, submittedAt, score, pdfUrl }] }
     const list = Array.isArray(payload?.attempts) ? payload.attempts : [];
-    const mapped: Attempt[] = list.map((a: any) => ({
-      _id: String(a.id || a._id || ''),
-      candidate_id: payload?.candidateId || candidateId,
-      candidateId: payload?.candidateId || candidateId,
-      score: typeof a.score === 'number' ? a.score : (typeof a.total_score === 'number' ? a.total_score : null),
-      type: 'smart', // we don't know; default to smart for compatibility
-      status: 'completed',
-      submitted_at: a.submittedAt || a.createdAt || a.created_at || null,
-      created_at: a.submittedAt || a.createdAt || a.created_at || null,
-    }));
-    return { attempts: mapped };
+    const mapped: Attempt[] = list.map((a: any) => toAttempt(a, payload?.candidateId || candidateId));
+    return { attempts: dedupeAttempts(mapped) };
   };
 
   const loadHistory = async () => {
@@ -213,11 +240,6 @@ export default function TestAssignment() {
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
         const { attempts, needs } = normalizeAllHistory(data);
-        const byTimeDesc = (a: Attempt, b: Attempt) => {
-          const ta = new Date(a.created_at || a.submitted_at || 0).getTime();
-          const tb = new Date(b.created_at || b.submitted_at || 0).getTime();
-          return tb - ta;
-        };
         setAllAttempts((attempts || []).sort(byTimeDesc));
         setNeedsMarking((needs || []).sort(byTimeDesc));
         return;
@@ -229,11 +251,6 @@ export default function TestAssignment() {
         if (resOne.ok) {
           const data = await resOne.json().catch(() => ({}));
           const { attempts } = normalizeCandidateHistory(data);
-          const byTimeDesc = (a: Attempt, b: Attempt) => {
-            const ta = new Date(a.created_at || a.submitted_at || 0).getTime();
-            const tb = new Date(b.created_at || b.submitted_at || 0).getTime();
-            return tb - ta;
-          };
           setAllAttempts((attempts || []).sort(byTimeDesc));
           setNeedsMarking([]); // no "needs marking" info in this shape
           return;
@@ -246,6 +263,61 @@ export default function TestAssignment() {
 
   useEffect(() => {
     loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidateId]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!candidateId) {
+        if (active) setInviteBlockedReason(null);
+        return;
+      }
+      try {
+        setCheckingInviteEligibility(true);
+        const res = await fetch(`${API_BASE}/tests/eligibility/${candidateId}`, { headers: authHeaders() });
+        if (!res.ok) {
+          if (active) setInviteBlockedReason(null);
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!active) return;
+        if (data?.can_invite === false) {
+          setInviteBlockedReason(String(data?.reason || "Candidate is not eligible for a new test invite."));
+        } else {
+          setInviteBlockedReason(null);
+        }
+      } catch {
+        if (active) setInviteBlockedReason(null);
+      } finally {
+        if (active) setCheckingInviteEligibility(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [candidateId, allAttempts.length, needsMarking.length]);
+
+  // Auto-refresh attempts so Smart AI completion and manual grading reflect quickly.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void loadHistory();
+      }
+    };
+    const onFocus = () => void loadHistory();
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void loadHistory();
+      }
+    }, 15000);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onFocus);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateId]);
 
@@ -300,6 +372,11 @@ export default function TestAssignment() {
   /** -------- send invite (Smart/Custom) -------- */
   const sendInvite = async () => {
     if (!candidateId) return;
+    if (inviteBlockedReason) {
+      setErr(inviteBlockedReason);
+      window.setTimeout(() => setErr(null), 3200);
+      return;
+    }
     try {
       setIsSending(true);
       const payload: any = {
@@ -472,6 +549,18 @@ export default function TestAssignment() {
     const getCandId = (a: Attempt) => a.candidateId || a.candidate_id || getCand(a)?._id || '';
     const getCandEmail = (a: Attempt) =>
       getCand(a)?.email || getCand(a)?.resume?.email || '—';
+    const fmtStatus = (s?: string) => {
+      const v = String(s || '').toLowerCase();
+      return v.includes('pending') || v.includes('manual') ? 'Pending Manual Review' : 'Completed';
+    };
+    const fmtDate = (iso?: string) => {
+      if (!iso) return '—';
+      try {
+        return new Date(iso).toLocaleString();
+      } catch {
+        return iso;
+      }
+    };
     return (
       <div className="bg-card text-foreground rounded-2xl shadow-xl border border-border p-4">
         <div className="text-sm font-medium mb-3">{title}</div>
@@ -483,7 +572,10 @@ export default function TestAssignment() {
                   {getCand(a)?.name || getCandEmail(a) || getCandId(a)}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Score: {a.score ?? '—'} / 100 · Type: {a.type}
+                  Type: {a.type === 'custom' ? 'Custom Test' : 'Smart AI Test'} · Score: {a.score ?? '—'} / 100
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Status: {fmtStatus(a.status)} · Date: {fmtDate(a.submitted_at || a.created_at)}
                 </div>
               </div>
               {getCandId(a) ? (
@@ -681,7 +773,13 @@ export default function TestAssignment() {
                 <button
                   onClick={sendInvite}
                   type="button"
-                  disabled={!candidateId || isSending || (testType === 'smart' && mcqCount + scenarioCount === 0)}
+                  disabled={
+                    !candidateId ||
+                    isSending ||
+                    checkingInviteEligibility ||
+                    Boolean(inviteBlockedReason) ||
+                    (testType === 'smart' && mcqCount + scenarioCount === 0)
+                  }
                   className="btn btn-primary"
                   aria-busy={isSending}
                 >
@@ -698,6 +796,9 @@ export default function TestAssignment() {
                   )}
                 </button>
               </div>
+              {inviteBlockedReason && (
+                <div className="mt-2 text-xs text-destructive">{inviteBlockedReason}</div>
+              )}
             </div>
           </div>
         </div>

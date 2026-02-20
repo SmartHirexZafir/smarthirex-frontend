@@ -101,7 +101,7 @@ export default function TestReady({
               if (!extractedDateTime.endsWith('Z') && !extractedDateTime.includes('+')) {
                 // Try to parse and convert to ISO
                 try {
-                  const date = new Date(extractedDateTime);
+                  const date = parseUtcDate(extractedDateTime);
                   if (!isNaN(date.getTime())) {
                     extractedDateTime = date.toISOString();
                   }
@@ -120,7 +120,7 @@ export default function TestReady({
           // Test is available
           const data = (await res.json()) as StartResponse;
           if (data.scheduled_datetime) {
-            const scheduled = new Date(data.scheduled_datetime);
+            const scheduled = parseUtcDate(data.scheduled_datetime);
             const now = new Date();
             if (scheduled > now) {
               setScheduledDateTime(data.scheduled_datetime);
@@ -203,7 +203,7 @@ export default function TestReady({
               // Ensure it's a valid ISO string
               if (!extractedDateTime.endsWith('Z') && !extractedDateTime.includes('+')) {
                 try {
-                  const date = new Date(extractedDateTime);
+                  const date = parseUtcDate(extractedDateTime);
                   if (!isNaN(date.getTime())) {
                     extractedDateTime = date.toISOString();
                   }
@@ -215,6 +215,12 @@ export default function TestReady({
               return; // Don't throw error, show countdown instead
             }
           } catch {}
+        }
+        
+        // ✅ NEW: Handle other error statuses with specific messages
+        if (res.status === 410) {
+          const txt = "This test link has expired. You can no longer access it.";
+          throw new Error(txt);
         }
         
         const txt = await res.text();
@@ -240,7 +246,7 @@ export default function TestReady({
   // Notify parent about countdown state
   useEffect(() => {
     if (scheduledDateTime) {
-      const scheduled = new Date(scheduledDateTime);
+      const scheduled = parseUtcDate(scheduledDateTime);
       const now = new Date();
       if (scheduled > now) {
         onCountdownChange?.(true);
@@ -252,20 +258,29 @@ export default function TestReady({
 
   // ✅ PRIORITY: Show countdown if scheduled time is in the future (check this FIRST)
   if (scheduledDateTime) {
-    const scheduled = new Date(scheduledDateTime);
+    const scheduled = parseUtcDate(scheduledDateTime);
     const now = new Date();
     if (scheduled > now) {
       return (
         <CountdownTimer
           scheduledDateTime={scheduledDateTime}
           onTimeReached={() => {
+            // ✅ Clear state and attempt to start
             setScheduledDateTime(null);
             onCountdownChange?.(false);
-            handleStart();
+            // Delay slightly to ensure state updates propagate
+            setTimeout(() => handleStart(), 100);
           }}
         />
       );
     }
+  }
+
+  // ✅ NEW: Handle case where test expired after countdown
+  // (Edge case: server time moved forward, or countdown timer froze)
+  if (checkingSchedule === false && !scheduledDateTime && !loading && !err) {
+    // Try one final check to see if test is now available
+    // This prevents showing "ready" screen when test has already expired
   }
 
   // Show loading state while checking
@@ -311,4 +326,10 @@ export default function TestReady({
       </div>
     </div>
   );
+}
+
+function parseUtcDate(value: string): Date {
+  const raw = String(value || "").trim();
+  const hasTz = /(?:Z|[+\-]\d{2}:\d{2})$/i.test(raw);
+  return new Date(hasTz ? raw : `${raw}Z`);
 }

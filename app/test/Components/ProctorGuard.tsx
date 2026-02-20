@@ -3,6 +3,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProctorHeartbeat, type HeartbeatStatus } from "../Services/proctorHeartbeat";
+import { VideoRecorder } from "../Services/videoRecorder";
 
 type ProctorGuardProps = {
   /** Backend base URL, e.g. http://localhost:10000 */
@@ -74,12 +75,18 @@ export default function ProctorGuard({
   const hbRef = useRef<ProctorHeartbeat | null>(null);
   const lastFrameAtRef = useRef<number>(0); // used by watchdog
   const restartingRef = useRef<boolean>(false);
+  const videoRecorderRef = useRef<VideoRecorder | null>(null);
+  const recordingPromiseRef = useRef<Promise<Blob | null> | null>(null);
+  const startVideoRecordingRef = useRef<(() => Promise<void>) | null>(null);
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [cameraStatus, setCameraStatus] = useState<"idle" | "on" | "blocked" | "error">("idle");
   const [proctorError, setProctorError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null); // transient notices (e.g., screenshot attempt)
+  const [videoStatus, setVideoStatus] = useState<"idle" | "recording" | "uploading" | "error">("idle");
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const previewStyle = useMemo<React.CSSProperties>(() => {
     const base: React.CSSProperties = {
@@ -182,6 +189,11 @@ export default function ProctorGuard({
     if ((!hasLiveTrack || !frameIsFresh) && document.visibilityState === "visible" && document.hasFocus()) {
       try {
         restartingRef.current = true;
+        // ✅ Stop video recording before restarting camera
+        if (videoRecorderRef.current?.isActive()) {
+          await videoRecorderRef.current.stop();
+        }
+
         // stop old tracks first
         try {
           s?.getTracks?.().forEach((t) => t.stop());
@@ -191,11 +203,14 @@ export default function ProctorGuard({
 
         const ok = await startCamera();
         if (ok) {
+          // ✅ Restart video recording with new stream
+          await startVideoRecordingRef.current?.();
+
           // re-hook heartbeat media (if running)
           if (hbRef.current) {
             hbRef.current.setMedia({ stream: streamRef.current, videoEl: videoRef.current });
           }
-          setNotice("Camera recovered.");
+          setNotice("Camera recovered and recording resumed.");
           window.setTimeout(() => setNotice(null), 1200);
         }
       } finally {
@@ -303,6 +318,7 @@ export default function ProctorGuard({
           width: w,
           height: h,
           taken_at: new Date().toISOString(),
+          candidate_token: token ?? undefined,
         }),
         keepalive: true,
       });
@@ -313,7 +329,7 @@ export default function ProctorGuard({
     } catch {
       // ignore network flakiness; try again at next interval
     }
-  }, [apiBase, enableSnapshots, sessionId]);
+  }, [apiBase, enableSnapshots, sessionId, token]);
 
   const endSession = useCallback(
     async (reason: string) => {
@@ -322,15 +338,87 @@ export default function ProctorGuard({
         await fetch(`${apiBase}/proctor/end`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ session_id: sessionId, reason }),
+          body: JSON.stringify({ session_id: sessionId, reason, candidate_token: token ?? undefined }),
           keepalive: true,
         });
       } catch {
         // ignore
       }
     },
-    [apiBase, sessionId]
+    [apiBase, sessionId, token]
   );
+
+  // ✅ Stop recording and finalize chunked upload
+  const stopAndUploadVideo = useCallback(async () => {
+    if (!videoRecorderRef.current || !videoRecorderRef.current.isActive()) {
+      return;
+    }
+
+    try {
+      setVideoStatus("idle");
+      setVideoStatus("uploading");
+      setUploadProgress(0);
+      await videoRecorderRef.current.stop();
+      setUploadProgress(100);
+      console.log("ProctorGuard: Video uploaded successfully");
+    } catch (error: any) {
+      setVideoStatus("error");
+      setVideoError(error?.message || "Video upload failed");
+      console.error("ProctorGuard: Video upload error", error);
+    } finally {
+      if (videoStatus === "uploading") {
+        window.setTimeout(() => setVideoStatus("idle"), 2000);
+      }
+    }
+  }, [videoStatus]);
+
+  // ✅ NEW: Start video recording
+  const startVideoRecording = useCallback(async () => {
+    if (!streamRef.current) {
+      console.warn("ProctorGuard: No media stream available for video recording");
+      return;
+    }
+
+    try {
+      const recorder = new VideoRecorder({
+        uploadUrl: `${apiBase}/proctor/video/upload`,
+        onStart: () => {
+          setVideoStatus("recording");
+          setVideoError(null);
+        },
+        onUploadProgress: (percent) => {
+          setUploadProgress(percent);
+        },
+        onError: (error) => {
+          setVideoStatus("error");
+          setVideoError(error.message);
+          console.error("VideoRecorder error:", error);
+        },
+      });
+
+      videoRecorderRef.current = recorder;
+      if (sessionId && testId && candidateId) {
+        recorder.startStreamingSession(sessionId, testId, candidateId, token ?? "");
+      }
+      const started = recorder.start(streamRef.current);
+
+      if (!started) {
+        setVideoStatus("error");
+        setVideoError("Failed to start video recording");
+      }
+    } catch (error: any) {
+      setVideoStatus("error");
+      setVideoError(error?.message || "Failed to initialize video recorder");
+      console.error("ProctorGuard: Video recorder init error", error);
+    }
+  }, [apiBase, sessionId, testId, candidateId, token]);
+
+  useEffect(() => {
+    startVideoRecordingRef.current = startVideoRecording;
+    return () => {
+      startVideoRecordingRef.current = null;
+    };
+  }, [startVideoRecording]);
 
   // --- Optional fullscreen ---------------------------------------------------
   const requestFullscreen = useCallback(async () => {
@@ -375,13 +463,16 @@ export default function ProctorGuard({
 
       const sid = await startSession();
       if (!sid || cancelled) return;
+
+      // ✅ Start video recording once session is established
+      await startVideoRecording();
     })();
 
     return () => {
       cancelled = true;
       try { detachFrame?.(); } catch {}
     };
-  }, [startCamera, startSession, requestFullscreen, enforceFullscreen, attachFrameListener]);
+  }, [startCamera, startSession, requestFullscreen, enforceFullscreen, attachFrameListener, startVideoRecording]);
 
   // Instantiate + run ProctorHeartbeat once we have a session and a stream
   useEffect(() => {
@@ -405,7 +496,7 @@ export default function ProctorGuard({
         }
       },
       // include session_id to match backend shape; other fields are additional but harmless
-      extra: { session_id: sessionId },
+      extra: { session_id: sessionId, candidate_token: token ?? undefined },
     });
 
     hb.setIdentity({ testSessionId: sessionId, userId: candidateId ?? undefined });
@@ -418,7 +509,7 @@ export default function ProctorGuard({
       try { hb.stop(); } catch {}
       hbRef.current = null;
     };
-  }, [sessionId, apiBase, heartbeatIntervalSec, candidateId]);
+  }, [sessionId, apiBase, heartbeatIntervalSec, candidateId, token]);
 
   // Watchdog to auto-recover camera if track ends or frames stall
   useEffect(() => {
@@ -512,6 +603,9 @@ export default function ProctorGuard({
   // Cleanup on page unload + unmount
   useEffect(() => {
     const onBeforeUnload = () => {
+      // Stop video recording and upload on unload
+      stopAndUploadVideo();
+
       // best-effort end (keepalive=true)
       endSession("page_unload");
       try { hbRef.current?.stop(); } catch {}
@@ -526,7 +620,7 @@ export default function ProctorGuard({
       window.removeEventListener("beforeunload", onBeforeUnload as any);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endSession, stopCamera, exitFullscreen, enforceFullscreen]);
+  }, [endSession, stopCamera, exitFullscreen, enforceFullscreen, stopAndUploadVideo]);
 
   // PrintScreen detection + best-effort clipboard clear (+ snapshot)
   useEffect(() => {
@@ -571,6 +665,14 @@ export default function ProctorGuard({
 
   return (
     <>
+      {/* CSS for pulse animation */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 0.9; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
+
       {/* hidden canvas for snapshot encoding */}
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
@@ -611,6 +713,34 @@ export default function ProctorGuard({
           >
             {starting ? "Starting…" : cameraStatus === "on" ? "Recording" : cameraStatus}
           </div>
+
+          {/* ✅ Video Recording Status Indicator */}
+          {videoStatus !== "idle" && (
+            <div
+              style={{
+                position: "absolute",
+                right: 8,
+                top: 8,
+                padding: "2px 8px",
+                borderRadius: 999,
+                fontSize: 10,
+                fontWeight: "bold",
+                background:
+                  videoStatus === "recording"
+                    ? "rgba(239, 68, 68, 0.9)" // red with pulse for recording
+                    : videoStatus === "uploading"
+                    ? "rgba(59, 130, 246, 0.9)" // blue for uploading
+                    : "rgba(239, 68, 68, 0.9)", // red for error
+                color: "#fff",
+                animation: videoStatus === "recording" ? "pulse 1.5s infinite" : "none",
+              }}
+              title={videoStatus}
+            >
+              {videoStatus === "recording" && "● RECORDING"}
+              {videoStatus === "uploading" && `UPLOADING ${uploadProgress}%`}
+              {videoStatus === "error" && "VIDEO ERROR"}
+            </div>
+          )}
         </div>
       )}
 
@@ -665,6 +795,27 @@ export default function ProctorGuard({
           }}
         >
           Proctoring: {proctorError}
+        </div>
+      )}
+
+      {/* ✅ Video Error Indicator */}
+      {videoError && (
+        <div
+          style={{
+            position: "fixed",
+            left: 16,
+            bottom: proctorError ? 80 : 16,
+            zIndex: 50,
+            background: "rgba(239,68,68,.95)",
+            color: "#fff",
+            padding: "8px 12px",
+            borderRadius: 10,
+            boxShadow: "0 8px 30px rgba(0,0,0,.25)",
+            maxWidth: 360,
+            fontSize: 13,
+          }}
+        >
+          Video Recording: {videoError}
         </div>
       )}
 

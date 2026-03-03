@@ -79,15 +79,21 @@ export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
   // ✅ Tokenized access: /test/[token] (candidate) - NO LOGIN REQUIRED
-  // Candidates can access tests directly via token link - backend will validate the token
-  // /verify/[token] (email verification) uses UUID tokens - pass through to backend
   if (pathname.startsWith('/test/')) {
-    // ✅ Allow all test token access - backend validates token validity
-    // No login required - candidates go straight to test
     return NextResponse.next();
   }
 
-  // Email verification tokens are UUIDs validated by backend - allow through
+  // ✅ Meeting link: /meetings/[token] - NO LOGIN REQUIRED (same as test links)
+  // Candidate clicks link → token + optional ?access= validated by backend; timer or meeting room
+  if (pathname.startsWith('/meetings/')) {
+    const rest = pathname.slice('/meetings/'.length);
+    const segment = rest.split('/')[0];
+    if (segment && !rest.includes('/') && segment.length > 0) {
+      return NextResponse.next();
+    }
+  }
+
+  // Email verification - allow through
   if (pathname.startsWith('/verify/')) {
     return NextResponse.next();
   }

@@ -4,7 +4,7 @@
 export const dynamic = 'force-dynamic';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -72,6 +72,27 @@ type DashboardSummary = {
   generatedAt?: string;
 };
 
+type CandidateListItem = {
+  _id: string;
+  name?: string | null;
+  email?: string | null;
+  job_role?: string | null;
+  status?: string | null;
+  score?: number;
+  test_score?: number;
+  total_score?: number;
+  rank?: number;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+};
+
+type DashboardLists = {
+  in_review: CandidateListItem[];
+  shortlisted: CandidateListItem[];
+  rejected: CandidateListItem[];
+  accepted: CandidateListItem[];
+};
+
 const API_BASE = (
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   process.env.NEXT_PUBLIC_API_BASE ||
@@ -133,11 +154,44 @@ function pct(part: number, total: number): number {
   return Math.max(0, Math.min(100, Math.round((part / total) * 100)));
 }
 
+const EMPTY_LISTS: DashboardLists = {
+  in_review: [],
+  shortlisted: [],
+  rejected: [],
+  accepted: [],
+};
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardSummary>(EMPTY_SUMMARY);
+  const [lists, setLists] = useState<DashboardLists>(EMPTY_LISTS);
+  const [listsLoading, setListsLoading] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  const loadLists = useCallback(async () => {
+    try {
+      setListsLoading(true);
+      const res = await fetch(`${API_BASE}/dashboard/lists?limit_per_bucket=50`, {
+        method: 'GET',
+        headers: authHeaders(),
+      });
+      const payload = (await res.json().catch(() => ({}))) as Partial<DashboardLists>;
+      if (!res.ok) {
+        throw new Error((payload as { detail?: string })?.detail || 'Failed to load candidate lists');
+      }
+      setLists({
+        in_review: Array.isArray(payload.in_review) ? payload.in_review : [],
+        shortlisted: Array.isArray(payload.shortlisted) ? payload.shortlisted : [],
+        rejected: Array.isArray(payload.rejected) ? payload.rejected : [],
+        accepted: Array.isArray(payload.accepted) ? payload.accepted : [],
+      });
+    } catch {
+      setLists(EMPTY_LISTS);
+    } finally {
+      setListsLoading(false);
+    }
+  }, []);
 
   const loadSummary = async (mode: 'initial' | 'refresh' = 'refresh') => {
     try {
@@ -180,17 +234,18 @@ export default function DashboardPage() {
     };
 
     safeRefresh('initial');
+    loadLists();
 
-    const onFocus = () => safeRefresh('refresh');
+    const onFocus = () => { safeRefresh('refresh'); loadLists(); };
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') safeRefresh('refresh');
+      if (document.visibilityState === 'visible') { safeRefresh('refresh'); loadLists(); }
     };
     const onStorage = (event: StorageEvent) => {
-      if (event.key === 'candidate_status_changed') safeRefresh('refresh');
+      if (event.key === 'candidate_status_changed') { safeRefresh('refresh'); loadLists(); }
     };
 
     const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') safeRefresh('refresh');
+      if (document.visibilityState === 'visible') { safeRefresh('refresh'); loadLists(); }
     }, POLL_MS);
 
     window.addEventListener('focus', onFocus);
@@ -204,7 +259,7 @@ export default function DashboardPage() {
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('storage', onStorage);
     };
-  }, []);
+  }, [loadLists]);
 
   const funnel = useMemo(() => {
     const total = Math.max(1, data.totalCandidatesUploaded);
@@ -500,6 +555,104 @@ export default function DashboardPage() {
               );
             })}
           </ul>
+        )}
+      </section>
+
+      {/* Real candidate lists: Uploaded (in review), Shortlisted, Rejected */}
+      <section className="rounded-xl border border-border bg-background p-4">
+        <h3 className="text-lg font-semibold mb-4">Candidates by status</h3>
+        <p className="text-sm text-muted-foreground mb-4">Click a candidate to open their profile.</p>
+        {listsLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="rounded-lg border border-border p-4 animate-pulse">
+                <div className="h-5 bg-muted rounded w-1/2 mb-3" />
+                <div className="space-y-2">
+                  {[1, 2, 3].map((j) => (
+                    <div key={j} className="h-12 bg-muted rounded" />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="rounded-lg border border-border p-4">
+              <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                <i className="ri-upload-cloud-2-line" />
+                Uploaded / In review
+              </h4>
+              <p className="text-xs text-muted-foreground mb-3">Candidates awaiting review</p>
+              {lists.in_review.length === 0 ? (
+                <p className="text-sm text-muted-foreground">None</p>
+              ) : (
+                <ul className="space-y-2">
+                  {lists.in_review.slice(0, 15).map((c) => (
+                    <li key={c._id} className="rounded border border-border p-2 text-sm hover:bg-muted/50 transition-colors">
+                      <Link href={`/candidate/${c._id}`} className="font-medium text-primary hover:underline block truncate">
+                        {c.name || 'Unnamed'}
+                      </Link>
+                      <p className="text-xs text-muted-foreground truncate">{c.job_role || '—'}</p>
+                      <p className="text-xs text-muted-foreground">{safeDate(c.createdAt || c.updatedAt)}</p>
+                      <Link href={`/candidate/${c._id}`} className="text-xs text-primary hover:underline mt-1 inline-block">
+                        Open profile →
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="rounded-lg border border-border p-4">
+              <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                <i className="ri-award-line" />
+                Shortlisted
+              </h4>
+              <p className="text-xs text-muted-foreground mb-3">Score and role</p>
+              {lists.shortlisted.length === 0 ? (
+                <p className="text-sm text-muted-foreground">None</p>
+              ) : (
+                <ul className="space-y-2">
+                  {lists.shortlisted.slice(0, 15).map((c) => (
+                    <li key={c._id} className="rounded border border-border p-2 text-sm hover:bg-muted/50 transition-colors">
+                      <Link href={`/candidate/${c._id}`} className="font-medium text-primary hover:underline block truncate">
+                        {c.name || 'Unnamed'}
+                      </Link>
+                      <p className="text-xs text-muted-foreground truncate">{c.job_role || '—'}</p>
+                      <p className="text-xs text-muted-foreground">Score: {(c.total_score ?? c.test_score ?? c.score ?? 0).toFixed(1)}</p>
+                      <Link href={`/candidate/${c._id}`} className="text-xs text-primary hover:underline mt-1 inline-block">
+                        Open profile →
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="rounded-lg border border-border p-4">
+              <h4 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                <i className="ri-close-circle-line" />
+                Rejected
+              </h4>
+              <p className="text-xs text-muted-foreground mb-3">Status and profile link</p>
+              {lists.rejected.length === 0 ? (
+                <p className="text-sm text-muted-foreground">None</p>
+              ) : (
+                <ul className="space-y-2">
+                  {lists.rejected.slice(0, 15).map((c) => (
+                    <li key={c._id} className="rounded border border-border p-2 text-sm hover:bg-muted/50 transition-colors">
+                      <Link href={`/candidate/${c._id}`} className="font-medium text-primary hover:underline block truncate">
+                        {c.name || 'Unnamed'}
+                      </Link>
+                      <p className="text-xs text-muted-foreground truncate">{c.job_role || '—'}</p>
+                      <p className="text-xs text-muted-foreground">Status: {c.status || 'rejected'}</p>
+                      <Link href={`/candidate/${c._id}`} className="text-xs text-primary hover:underline mt-1 inline-block">
+                        Open profile →
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
         )}
       </section>
     </div>

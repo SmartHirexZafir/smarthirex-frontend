@@ -136,8 +136,16 @@ export default function TestReady({
           // Other error statuses
           setCheckingSchedule(false);
         }
-      } catch (e) {
-        console.error("Error checking schedule:", e);
+      } catch (e: unknown) {
+        const isNetworkError = e instanceof TypeError && (e.message === "Failed to fetch" || e.message === "Load failed");
+        const msg = e instanceof Error ? e.message : String(e);
+        const isFetchFailure = msg === "Failed to fetch" || msg === "Load failed";
+        if (isNetworkError || isFetchFailure) {
+          setErr("Unable to reach the server. Please check your connection and try again, or use the same link from your email.");
+          setCheckingSchedule(false);
+        } else {
+          console.error("Error checking schedule:", e);
+        }
       } finally {
         setCheckingSchedule(false);
       }

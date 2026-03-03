@@ -147,7 +147,7 @@ export default function GlobalLoadingProvider({ children }: { children: React.Re
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const EXCLUDE = [/\/api\/chat/i, /\/chatbot/i];
+    const EXCLUDE = [/\/api\/chat/i, /\/chatbot/i, /\/tests\/start/i, /\/tests\/autosave/i];
     const originalFetch = window.fetch;
 
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {

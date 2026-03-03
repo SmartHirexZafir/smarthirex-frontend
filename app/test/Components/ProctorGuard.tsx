@@ -75,6 +75,7 @@ export default function ProctorGuard({
   const hbRef = useRef<ProctorHeartbeat | null>(null);
   const lastFrameAtRef = useRef<number>(0); // used by watchdog
   const restartingRef = useRef<boolean>(false);
+  const sessionFlowStartedRef = useRef<boolean>(false); // ensure startSession runs only once per mount
   const videoRecorderRef = useRef<VideoRecorder | null>(null);
   const recordingPromiseRef = useRef<Promise<Blob | null> | null>(null);
   const startVideoRecordingRef = useRef<(() => Promise<void>) | null>(null);
@@ -151,6 +152,15 @@ export default function ProctorGuard({
 
   const startCamera = useCallback(async () => {
     try {
+      const existing = streamRef.current;
+      if (existing?.getVideoTracks?.().some((t) => t.readyState === "live")) {
+        if (videoRef.current && !videoRef.current.srcObject) {
+          videoRef.current.srcObject = existing;
+          try { await videoRef.current.play(); } catch {}
+        }
+        setCameraStatus("on");
+        return true;
+      }
       setCameraStatus("idle");
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       streamRef.current = stream;
@@ -445,8 +455,11 @@ export default function ProctorGuard({
 
   // --- Lifecycle -------------------------------------------------------------
 
-  // Start camera + session on mount
+  // Start camera + session on mount — run only once per mount to avoid rate limit (Too Many Requests)
   useEffect(() => {
+    if (sessionFlowStartedRef.current) return;
+    sessionFlowStartedRef.current = true;
+
     let cancelled = false;
     let detachFrame: (() => void) | undefined;
 

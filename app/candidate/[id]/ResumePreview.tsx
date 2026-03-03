@@ -33,6 +33,7 @@ type ProjectObj = {
 
 type Resume = {
   url?: string;
+  file_url?: string;
   filename?: string;
   summary?: string;
   education?: Education[];
@@ -60,20 +61,13 @@ function toAbsoluteUrl(url?: string): string {
   return `${API_BASE}${trimmed.startsWith("/") ? trimmed : `/${trimmed}`}`;
 }
 
-/** Extract resume URL from candidate - checks all possible locations */
+/** Extract resume URL from candidate - checks all possible locations (MongoDB fields) */
 function getResumeUrl(candidate: Candidate): string {
-  // Check nested resume.url first
-  if (candidate.resume?.url) {
-    return candidate.resume.url;
-  }
-  // Check top-level resume_url (snake_case)
-  if (candidate.resume_url) {
-    return candidate.resume_url;
-  }
-  // Check top-level resumeUrl (camelCase)
-  if (candidate.resumeUrl) {
-    return candidate.resumeUrl;
-  }
+  const u = (s: string | undefined) => (typeof s === "string" && s.trim() ? s.trim() : "");
+  if (u(candidate.resume?.url)) return candidate.resume!.url!.trim();
+  if (u(candidate.resume?.file_url)) return candidate.resume!.file_url!.trim();
+  if (u(candidate.resume_url)) return candidate.resume_url!.trim();
+  if (u(candidate.resumeUrl)) return candidate.resumeUrl!.trim();
   return "";
 }
 
@@ -110,14 +104,24 @@ export default function ResumePreview({ candidate }: { candidate: Candidate }) {
     return null;
   }
 
+  const openCv = () => {
+    if (openUrl) window.open(openUrl, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="p-4">
-      {/* Header */}
+      {/* Header + file tile: clickable to open CV using stored resume URL from MongoDB */}
       <div className="mb-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div
+          className={`mb-3 flex items-center justify-between ${openUrl ? "cursor-pointer" : ""}`}
+          onClick={openUrl ? openCv : undefined}
+          onKeyDown={openUrl ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openCv(); } } : undefined}
+          role={openUrl ? "button" : undefined}
+          tabIndex={openUrl ? 0 : undefined}
+          aria-label={openUrl ? "Open resume in new tab" : undefined}
+          title={openUrl ? "Click to open CV" : undefined}
+        >
           <h3 className="text-lg font-semibold text-card-foreground">Resume Preview</h3>
-
-          {/* Per requirement: open in browser (no refresh/download). */}
           {openUrl ? (
             <a
               href={openUrl}
@@ -126,24 +130,24 @@ export default function ResumePreview({ candidate }: { candidate: Candidate }) {
               aria-label="Open resume in browser"
               title="Open resume in browser"
               className="btn btn-primary"
+              onClick={(e) => e.stopPropagation()}
             >
               <i className="ri-external-link-line text-sm" aria-hidden />
               <span className="text-sm">Open</span>
             </a>
           ) : null}
         </div>
-
-        {/* Clickable file tile also opens the resume */}
-        <a
-          href={openUrl || undefined}
-          target={openUrl ? "_blank" : undefined}
-          rel={openUrl ? "noopener noreferrer" : undefined}
+        <div
+          onClick={openUrl ? openCv : undefined}
+          onKeyDown={openUrl ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openCv(); } } : undefined}
+          role={openUrl ? "button" : undefined}
+          tabIndex={openUrl ? 0 : undefined}
+          aria-label={openUrl ? "Open CV" : "No file URL available"}
           className={`block rounded-xl border border-border bg-card/80 backdrop-blur-md p-3 shadow-soft transition ${
             openUrl
-              ? "hover:shadow-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              ? "hover:shadow-glow focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background cursor-pointer"
               : ""
           }`}
-          aria-disabled={!openUrl}
         >
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/15">
@@ -152,11 +156,11 @@ export default function ResumePreview({ candidate }: { candidate: Candidate }) {
             <div>
               <p className="text-sm font-medium text-card-foreground">{fileName}</p>
               <p className="text-xs text-muted-foreground">
-                {openUrl ? "Opens in a new tab" : "No file URL available"}
+                {openUrl ? "Click to open in a new tab" : "No file URL available"}
               </p>
             </div>
           </div>
-        </a>
+        </div>
       </div>
 
       {/* Professional Summary (show full text; no truncation) - from parsed CV data */}

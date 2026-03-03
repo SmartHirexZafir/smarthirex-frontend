@@ -468,6 +468,17 @@ export default function DateTimePicker({ value, onChange, min, placeholder = "Se
                   {String(selectedHour).padStart(2, "0")}:{String(selectedMinute).padStart(2, "0")} {selectedPeriod}
                 </div>
               </div>
+
+              {/* Done button - apply and close without clicking outside */}
+              <div className="mt-4 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         </div>

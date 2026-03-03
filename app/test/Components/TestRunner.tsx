@@ -212,15 +212,15 @@ export default function TestRunner({
       });
 
       if (!res.ok) {
-        // ✅ Handle 410 (test expired) with user-friendly message
+        const errorData = await res.json().catch(() => null) as { detail?: string } | null;
+        const detail = errorData?.detail;
         if (res.status === 410) {
-          const errorData = await res.json().catch(() => ({}));
-          const msg = (errorData as any)?.detail || "Your test time has expired. You can no longer submit answers.";
-          throw new Error(msg);
+          throw new Error(detail || "Your test time has expired. You can no longer submit answers.");
         }
-        
-        const txt = await res.text().catch(() => "");
-        throw new Error(txt || `Failed to submit test (status ${res.status})`);
+        if (res.status >= 500) {
+          throw new Error(detail || "The server could not process your submission. Please try again.");
+        }
+        throw new Error(detail || `Failed to submit test (status ${res.status}).`);
       }
 
       const data = (await res.json().catch(() => null)) as SubmitResponse | null;

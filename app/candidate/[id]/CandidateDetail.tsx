@@ -422,6 +422,7 @@ function VideoPlaybackComponent({ videoId, testId, candidateId, uploadedAt, info
   const [videoInfo, setVideoInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchVideoInfo = async () => {
@@ -455,6 +456,43 @@ function VideoPlaybackComponent({ videoId, testId, candidateId, uploadedAt, info
     fetchVideoInfo();
   }, [videoId, infoUrl]);
 
+  // Fetch video as blob with auth so <video src> can play (download URL requires Bearer)
+  useEffect(() => {
+    if (!downloadUrl || !videoInfo) return;
+
+    const headers: Record<string, string> = { "Cache-Control": "no-cache" };
+    const token = getAuthToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    let cancelled = false;
+    fetch(downloadUrl, { method: "GET", headers })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load video file");
+        return res.blob();
+      })
+      .then((blob) => {
+        if (!cancelled) {
+          setVideoBlobUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return URL.createObjectURL(blob);
+          });
+        } else {
+          URL.revokeObjectURL(URL.createObjectURL(blob));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not load video for playback");
+      });
+
+    return () => {
+      cancelled = true;
+      setVideoBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+    };
+  }, [downloadUrl, videoInfo]);
+
   if (loading) {
     return <div className="text-xs text-muted-foreground">Loading video...</div>;
   }
@@ -468,22 +506,31 @@ function VideoPlaybackComponent({ videoId, testId, candidateId, uploadedAt, info
   }
 
   const fileSizeMB = (videoInfo.file_size / (1024 * 1024)).toFixed(2);
-  const videoUrl = downloadUrl || "";
+  const videoSrc = videoBlobUrl || "";
 
   return (
     <div className="space-y-2">
-      <video
-        controls
-        style={{
-          width: "100%",
-          maxWidth: "600px",
-          borderRadius: "8px",
-          background: "#000",
-        }}
-      >
-        <source src={videoUrl} type={videoInfo.mime_type || "video/webm"} />
-        Your browser does not support the video tag.
-      </video>
+      <div className="relative rounded-lg overflow-hidden bg-black" style={{ maxWidth: "600px" }}>
+        {!videoSrc ? (
+          <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+            Loading video…
+          </div>
+        ) : null}
+        <video
+          controls
+          src={videoSrc}
+          style={{
+            width: "100%",
+            maxWidth: "600px",
+            borderRadius: "8px",
+            background: "#000",
+            display: videoSrc ? "block" : "none",
+          }}
+        >
+          <source src={videoSrc} type={videoInfo.mime_type || "video/webm"} />
+          Your browser does not support the video tag.
+        </video>
+      </div>
 
       <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
         <div>
@@ -497,16 +544,50 @@ function VideoPlaybackComponent({ videoId, testId, candidateId, uploadedAt, info
       </div>
 
       <div className="flex gap-2 pt-2">
-        <a
-          href={videoUrl}
-          download={`test_${testId}_recording.webm`}
-          className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium shadow-sm transition-all duration-200 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        >
-          <i className="ri-download-line" />
-          Download
-        </a>
+        <VideoDownloadButton
+          downloadUrl={downloadUrl}
+          testId={testId}
+          getAuthToken={getAuthToken}
+        />
       </div>
     </div>
+  );
+}
+
+function VideoDownloadButton({ downloadUrl, testId, getAuthToken }: { downloadUrl?: string; testId: string; getAuthToken: () => string | null }) {
+  const [downloading, setDownloading] = useState(false);
+  const handleDownload = async () => {
+    if (!downloadUrl) return;
+    const token = getAuthToken();
+    if (!token) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `test_${testId}_recording.webm`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore
+    } finally {
+      setDownloading(false);
+    }
+  };
+  if (!downloadUrl) return null;
+  return (
+    <button
+      type="button"
+      onClick={handleDownload}
+      disabled={downloading}
+      className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium shadow-sm transition-all duration-200 hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+    >
+      <i className="ri-download-line" />
+      {downloading ? "Downloading…" : "Download"}
+    </button>
   );
 }
 

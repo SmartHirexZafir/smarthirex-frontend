@@ -31,6 +31,7 @@ function TestHistoryItem({
   openLabel,
   reportLabel,
   fmtDate,
+  onEvaluationSaved,
 }: {
   attempt: Attempt;
   testName: string;
@@ -53,8 +54,12 @@ function TestHistoryItem({
   openLabel: string;
   reportLabel: string;
   fmtDate: (date: any) => string;
+  onEvaluationSaved?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [manualScores, setManualScores] = useState<Record<number, number>>({});
+  const [savingEvaluation, setSavingEvaluation] = useState(false);
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
   const statusLabel = (status || "completed").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
@@ -197,6 +202,28 @@ function TestHistoryItem({
                       <p className="text-sm p-2 rounded bg-muted/30">{candidateAnswer}</p>
                     </div>
 
+                    {/* Score (0–5) for free text — manual marking */}
+                    {(questionType === "text" || questionType === "scenario") && isPending && (
+                      <div className="mt-2">
+                        <label className="text-xs font-medium text-muted-foreground block mb-1">
+                          Score (0–5)
+                        </label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={5}
+                          step={1}
+                          className="w-20 p-2 rounded-lg bg-background border border-input text-sm"
+                          value={manualScores[idx] ?? ""}
+                          onChange={(e) => {
+                            const v = e.target.value === "" ? "" : Number(e.target.value);
+                            setManualScores((s) => ({ ...s, [idx]: v as number }));
+                          }}
+                          placeholder="0–5"
+                        />
+                      </div>
+                    )}
+
                     {/* Correct Answer (if wrong) */}
                     {!isCorrect && correctAnswer && (
                       <div className="mb-2">
@@ -217,6 +244,68 @@ function TestHistoryItem({
               })}
             </div>
           )}
+
+          {/* Save Evaluation — for attempts with text/scenario questions pending */}
+          {isPending && hasFullData && (() => {
+            const items = questions.length > 0 ? questions : details;
+            const hasTextOrScenario = items.some((q: any, i: number) => {
+              const t = (q?.type || details[i]?.type || "text").toString().toLowerCase();
+              return t === "text" || t === "scenario";
+            });
+            if (!hasTextOrScenario) return null;
+            const attemptId = (attempt as any).id ?? (attempt as any)._id;
+            const saveEvaluation = async () => {
+              if (!attemptId) return;
+              setSavingEvaluation(true);
+              setEvaluationError(null);
+              try {
+                const items = questions.length > 0 ? questions : details;
+                const questionGrades: { question_index: number; score: number }[] = [];
+                for (let i = 0; i < items.length; i++) {
+                  const d = details[i] || {};
+                  const qType = (items[i]?.type ?? d?.type ?? "text").toString().toLowerCase();
+                  const maxScore = Math.max(0.1, Number(d?.max_score) ?? 5);
+                  if (qType === "text" || qType === "scenario") {
+                    const raw = manualScores[i];
+                    const score = raw !== undefined && raw !== null ? (Number(raw) / 5) * maxScore : Number(d?.score) ?? 0;
+                    questionGrades.push({ question_index: i, score: Math.min(maxScore, Math.max(0, score)) });
+                  } else {
+                    questionGrades.push({ question_index: i, score: Number(d?.score) ?? 0 });
+                  }
+                }
+                const token = getAuthToken();
+                const headers: Record<string, string> = { "Content-Type": "application/json" };
+                if (token) headers.Authorization = `Bearer ${token}`;
+                const res = await fetch(`${API_BASE}/tests/grade/${attemptId}`, {
+                  method: "POST",
+                  headers,
+                  body: JSON.stringify({ score: 0, question_grades: questionGrades }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error((data as any)?.detail ?? (data as any)?.message ?? "Failed to save");
+                onEvaluationSaved?.();
+              } catch (err: any) {
+                setEvaluationError(err?.message ?? "Failed to save evaluation");
+              } finally {
+                setSavingEvaluation(false);
+              }
+            };
+            return (
+              <div className="mt-4 pt-4 border-t border-border">
+                {evaluationError && (
+                  <p className="text-sm text-[hsl(var(--destructive))] mb-2">{evaluationError}</p>
+                )}
+                <button
+                  type="button"
+                  onClick={saveEvaluation}
+                  disabled={savingEvaluation}
+                  className="btn btn-primary"
+                >
+                  {savingEvaluation ? "Saving…" : "Save Evaluation"}
+                </button>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
@@ -274,9 +363,39 @@ function TestScreeningTab({ candidateId }: { candidateId: string }) {
   }
 
   const sessions = monitoringData?.sessions || [];
+  const latestSessionWithVideo = sessions.find((s: any) => s.video_id);
+  const hasSessionWithoutVideo = sessions.length > 0 && !latestSessionWithVideo;
 
   return (
     <div className="p-4 space-y-4">
+      {/* Candidate Test Recording - video player at top when available */}
+      <div className="rounded-xl border border-border p-4 bg-card/70">
+        <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <i className="ri-video-line" />
+          Candidate Test Recording
+        </h3>
+        {latestSessionWithVideo ? (
+          <VideoPlaybackComponent
+            videoId={latestSessionWithVideo.video_id}
+            testId={latestSessionWithVideo.test_id}
+            candidateId={latestSessionWithVideo.candidate_id}
+            uploadedAt={latestSessionWithVideo.video_uploaded_at}
+            infoUrl={latestSessionWithVideo.video_info_url ? `${API_BASE}${latestSessionWithVideo.video_info_url}` : undefined}
+            downloadUrl={latestSessionWithVideo.video_download_url ? `${API_BASE}${latestSessionWithVideo.video_download_url}` : undefined}
+          />
+        ) : hasSessionWithoutVideo ? (
+          <div className="flex flex-col items-center justify-center py-8 px-4 rounded-lg bg-muted/30 border border-dashed">
+            <div className="w-full max-w-xs h-2 rounded-full bg-muted overflow-hidden mb-3">
+              <div className="h-full bg-primary animate-pulse rounded-full" style={{ width: "60%" }} />
+            </div>
+            <p className="text-sm text-muted-foreground">Video uploading…</p>
+            <p className="text-xs text-muted-foreground mt-1">Recording will appear here when ready.</p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground py-4">No test recording available.</p>
+        )}
+      </div>
+
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-semibold">Test Screening & Monitoring</h3>
         <div className="text-sm text-muted-foreground">
@@ -1074,6 +1193,7 @@ export default function CandidateDetail({ candidateId }: { candidateId: string }
                             openLabel={openLabel}
                             reportLabel={reportLabel}
                             fmtDate={fmtDate}
+                            onEvaluationSaved={fetchAttempts}
                           />
                         );
                       })}

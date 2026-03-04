@@ -9,6 +9,108 @@ import DateTimePicker from './Components/DateTimePicker';
  *  ======================== */
 type TestType = 'smart' | 'custom';
 
+type CustomQ = { question: string; type: 'mcq' | 'text'; options?: string[]; correct_answer?: string | null };
+
+/** Custom authoring: stable component outside page so it does not remount on parent state change (fixes typing focus loss). */
+function CustomAuthoring({ value, onChange }: { value: CustomQ[]; onChange: (v: CustomQ[]) => void }) {
+  const add = () => onChange([...(value || []), { question: '', type: 'text' }]);
+  const update = (i: number, patch: Partial<CustomQ>) =>
+    onChange((value || []).map((q, idx) => (idx === i ? { ...q, ...patch } : q)));
+  const remove = (i: number) => onChange((value || []).filter((_, idx) => idx !== i));
+
+  return (
+    <div className="space-y-3">
+      {(value || []).map((q, i) => (
+        <div key={`custom-q-${i}`} className="rounded-xl border border-input p-3 bg-background/60">
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2">
+            <select
+              className="w-full md:w-40 p-2 rounded-lg bg-background border border-input"
+              value={q.type}
+              onChange={(e) => update(i, { type: e.target.value as 'mcq' | 'text' })}
+            >
+              <option value="text">Free Text</option>
+              <option value="mcq">MCQ</option>
+            </select>
+            <input
+              className="flex-1 p-2 rounded-lg bg-background border border-input"
+              placeholder="Question"
+              value={q.question}
+              onChange={(e) => update(i, { question: e.target.value })}
+            />
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => remove(i)}
+              type="button"
+              aria-label="Remove question"
+              title="Remove question"
+            >
+              <i className="ri-delete-bin-line" />
+            </button>
+          </div>
+
+          {q.type === 'mcq' && (
+            <div className="grid md:grid-cols-2 gap-2 mt-3">
+              <input
+                className="p-2 rounded-lg bg-background border border-input"
+                placeholder="Option A"
+                value={q.options?.[0] || ''}
+                onChange={(e) =>
+                  update(i, {
+                    options: [e.target.value, q.options?.[1] || '', q.options?.[2] || '', q.options?.[3] || ''],
+                  })
+                }
+              />
+              <input
+                className="p-2 rounded-lg bg-background border border-input"
+                placeholder="Option B"
+                value={q.options?.[1] || ''}
+                onChange={(e) =>
+                  update(i, {
+                    options: [q.options?.[0] || '', e.target.value, q.options?.[2] || '', q.options?.[3] || ''],
+                  })
+                }
+              />
+              <input
+                className="p-2 rounded-lg bg-background border border-input"
+                placeholder="Option C"
+                value={q.options?.[2] || ''}
+                onChange={(e) =>
+                  update(i, {
+                    options: [q.options?.[0] || '', q.options?.[1] || '', e.target.value, q.options?.[3] || ''],
+                  })
+                }
+              />
+              <input
+                className="p-2 rounded-lg bg-background border border-input"
+                placeholder="Option D"
+                value={q.options?.[3] || ''}
+                onChange={(e) =>
+                  update(i, {
+                    options: [q.options?.[0] || '', q.options?.[1] || '', q.options?.[2] || '', e.target.value],
+                  })
+                }
+              />
+              <input
+                className="md:col-span-2 p-2 rounded-lg bg-background border border-input"
+                placeholder="(Optional) Correct Answer"
+                value={q.correct_answer || ''}
+                onChange={(e) => update(i, { correct_answer: e.target.value })}
+              />
+            </div>
+          )}
+        </div>
+      ))}
+      <button
+        className="btn btn-outline btn-sm"
+        type="button"
+        onClick={add}
+      >
+        <i className="ri-add-line" /> Add question
+      </button>
+    </div>
+  );
+}
+
 type CandidateDoc = {
   _id: string;
   name?: string;
@@ -94,13 +196,14 @@ export default function TestAssignment() {
   const [testDurationMinutes, setTestDurationMinutes] = useState<number>(60);
 
   // Custom authoring
-  type CustomQ = { question: string; type: 'mcq' | 'text'; options?: string[]; correct_answer?: string | null };
   const [customTitle, setCustomTitle] = useState('');
   const [customQuestions, setCustomQuestions] = useState<CustomQ[]>([]);
 
   // Preview / history
   const [allAttempts, setAllAttempts] = useState<Attempt[]>([]);
   const [needsMarking, setNeedsMarking] = useState<Attempt[]>([]);
+  // Test Marking filter: All | Pending | Marked
+  const [markingFilter, setMarkingFilter] = useState<'all' | 'pending' | 'marked'>('all');
 
   // UI feedback
   const [isSending, setIsSending] = useState(false);
@@ -443,216 +546,22 @@ export default function TestAssignment() {
     }
   };
 
-  /** -------- custom authoring subcomponent -------- */
-  const CustomAuthoring = ({ value, onChange }: { value: CustomQ[]; onChange: (v: CustomQ[]) => void }) => {
-    const add = () => onChange([...(value || []), { question: '', type: 'text' }]);
-    const update = (i: number, patch: Partial<CustomQ>) =>
-      onChange(value.map((q, idx) => (idx === i ? { ...q, ...patch } : q)));
-    const remove = (i: number) => onChange(value.filter((_, idx) => idx !== i));
-
-    return (
-      <div className="space-y-3">
-        {(value || []).map((q, i) => (
-          <div key={i} className="rounded-xl border border-input p-3 bg-background/60">
-            <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2">
-              <select
-                className="w-full md:w-40 p-2 rounded-lg bg-background border border-input"
-                value={q.type}
-                onChange={(e) => update(i, { type: e.target.value as 'mcq' | 'text' })}
-              >
-                <option value="text">Free Text</option>
-                <option value="mcq">MCQ</option>
-              </select>
-              <input
-                className="flex-1 p-2 rounded-lg bg-background border border-input"
-                placeholder="Question"
-                value={q.question}
-                onChange={(e) => update(i, { question: e.target.value })}
-              />
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => remove(i)}
-                type="button"
-                aria-label="Remove question"
-                title="Remove question"
-              >
-                <i className="ri-delete-bin-line" />
-              </button>
-            </div>
-
-            {q.type === 'mcq' && (
-              <div className="grid md:grid-cols-2 gap-2 mt-3">
-                <input
-                  className="p-2 rounded-lg bg-background border border-input"
-                  placeholder="Option A"
-                  value={q.options?.[0] || ''}
-                  onChange={(e) =>
-                    update(i, {
-                      options: [e.target.value, q.options?.[1] || '', q.options?.[2] || '', q.options?.[3] || ''],
-                    })
-                  }
-                />
-                <input
-                  className="p-2 rounded-lg bg-background border border-input"
-                  placeholder="Option B"
-                  value={q.options?.[1] || ''}
-                  onChange={(e) =>
-                    update(i, {
-                      options: [q.options?.[0] || '', e.target.value, q.options?.[2] || '', q.options?.[3] || ''],
-                    })
-                  }
-                />
-                <input
-                  className="p-2 rounded-lg bg-background border border-input"
-                  placeholder="Option C"
-                  value={q.options?.[2] || ''}
-                  onChange={(e) =>
-                    update(i, {
-                      options: [q.options?.[0] || '', q.options?.[1] || '', e.target.value, q.options?.[3] || ''],
-                    })
-                  }
-                />
-                <input
-                  className="p-2 rounded-lg bg-background border border-input"
-                  placeholder="Option D"
-                  value={q.options?.[3] || ''}
-                  onChange={(e) =>
-                    update(i, {
-                      options: [q.options?.[0] || '', q.options?.[1] || '', q.options?.[2] || '', e.target.value],
-                    })
-                  }
-                />
-                <input
-                  className="md:col-span-2 p-2 rounded-lg bg-background border border-input"
-                  placeholder="(Optional) Correct Answer"
-                  value={q.correct_answer || ''}
-                  onChange={(e) => update(i, { correct_answer: e.target.value })}
-                />
-              </div>
-            )}
-          </div>
-        ))}
-        <button
-          className="btn btn-outline btn-sm"
-          type="button"
-          onClick={add}
-        >
-          <i className="ri-add-line" /> Add question
-        </button>
-      </div>
-    );
+  /** Whether an attempt is pending (not yet evaluated) for filter */
+  const isAttemptPending = (a: Attempt) => {
+    const s = String(a.status || '').toLowerCase();
+    const pendingKeywords = ['pending', 'awaiting', 'manual', 'review', 'needs manual marking'];
+    if (pendingKeywords.some((k) => s.includes(k))) return true;
+    if ((a as any).needs_marking === true || (a as any).manual_review_required === true) return true;
+    if (a.type === 'custom' && (a.score === undefined || a.score === null)) return true;
+    return false;
   };
 
-  /** -------- attempts list (all) -------- */
-  const AttemptsPanel = ({ title, attempts }: { title: string; attempts: Attempt[] }) => {
-    const getCand = (a: Attempt) => a.candidate || {};
-    const getCandId = (a: Attempt) => a.candidateId || a.candidate_id || getCand(a)?._id || '';
-    const getCandEmail = (a: Attempt) =>
-      getCand(a)?.email || getCand(a)?.resume?.email || '—';
-    const fmtStatus = (s?: string) => {
-      const v = String(s || '').toLowerCase();
-      return v.includes('pending') || v.includes('manual') ? 'Pending Manual Review' : 'Completed';
-    };
-    const fmtDate = (iso?: string) => {
-      if (!iso) return '—';
-      try {
-        return new Date(iso).toLocaleString();
-      } catch {
-        return iso;
-      }
-    };
-    return (
-      <div className="bg-card text-foreground rounded-2xl shadow-xl border border-border p-4">
-        <div className="text-sm font-medium mb-3">{title}</div>
-        <div className="space-y-2">
-          {(attempts || []).map((a) => (
-            <div key={a._id} className="rounded-lg border border-border p-3 flex flex-wrap items-center gap-3">
-              <div className="text-sm">
-                <div className="font-medium">
-                  {getCand(a)?.name || getCandEmail(a) || getCandId(a)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Type: {a.type === 'custom' ? 'Custom Test' : 'Smart AI Test'} · Score: {a.score ?? '—'} / 100
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Status: {fmtStatus(a.status)} · Date: {fmtDate(a.submitted_at || a.created_at)}
-                </div>
-              </div>
-              {getCandId(a) ? (
-                <a
-                  className="ml-auto text-sm underline"
-                  href={`/candidate/${getCandId(a)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open profile
-                </a>
-              ) : null}
-            </div>
-          ))}
-          {(attempts || []).length === 0 && (
-            <div className="text-sm text-muted-foreground">No attempts yet.</div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  /** -------- manual marking panel -------- */
-  const ManualMarkingPanel = ({
-    title,
-    attempts,
-    onGrade,
-  }: {
-    title: string;
-    attempts: Attempt[];
-    onGrade: (id: string, score: number) => void;
-  }) => {
-    const [local, setLocal] = useState<Record<string, number>>({});
-    return (
-      <div className="bg-card text-foreground rounded-2xl shadow-xl border border-border p-4">
-        <div className="text-sm font-medium mb-3">{title}</div>
-        <div className="space-y-3">
-          {(attempts || []).length === 0 && (
-            <div className="text-sm text-muted-foreground">No custom tests awaiting marking.</div>
-          )}
-          {(attempts || []).map((a) => (
-            <div key={a._id} className="rounded-lg border border-border p-3 flex items-center gap-3">
-              <div className="flex-1">
-                <div className="text-sm font-medium">
-                  {a.candidate?.name ||
-                    a.candidate?.email ||
-                    a.candidate?.resume?.email ||
-                    a.candidateId ||
-                    a.candidate_id}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Submitted: {a.submitted_at ? new Date(a.submitted_at).toLocaleString() : '—'}
-                </div>
-              </div>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                className="input w-24 p-2 rounded-lg bg-background border border-input"
-                placeholder="Score"
-                value={local[a._id] ?? ''}
-                onChange={(e) =>
-                  setLocal((s) => ({ ...s, [a._id]: Number(e.target.value) }))
-                }
-              />
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={() => onGrade(a._id, Number(local[a._id] ?? 0))}
-              >
-                Save
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  const filteredMarkingAttempts = useMemo(() => {
+    const list = allAttempts || [];
+    if (markingFilter === 'all') return list;
+    if (markingFilter === 'pending') return list.filter(isAttemptPending);
+    return list.filter((a) => !isAttemptPending(a));
+  }, [allAttempts, markingFilter]);
 
   return (
     <div className="space-y-6">
@@ -934,14 +843,69 @@ export default function TestAssignment() {
         )}
       </div>
 
-      {/* Preview Tests (All + Needs manual marking) */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <AttemptsPanel title="All attempts" attempts={allAttempts} />
-        <ManualMarkingPanel
-          title="Needs manual marking (custom)"
-          attempts={needsMarking}
-          onGrade={gradeAttempt}
-        />
+      {/* Test Marking — single page with filter */}
+      <div className="bg-card text-foreground rounded-2xl shadow-xl border border-border p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h3 className="text-lg font-semibold">Test Marking</h3>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Filter:</span>
+            <select
+              className="p-2 rounded-lg bg-background border border-input text-sm"
+              value={markingFilter}
+              onChange={(e) => setMarkingFilter(e.target.value as 'all' | 'pending' | 'marked')}
+              aria-label="Filter test attempts"
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="marked">Marked</option>
+            </select>
+          </div>
+        </div>
+        <div className="space-y-2">
+          {filteredMarkingAttempts.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-4">No attempts match the filter.</div>
+          ) : (
+            filteredMarkingAttempts.map((a) => {
+              const getCand = (x: Attempt) => x.candidate || {};
+              const getCandId = (x: Attempt) => x.candidateId || x.candidate_id || getCand(x)?._id || '';
+              const getCandEmail = (x: Attempt) =>
+                getCand(x)?.email || getCand(x)?.resume?.email || '—';
+              const status =
+                String(a.status || '').toLowerCase().includes('pending') ||
+                String(a.status || '').toLowerCase().includes('manual')
+                  ? 'Pending Evaluation'
+                  : 'Checked';
+              const subTime = a.submitted_at || a.created_at;
+              const fmtDate = subTime ? new Date(subTime).toLocaleString() : '—';
+              return (
+                <div
+                  key={a._id}
+                  className="rounded-lg border border-border p-3 flex flex-wrap items-center gap-3"
+                >
+                  <div className="text-sm flex-1 min-w-0">
+                    <div className="font-medium">
+                      {getCand(a)?.name || getCandEmail(a) || getCandId(a) || 'Candidate'}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Submission Time: {fmtDate}
+                    </div>
+                    <div className="text-xs text-muted-foreground">Status: {status}</div>
+                  </div>
+                  {getCandId(a) ? (
+                    <a
+                      className="text-sm font-medium text-primary hover:underline shrink-0"
+                      href={`/candidate/${getCandId(a)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open profile
+                    </a>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
 
       {/* Toasts */}

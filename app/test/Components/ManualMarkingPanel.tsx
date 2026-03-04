@@ -103,10 +103,12 @@ function getCandName(a: Attempt): string {
 }
 
 function needsManualMarking(a: Attempt): boolean {
-  // Heuristics: custom test & no score yet OR explicit pending status
-  const pendingFlags = ["pending", "awaiting", "manual", "review"];
+  // Custom tests without score, or smart tests with scenario questions (needs_marking / pending_manual_review)
+  const pendingFlags = ["pending", "awaiting", "manual", "review", "needs manual marking"];
   const s = (a.status || "").toLowerCase();
   const pending = pendingFlags.some((k) => s.includes(k));
+  const needsMarkingFlag = (a as any).needs_marking === true || (a as any).manual_review_required === true;
+  if (a.type === "smart" && needsMarkingFlag) return true;
   return a.type === "custom" && (a.score === undefined || a.score === null || pending);
 }
 
@@ -181,21 +183,14 @@ export default function ManualMarkingPanel({
     [highlightCandidateId]
   );
 
-  // ✅ Fetch full attempt data (questions, answers, details)
+  // ✅ Fetch full attempt data (questions, answers, details) from dedicated endpoint
   const fetchFullAttemptData = async (attemptId: string) => {
-    if (fullAttemptData[attemptId]) return; // Already loaded
-    
+    if (fullAttemptData[attemptId]) return;
+
     try {
-      const res = await fetch(`${API_BASE}/tests/history/all`, { headers: authHeaders() });
-      const data = (await res.json().catch(() => ({}))) as HistoryResponse;
-      
-      // Find the attempt in the full list
-      const allAttempts = [
-        ...(Array.isArray(data?.attempts) ? data.attempts : []),
-        ...(Array.isArray(data?.needs_marking) ? data.needs_marking : []),
-      ];
-      const attempt = allAttempts.find((a: any) => a._id === attemptId || a.id === attemptId);
-      
+      const res = await fetch(`${API_BASE}/tests/attempt/${attemptId}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error("Failed to load attempt");
+      const attempt = (await res.json().catch(() => null)) as Attempt | null;
       if (attempt) {
         setFullAttemptData((prev) => ({
           ...prev,
@@ -225,13 +220,7 @@ export default function ManualMarkingPanel({
   };
 
   const onSaveGrade = async (attemptId: string) => {
-    const score = Number(grades[attemptId]);
-    if (Number.isNaN(score) || score < 0 || score > 100) {
-      showToast("Score must be a number between 0 and 100.");
-      return;
-    }
-    
-    // ✅ Build per-question grades if provided
+    const totalScoreInput = Number(grades[attemptId]);
     const qGrades = questionGrades[attemptId];
     const questionGradesList = qGrades
       ? Object.entries(qGrades).map(([idx, g]) => ({
@@ -240,6 +229,13 @@ export default function ManualMarkingPanel({
           feedback: g.feedback || undefined,
         }))
       : undefined;
+    const hasFullQuestionGrades = questionGradesList && questionGradesList.length > 0;
+    const totalScoreValid = !Number.isNaN(totalScoreInput) && totalScoreInput >= 0 && totalScoreInput <= 100;
+    if (!totalScoreValid && !hasFullQuestionGrades) {
+      showToast("Enter a total score (0–100) or score each question.");
+      return;
+    }
+    const score = totalScoreValid ? totalScoreInput : 0;
 
     try {
       setSavingId(attemptId);
@@ -255,7 +251,7 @@ export default function ManualMarkingPanel({
       if (!res.ok) {
         throw new Error((data && (data.detail || data.error)) || "Could not save grade.");
       }
-      showToast("Custom test graded successfully.");
+      showToast("Grade saved. Candidate profile updated.");
       setGrades((g) => {
         const n = { ...g };
         delete n[attemptId];
@@ -302,7 +298,7 @@ export default function ManualMarkingPanel({
 
       {!loading && attempts.length === 0 && (
         <div className="text-sm text-muted-foreground">
-          No custom tests awaiting marking.
+          No tests awaiting marking.
         </div>
       )}
 
@@ -403,36 +399,41 @@ export default function ManualMarkingPanel({
                 {isExpanded && questions.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-border space-y-3">
                     <div className="text-xs font-medium text-muted-foreground mb-2">
-                      Score each question (0-100):
+                      Scenario questions: assign marks per question. MCQ are auto-graded.
                     </div>
                     {questions.map((q: any, idx: number) => {
                       const questionText = q.question || `Question ${idx + 1}`;
-                      const questionType = q.type || "text";
+                      const questionType = (q.type || "text").toString().toLowerCase();
                       const candidateAnswer = answers[idx]?.answer || details[idx]?.answer || "No answer provided";
                       const qGrade = questionGrades[a._id]?.[idx] || { score: 0, feedback: "" };
+                      const maxScore = Number(details[idx]?.max_score) || (questionType === "scenario" ? 5 : 100);
+                      const isScenario = questionType === "scenario";
 
                       return (
-                        <div key={idx} className="p-3 rounded-lg bg-background/50 border border-border">
+                        <div key={`q-${idx}`} className="p-3 rounded-lg bg-background/50 border border-border">
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="text-xs font-medium">Q{idx + 1}</span>
-                                <span className="badge text-xs">{questionType.toUpperCase()}</span>
+                                <span className="badge text-xs">{String(questionType).toUpperCase()}</span>
                               </div>
                               <div className="text-sm font-medium mb-1">{questionText}</div>
                               <div className="text-xs text-muted-foreground">
-                                <span className="font-medium">Answer: </span>
+                                <span className="font-medium">Candidate Answer: </span>
                                 <span className="break-words">{candidateAnswer}</span>
                               </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 mt-2">
+                            <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                              {isScenario ? `Marks (out of ${maxScore}):` : `Points (0–${maxScore}):`}
+                            </label>
                             <input
                               type="number"
                               min={0}
-                              max={100}
+                              max={maxScore}
                               className="input w-20 text-xs"
-                              placeholder="Score"
+                              placeholder={`0–${maxScore}`}
                               value={qGrade.score || ""}
                               onChange={(e) => {
                                 const score = Number(e.target.value);

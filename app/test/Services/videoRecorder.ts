@@ -45,6 +45,8 @@ export class VideoRecorder {
   private isRecording = false;
   private uploadInProgress = false;
   private recordingSizeBytes = 0;
+  private bytesUploaded = 0;
+  private finalTotalBytes: number | null = null;
   private uploadAbortController: AbortController | null = null;
   private uploadId: string | null = null;
   private finalized = false;
@@ -93,6 +95,8 @@ export class VideoRecorder {
 
       this.mediaRecorder = new MediaRecorder(stream, options);
       this.recordingSizeBytes = 0;
+      this.bytesUploaded = 0;
+      this.finalTotalBytes = null;
       this.uploadId = null;
       this.finalized = false;
       this.isRecording = true;
@@ -102,8 +106,9 @@ export class VideoRecorder {
       this.mediaRecorder.onerror = this._onError;
       this.mediaRecorder.onstop = this._onStop;
 
-      // Start recording
-      this.mediaRecorder.start(5000); // Collect data every 5 seconds
+      // Chunk buffering: request data every 3s so chunks are captured continuously and stream doesn't stall
+      const timesliceMs = 3000;
+      this.mediaRecorder.start(timesliceMs);
 
       this.opts.onStart?.();
       console.log("VideoRecorder: Recording started");
@@ -131,8 +136,11 @@ export class VideoRecorder {
 
       const onStopFinal = async () => {
         this.isRecording = false;
+        this.finalTotalBytes = this.recordingSizeBytes;
         await this._flushPendingUploads();
+        this._reportUploadProgress();
         await this._finalizeUpload();
+        this.opts.onUploadProgress?.(100);
         this.opts.onStop?.(this.recordingSizeBytes);
         console.log(`VideoRecorder: Recording stopped. Size: ${(this.recordingSizeBytes / 1024 / 1024).toFixed(2)} MB`);
         resolve();
@@ -223,8 +231,9 @@ export class VideoRecorder {
 
   private _onDataAvailable(event: BlobEvent) {
     if (event.data.size > 0) {
-      this.recordingSizeBytes += event.data.size;
-      this.opts.onDataAvailable?.(event.data.size);
+      const chunkSize = event.data.size;
+      this.recordingSizeBytes += chunkSize;
+      this.opts.onDataAvailable?.(chunkSize);
       const p = this._uploadChunk(event.data)
         .catch((e) => {
           const err = new Error(`Chunk upload error: ${String((e as any)?.message || e)}`);
@@ -233,16 +242,27 @@ export class VideoRecorder {
         })
         .finally(() => {
           this.pendingChunkUploads.delete(p);
+          this.bytesUploaded += chunkSize;
+          this._reportUploadProgress();
         });
       this.pendingChunkUploads.add(p);
     }
   }
 
+  private _reportUploadProgress(): void {
+    const total = this.finalTotalBytes ?? this.recordingSizeBytes;
+    if (total > 0 && this.opts.onUploadProgress) {
+      const percent = Math.min(100, Math.round((this.bytesUploaded / total) * 100));
+      this.opts.onUploadProgress(percent);
+    }
+  }
+
   private _onError(event: Event & { error?: unknown }) {
     const err = new Error(`MediaRecorder error: ${String(event.error ?? "unknown")}`);
-    this.opts.onError?.(err);
     this.isRecording = false;
-    console.error(err);
+    this.mediaRecorder = null;
+    this.opts.onError?.(err);
+    console.error("VideoRecorder:", err);
   }
 
   private _onStop() {

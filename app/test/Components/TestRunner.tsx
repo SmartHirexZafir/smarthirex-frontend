@@ -33,6 +33,7 @@ export type SubmitResponse = {
   candidate_id: string;
   score: number;
   details: SubmitDetail[];
+  pending_manual_review?: boolean;
 };
 
 type Props = {
@@ -106,6 +107,7 @@ export default function TestRunner({
 
   // ✅ Auto-submit timer ref - will be set after handleSubmit is defined
   const handleSubmitRef = React.useRef<((e: React.FormEvent) => Promise<void>) | null>(null);
+  const autoSubmittedRef = React.useRef(false);
 
   const safeQuestions = useMemo<Question[]>(
     () => (Array.isArray(questions) ? questions : []),
@@ -186,9 +188,9 @@ export default function TestRunner({
     setLoading(true);
     submittingRef.current = true;
 
-    // Abort after 20s to avoid hanging UI on network issues
+    // Allow up to 60s for submit (backend may be busy; avoid "Network timeout" on slow responses)
     const controller = new AbortController();
-    const t = window.setTimeout(() => controller.abort(), 20000);
+    const t = window.setTimeout(() => controller.abort(), 60000);
 
     try {
       // Backward-compatible: each answer still has ".answer"
@@ -247,7 +249,9 @@ export default function TestRunner({
   // Update ref after handleSubmit is defined
   handleSubmitRef.current = handleSubmit;
 
-  // ✅ Auto-submit when duration expires
+  // ✅ Auto-submit when duration expires (stable deps to avoid re-running on every keystroke)
+  const nudgeRef = React.useRef(nudge);
+  nudgeRef.current = nudge;
   useEffect(() => {
     if (!expiresAt) {
       setTimeRemaining("");
@@ -258,38 +262,28 @@ export default function TestRunner({
       try {
         const expires = parseUtcDate(expiresAt);
         const now = new Date();
-        
-        // Validate date
         if (isNaN(expires.getTime())) {
-          console.error("Invalid expiresAt date:", expiresAt);
           setTimeRemaining("");
           return;
         }
-        
         const diff = expires.getTime() - now.getTime();
 
-        // Only auto-submit if time has actually expired (with small buffer to avoid race conditions)
         if (diff <= -1000) {
-          // Time expired - auto-submit (only if not already loading/submitting)
-          if (!loading && handleSubmitRef.current && !err) {
+          setTimeRemaining("0:00");
+          if (!autoSubmittedRef.current && !loading && handleSubmitRef.current && !err) {
+            autoSubmittedRef.current = true;
             const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
             handleSubmitRef.current(fakeEvent);
           }
           return;
         }
 
-        const minutes = Math.floor(diff / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        const minutes = Math.max(0, Math.floor(diff / (1000 * 60)));
+        const seconds = Math.max(0, Math.floor((diff % (1000 * 60)) / 1000));
         setTimeRemaining(`${minutes}:${String(seconds).padStart(2, "0")}`);
 
-        // Warning at 5 minutes
-        if (minutes === 5 && seconds === 0) {
-          nudge("⚠️ 5 minutes remaining! Test will auto-submit when time expires.");
-        }
-        // Warning at 1 minute
-        if (minutes === 1 && seconds === 0) {
-          nudge("⚠️ 1 minute remaining! Test will auto-submit soon.");
-        }
+        if (minutes === 5 && seconds === 0) nudgeRef.current("⚠️ 5 minutes remaining! Test will auto-submit when time expires.");
+        if (minutes === 1 && seconds === 0) nudgeRef.current("⚠️ 1 minute remaining! Test will auto-submit soon.");
       } catch (e) {
         console.error("Timer error:", e);
         setTimeRemaining("");
@@ -298,9 +292,8 @@ export default function TestRunner({
 
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
-
     return () => clearInterval(interval);
-  }, [expiresAt, loading, nudge, err]);
+  }, [expiresAt, loading, err]);
 
   const payloadAnswers = useMemo(
     () =>
@@ -592,7 +585,7 @@ export default function TestRunner({
           (isCode ? "Write your solution here…" : isScenario ? "Describe your approach…" : "");
 
         return (
-          <div key={idx} className="rounded-xl border border-border p-4">
+          <div key={`q-${idx}`} className="rounded-xl border border-border p-4">
             <div className="mb-2 text-sm font-medium">
               Q{idx + 1}.{" "}
               <span className="rounded bg-muted px-2 py-0.5 text-xs font-normal uppercase tracking-wide text-foreground/80">

@@ -56,8 +56,9 @@ export type SubmitDetail = {
 export type SubmitResponse = {
   test_id: string;
   candidate_id: string;
-  score: number;           // percent from backend (legacy)
+  score: number;           // percent from backend (0 when pending_manual_review)
   details: SubmitDetail[];
+  pending_manual_review?: boolean;  // scenario/custom needs recruiter marking
 };
 
 type Props = {
@@ -206,12 +207,13 @@ export default function TestResult({
     (tryCloseTab as any)._t = window.setTimeout(() => setToast(null), 1600);
   }
 
-  // Label chip per row (kept logic, extended for auto-graded)
+  // Label chip per row (kept logic, extended for auto-graded and manual review)
   function rowChip(d: SubmitDetail) {
     const hasCorrect = (d?.correct || "").trim().length > 0;
     const isFreeForm = !hasCorrect;
+    const isPendingManual = (d as any).manual_review_required || (d?.explanation === "Pending manual review.");
     const isAutoGraded =
-      isFreeForm && typeof d?.is_correct === "boolean" && (d.explanation?.length > 0 || Number.isFinite(d?.score));
+      isFreeForm && !isPendingManual && typeof d?.is_correct === "boolean" && (d.explanation?.length > 0 || Number.isFinite(d?.score));
 
     if (hasCorrect) {
       return (
@@ -219,6 +221,9 @@ export default function TestResult({
           {d.is_correct ? "Correct" : "Incorrect"}
         </Badge>
       );
+    }
+    if (isPendingManual) {
+      return <Badge tone="amber" title="Awaiting recruiter marking">Pending manual review</Badge>;
     }
     if (isAutoGraded) {
       return (
@@ -360,12 +365,23 @@ export default function TestResult({
     );
   }
 
+  const pendingReview = Boolean(result?.pending_manual_review);
+
   return (
     <div className="space-y-6 rounded-2xl border border-border bg-card text-foreground p-6 shadow-sm">
+      {/* Pending manual review banner */}
+      {pendingReview && (
+        <div className="rounded-xl border border-[hsl(var(--warning))/0.5] bg-[hsl(var(--warning))/0.1 px-4 py-3 text-center">
+          <p className="text-base font-semibold text-foreground">Test submitted successfully.</p>
+          <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Results pending review. Your recruiter will review your answers and update your score.</p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-medium">{title || "Your result"}</h2>
 
+        {!pendingReview && (
         <div className="text-sm text-[hsl(var(--muted-foreground))]">
           Overall score (MCQs only):{" "}
           <span className="font-semibold text-foreground">
@@ -374,9 +390,10 @@ export default function TestResult({
             {`(${Number.isFinite(percent) ? percent : 0}%)`}
           </span>
         </div>
+        )}
 
         {/* Optional: show aggregate auto-graded score if backend provided per-question scores */}
-        {autoAgg.max > 0 && (
+        {!pendingReview && autoAgg.max > 0 && (
           <div className="text-sm text-[hsl(var(--muted-foreground))]">
             Auto-graded score (free-form/coding):{" "}
             <span className="font-semibold text-foreground">

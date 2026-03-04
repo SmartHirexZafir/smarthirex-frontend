@@ -146,7 +146,12 @@ export default function TestTokenPage() {
             durationMinutes={durationMinutes}
             onSubmitted={(data) => {
               setResult(data);
-              setStep("result");
+              // Notify proctor to stop recording and upload video before we unmount (ProctorGuard will also stop on unmount)
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("proctor-test-ended"));
+              }
+              // Brief delay so ProctorGuard can start stop/upload before unmount
+              setTimeout(() => setStep("result"), 800);
             }}
             onCancel={resetAndExit}
             onError={handleTestError}
